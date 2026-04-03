@@ -1,0 +1,17 @@
+[project]
+name = "csen-346"
+version = "0.1.0"
+description = "Natural Language Processing - CSEN 346 SCU. Hugging Face and other resources"
+authors = [
+    {name = "Ulises Chavarria",email = "ulises.engineer@gmail.com"}
+]
+readme = "README.md"
+requires-python = "^3.12"
+dependencies = [
+    "transformers (>=5.5.0,<6.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
