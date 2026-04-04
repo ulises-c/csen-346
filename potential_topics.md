@@ -23,11 +23,11 @@ These SIGs (special interest group) are relevant to the project and can be used 
 # Potential Topics
 
 1. Can GPTZero’s AI Vocabulary Distinguish Between LLM-Generated and Student-Written Essays?
-   Veronica Schmalz | Anaïs Tack
-   1. https://aclanthology.org/2025.bea-1.71/
+   1. Veronica Schmalz | Anaïs Tack
+   2. https://aclanthology.org/2025.bea-1.71/
 2. Unsupervised Automatic Short Answer Grading and Essay Scoring: A Weakly Supervised Explainable Approach
-   Felipe Urrutia | Cristian Buc | Roberto Araya | Valentin Barriere
-   1. https://aclanthology.org/2025.bea-1.4/
+   1. Felipe Urrutia | Cristian Buc | Roberto Araya | Valentin Barriere
+   2. https://aclanthology.org/2025.bea-1.4/
 3. LLMs in Short Answer Scoring: Limitations and Promise of Zero-Shot and Few-Shot Approaches
-   Imran Chamieh | Torsten Zesch | Klaus Giebermann
-   1. https://aclanthology.org/2024.bea-1.25/
+   1. Imran Chamieh | Torsten Zesch | Klaus Giebermann
+   2. https://aclanthology.org/2024.bea-1.25/
