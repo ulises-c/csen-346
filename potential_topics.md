@@ -58,3 +58,15 @@ These SIGs (special interest group) are relevant to the project and can be used 
 5. Harnessing GPT to Study Second Language Learner Essays: Can We Use Perplexity to Determine Linguistic Competence?
    1. Ricardo Muñoz Sánchez, Simon Dobnik, Elena Volodina
    2. https://aclanthology.org/2024.bea-1.34/
+
+---
+
+# Chosen Topic
+
+# KELE: Multi-Agent Socratic Teaching Framework
+
+- **Venue:** Findings of EMNLP 2025
+- **Link:** https://aclanthology.org/2025.findings-emnlp.888/
+- **What:** Two-agent system (consultant + teacher) for structured Socratic questioning. 42K+ dialogue turns dataset. Trained model beats GPT-4o on all teaching dimensions.
+- **Why it's fun:** Multi-agent coordination with a specialized dataset. The Socratic method forces the model to guide discovery rather than lecture.
+- **Skills:** Multi-agent systems, dialogue strategy, dataset construction
