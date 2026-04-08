@@ -1,133 +1,85 @@
-# Project Idea Presentation Skeleton
+# Slide 1 - Quick Intro
 
-## Presentation Constraints
+KELE: A Multi-Agent Framework for Structured Socratic Teaching with Large Language Models
 
-- Team members: `[Name 1]`, `[Name 2]`, `[Name 3]`
-- Speaker for in-class presentation: `[Choose 1 speaker]`
-- Time limit: exactly `5 minutes`
-- Slide target: `3-5 slides`
-- Note: project idea can pivot by the end of `W4` if needed
+Peng, Yuan, Li, Cheng, Fang, Liu - Central China Normal University 
 
----
+Note: Just present which research paper we're using as our foundation
 
-## Slide 1 - Title, Problem, and Motivation
+# Slide 2 - Team Members
 
-### Slide title
-`[Project Title]`
+Note: Photos and team member names
 
-### On-slide content
+# Slide 3 - Inspiration
 
-- One-sentence project summary: `[What are we building or studying?]`
-- Problem statement: `[What real problem or gap are we addressing?]`
-- Motivation: `[Why does this problem matter to users, researchers, or industry?]`
-- Audience/stakeholders: `[Who is affected by this problem?]`
+Human tutors use guided questioning, but that kind of Socratic teaching is hard to scale.
 
-### Speaker notes
+KELE stood out because it uses role-specific agents, which connects naturally to Mixture of Experts ideas where specialized models can handle different teaching roles or subjects.
 
-- Introduce the team and project title.
-- Explain the problem in simple terms.
-- Give 1 concrete example that shows why this problem is worth solving.
+This is still an active research area, making it a strong foundation for our project.
 
----
+Note: Why this topic?
 
-## Slide 2 - Proposed Solution
+# Slide 4 - Problem & Motivation
 
-### Slide title
-`Proposed Solution`
+Socratic teaching is powerful, but does not scale. 
+Heuristic questioning prompts deep thinking and cognitive development, but demands high teacher expertise and real-time adaptability (which is infeasible in large educational settings).
+Existing LLM approaches fail in two ways: 
+Prompt engineering (e..g. SPL/GPT-4): mimics Socratic style but has no structured pedagogy, which leads to arbitrary guidance, abrupt topic shifts, disorganized feedback.  
+Fine-tuning (e.g. EduChat, SocraticLM): learns to withhold answers but lacks coherent teaching progression or summarization/reflection mechanisms.  
+The identified gap: No prior work combines structured teaching rules with LLM-based execution. Style mimicry without pedagogical structure is counterproductive - EduChat scores 90.73% on not giving answers, but only 2.93/5 on actually guiding the student. 
+KELE’s thesis: Structure + specialization beats raw scale. A 9B model with the right framework outperforms GPT-4o.
 
-### On-slide content
 
-- Proposed solution: `[Describe the system, method, tool, or prototype]`
-- Core idea: `[What is the main approach?]`
-- Key features/components:
-  - `[Feature or component 1]`
-  - `[Feature or component 2]`
-  - `[Feature or component 3]`
-- Why this approach is promising: `[Why should this solution work better than current options?]`
+# Slide 5 - The KELE Framework: SocRule + Consultant-Teach Architecture 
 
-### Speaker notes
+Consultant (Planner): Analyzes student cognitive state and dialogue history, which then outputs an evaluation to lookup a recommended teaching action 
+Teacher (Executor): Receives history and the consultant plan, which then generates a heuristic response
+Per-turn flow: Given a student input that flows into the consultant classification system, the teacher generates a response given a SocRule lookup result. 
 
-- Walk through the solution at a high level.
-- Focus on what the project will actually do, not implementation details.
-- Keep this understandable for a short class pitch.
 
----
+# Slide 6 - Results: 9B Models Beats GPT-4o on All 13 Metrics
 
-## Slide 3 - Research Questions and Objectives
+Stated by authors:
+1. Domain specificity: Socrat Dataset covers only elementary science. No cross-domain or cross-lingual evaluation. Performance on math, humanities, or programming is unknown.
+2. Imperfect rule compliance: PRR of 75.13 means ~25% of turns still have relevance issues. The consultant-teacher mechanism mitigates but doesn't solve this.
 
-### Slide title
-`Research Questions / Objectives`
+# Slide 7 - Limitations and Critical Analysis
 
-### On-slide content
+Socratic teaching is powerful, but does not scale. 
+Heuristic questioning prompts deep thinking and cognitive development, but demands high teacher expertise and real-time adaptability (which is infeasible in large educational settings).
+Existing LLM approaches fail in two ways: 
+Prompt engineering (e..g. SPL/GPT-4): mimics Socratic style but has no structured pedagogy, which leads to arbitrary guidance, abrupt topic shifts, disorganized feedback.  
+Fine-tuning (e.g. EduChat, SocraticLM): learns to withhold answers but lacks coherent teaching progression or summarization/reflection mechanisms.  
+The identified gap: No prior work combines structured teaching rules with LLM-based execution. Style mimicry without pedagogical structure is counterproductive - EduChat scores 90.73% on not giving answers, but only 2.93/5 on actually guiding the student. 
+KELE’s thesis: Structure + specialization beats raw scale. A 9B model with the right framework outperforms GPT-4o.
 
-- Research question 1: `[What do we want to learn, test, or evaluate?]`
-- Research question 2: `[What comparison or outcome matters most?]`
-- Objective 1: `[Build / evaluate / compare / measure ...]`
-- Objective 2: `[Demonstrate feasibility, accuracy, usability, performance, etc.]`
-- Success criteria: `[How will we know the project is successful?]`
+# Slide 8 - Future Improvements and Our Project Direction
+1
+Mixture of Experts for Multi-Subject Teaching (gating)
+2
+RL-Based Stage Transitions (replace rigid rules)
+3
+Learned Consultant (via discrete classifier replacing LLM)
+4
+Stronger Evaluation (via ablation study and cross-domain)
 
-### Speaker notes
+# Slide 9 - Project roadmap
 
-- State 2-3 focused questions or objectives.
-- Make sure each objective is measurable or observable.
-- Connect the questions back to the original problem.
+Step 1
+Read and break down the KELE paper, identify the core consultant-teacher pipeline, and decide what parts are feasible to reproduce in our course timeline.
 
----
+Step 2
+Build a simplified baseline implementation that captures the main SocRule workflow and multi-agent interaction.
 
-## Slide 4 - Proposed Contributions
+Step 3
+Evaluate the reproduced baseline on a small but meaningful set of tutoring scenarios to understand where it succeeds and fails.
 
-### Slide title
-`Proposed Contributions`
+Step 4
+Choose one focused improvement, such as learned stage transitions or a lighter consultant module, and implement it as our extension.
 
-### On-slide content
+Step 5
+Compare the extension against the baseline, analyze tradeoffs, and prepare the final report and presentation.
 
-- Contribution 1: `[New model, workflow, dataset, prototype, or framework]`
-- Contribution 2: `[Evaluation, comparison, or analysis]`
-- Contribution 3: `[Practical impact, insight, or recommendation]`
-- Expected value: `[What will others gain from this project?]`
-
-### Speaker notes
-
-- Emphasize what is original, useful, or worth presenting.
-- Keep contributions realistic for the course timeline.
-- If relevant, briefly note what makes this different from existing work.
-
----
-
-## Slide 5 - Scope, Feasibility, and Pivot Plan
-
-### Slide title
-`Feasibility and Next Steps`
-
-### On-slide content
-
-- Initial scope: `[What is realistically achievable?]`
-- Team roles:
-  - `[Member 1 - responsibility]`
-  - `[Member 2 - responsibility]`
-  - `[Member 3 - responsibility]`
-- Risks/challenges: `[Data access, implementation difficulty, evaluation limits, time]`
-- Pivot plan by end of W4: `[What will we change if the idea does not work as expected?]`
-
-### Speaker notes
-
-- Show that the project is manageable.
-- Briefly mention the main risk and the backup direction.
-- End with a confident summary of why this is a strong project idea.
-
----
-
-## Suggested Timing for a 5-Minute Presentation
-
-- Slide 1: `60 seconds`
-- Slide 2: `60 seconds`
-- Slide 3: `60 seconds`
-- Slide 4: `60 seconds`
-- Slide 5: `60 seconds`
-
-## Quick Transfer Checklist for Slides
-
-- Keep each slide to `3-5 bullets`
-- Use short phrases, not full paragraphs
-- Include one clear visual if helpful: `[diagram, workflow, mockup, or comparison]`
-- Make sure the speaker can finish within exactly `5 minutes`
+Goal
+Deliver a working reproduction-plus-improvement project that tests whether structured multi-agent tutoring can be made more adaptive, scalable, and educationally effective.
