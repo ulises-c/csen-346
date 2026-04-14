@@ -15,16 +15,9 @@ This project reproduces and extends **KELE**, a multi-agent framework for struct
 | `src/` | Our reproduction and extensions |
 | `resources/` | Research paper and reference materials |
 | `deliverables/` | Course deliverables |
-| `scripts/` | Utility scripts |
+## Mirroring to the org repo
 
-## Syncing to the org repo
-
-This repo is mirrored from [CSEN-346](https://github.com/ulises-c/csen-346/tree/main) to [SCU-CSEN346/KELE](https://github.com/SCU-CSEN346/KELE). To sync changes:
-
-```bash
-./scripts/sync_kele.sh                        # default commit message
-./scripts/sync_kele.sh "your commit message"  # custom commit message
-```
+This repo is mirrored to [SCU-CSEN346/KELE](https://github.com/SCU-CSEN346/KELE) via a dual-push remote. A regular `git push` publishes to both automatically — no extra steps needed.
 
 ## Dependencies
 
