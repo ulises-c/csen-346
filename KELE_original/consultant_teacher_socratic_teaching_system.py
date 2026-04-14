@@ -1,3 +1,16 @@
+# =============================================================================
+# Original source: https://github.com/yuanpan1020/KELE
+# Paper: Peng et al., "KELE: A Multi-Agent Framework for Structured Socratic
+#        Teaching with Large Language Models", Findings of EMNLP 2025
+#        https://aclanthology.org/2025.findings-emnlp.888/
+# License: MIT
+#
+# This file has been translated from Chinese to English for the purposes of
+# a course project (CSEN 346, SCU). Logic and structure are unchanged.
+# The original Chinese source is preserved in the KELE repository:
+#   https://github.com/yuanpan1020/KELE
+# =============================================================================
+
 import openai
 import json
 from typing import Dict, Any
@@ -9,20 +22,20 @@ class SocraticTeachingSystem:
                  teacher_api_key: str, teacher_base_url: str, teacher_model_name: str,
                  debug_mode: bool = False, max_teaching_rounds: int = 10):
 
-        # 顾问智能体API配置
+        # Consultant agent API configuration
         self.consultant_api_key = consultant_api_key
         self.consultant_base_url = consultant_base_url
         self.consultant_model_name = consultant_model_name
 
-        # 教师智能体API配置
+        # Teacher agent API configuration
         self.teacher_api_key = teacher_api_key
         self.teacher_base_url = teacher_base_url
         self.teacher_model_name = teacher_model_name
 
-        self.debug_mode = debug_mode  # 调试模式开关，控制是否打印智能体1的输出
-        self.max_teaching_rounds = max_teaching_rounds  # 最大教学轮数，默认为10
+        self.debug_mode = debug_mode  # Debug mode toggle — controls whether consultant output is printed
+        self.max_teaching_rounds = max_teaching_rounds  # Maximum number of teaching rounds (default: 10)
 
-        # 初始化两个独立的OpenAI客户端
+        # Initialize two independent OpenAI clients
         self.consultant_client = openai.Client(
             api_key=self.consultant_api_key,
             base_url=self.consultant_base_url
@@ -33,255 +46,252 @@ class SocraticTeachingSystem:
             base_url=self.teacher_base_url
         )
 
-        # 状态到操作的映射表
+        # State-to-action mapping table
         self.state_to_action = {
-            "a0": "引导学生提出问题",
-            "a1": "生成一个与解题相关的子问题",
-            "b2": "从不同角度生成问题",
-            "b3": "更改问题",
-            "b4": "从不同角度生成同一问题的相关子问题",
-            "b5": "提出可以检查学生概念的问题",
-            "b6": "复习学生已经学过的概念",
-            "b7": "复习这些概念并与错误进行比较",
-            "c8": "提供一个反例",
-            "c9": "帮助学生形成不完整规则并进一步研究它，或提出一个误导性的问题",
-            "c10": "询问原因",
-            "c11": "应指出并明确询问原因",
-            "c12": "帮助其形成不完整规则并进一步研究它，或提出一个误导性的问题，或提供一个反例",
-            "c13": "提供一个反例",
-            "c14": "鼓励学生做出预测并提出新原则",
-            "c15": "鼓励学生做出预测并提出新原则",
-            "c16": "鼓励学生做出预测并提出新原则",
-            "c17": "生成该子问题",
-            "c18": "要求学生重新考虑该点",
-            "c19": "生成具有诊断功能的问题",
-            "c20": "验证学生刚学习的概念",
-            "c21": "要求学生详细思考问题",
-            "c22": "问'为什么'",
-            "c23": "帮助学生重新形成完整假设",
-            "c24": "要求学生单独检验假设",
-            "c25": "提供一个验证方法",
-            "c26": "要求学生比较两个示例的差异",
-            "c27": "指导学生进行检验",
-            "c28": "告知学生错误情况并要求其提出其他可能的概念",
-            "c29": "提供正确概念并询问为什么之前没有想到",
-            "d30": "提出相关案例并要求预测，或问'为什么'",
-            "d31": "直接向学生展示正确概念和规则，并要求其重新思考这些概念和给出题目答案",
-            "d32": "提出相关案例并要求预测",
-            "d33": "建立一个普遍定义并要求学生给出题目答案",
-            "e34": "对题目进行总结"
+            "a0": "Guide the student to ask a question",
+            "a1": "Generate a sub-question related to solving the problem",
+            "b2": "Generate questions from different angles",
+            "b3": "Change the question",
+            "b4": "Generate related sub-questions about the same concept from different angles",
+            "b5": "Ask a question that can check whether the student truly understands the concept",
+            "b6": "Review concepts the student has already learned",
+            "b7": "Review these concepts and compare them with the student's mistake",
+            "c8": "Provide a counterexample",
+            "c9": "Help the student form an incomplete rule and investigate it further, or pose a misleading question",
+            "c10": "Ask why",
+            "c11": "Point out and explicitly ask for the reason",
+            "c12": "Help form an incomplete rule and investigate it further, pose a misleading question, or provide a counterexample",
+            "c13": "Provide a counterexample",
+            "c14": "Encourage the student to make predictions and propose a new principle",
+            "c15": "Encourage the student to make predictions and propose a new principle",
+            "c16": "Encourage the student to make predictions and propose a new principle",
+            "c17": "Generate this sub-question",
+            "c18": "Ask the student to reconsider the point",
+            "c19": "Generate a question with diagnostic function",
+            "c20": "Verify the concept the student just learned",
+            "c21": "Ask the student to think more carefully about the problem",
+            "c22": "Ask 'why'",
+            "c23": "Help the student re-form a complete hypothesis",
+            "c24": "Ask the student to test the hypothesis independently",
+            "c25": "Provide a verification method",
+            "c26": "Ask the student to compare the differences between two examples",
+            "c27": "Guide the student to perform testing",
+            "c28": "Inform the student of the error and ask them to propose other possible concepts",
+            "c29": "Provide the correct concept and ask why they did not think of it before",
+            "d30": "Present a related case and ask for a prediction, or ask 'why'",
+            "d31": "Directly show the student the correct concept and rule, and ask them to reconsider and provide the answer",
+            "d32": "Present a related case and ask for a prediction",
+            "d33": "Establish a general definition and ask the student to provide the answer",
+            "e34": "Summarize the problem"
         }
 
-        # 初始化系统状态
+        # Initialize system state
         self.reset_session()
 
     def reset_session(self):
-        """重置会话状态，用于开始新的教学轮次"""
+        """Reset session state to begin a new teaching session."""
 
         self.conversation_history = []
 
         self.consultant_history = []
 
-        self.current_state = "a0"  # 默认开始状态为a0，表示学生尚未提出问题
+        self.current_state = "a0"  # Default starting state a0 — student has not yet asked a question
 
-        # 教学阶段对话轮数计数器
+        # Teaching stage dialogue round counter
         self.teaching_rounds = 0
 
     def add_to_history(self, role: str, content: str) -> None:
-        """添加对话到历史记录"""
+        """Append a dialogue turn to the conversation history."""
         self.conversation_history.append({"role": role, "content": content})
 
     def add_to_consultant_history(self, evaluation: str, state: str, action: str) -> None:
-        """添加顾问分析到历史记录"""
+        """Append a consultant analysis record to the consultant history."""
         self.consultant_history.append({
             "evaluation": evaluation,
             "state": state,
             "action": action,
-            "teaching_rounds": self.teaching_rounds  # 添加教学轮数
+            "teaching_rounds": self.teaching_rounds
         })
 
     def get_formatted_history(self) -> str:
-        """获取格式化的对话历史（仅对话内容，不包含顾问分析）
-        只包含完整的对话轮次（学生输入+教师回复）"""
+        """Return the formatted dialogue history (dialogue content only, no consultant analysis).
+        Only includes complete dialogue turns (student input + teacher response)."""
         formatted_history = ""
-        # 确保历史记录被成对处理（学生+教师），忽略最后一条未配对的学生输入
+        # Process history in pairs (student + teacher); ignore the last unpaired student input
         for i in range(0, len(self.conversation_history) - 1, 2):
-            if i + 1 < len(self.conversation_history):  # 确保有配对的教师回复
+            if i + 1 < len(self.conversation_history):
                 student_message = self.conversation_history[i]
                 teacher_message = self.conversation_history[i + 1]
 
                 if student_message["role"] == "student" and teacher_message["role"] == "teacher":
-                    formatted_history += f"学生: {student_message['content']}\n"
-                    formatted_history += f"老师: {teacher_message['content']}\n"
+                    formatted_history += f"Student: {student_message['content']}\n"
+                    formatted_history += f"Teacher: {teacher_message['content']}\n"
 
-        return formatted_history.rstrip()  # 去除字符串末尾的空白字符
+        return formatted_history.rstrip()
 
     def get_full_formatted_history(self) -> str:
-        """获取包含顾问分析的完整格式化对话历史（用于顾问输入）
-        只包含完整的对话轮次（学生输入+教师回复+顾问分析）"""
+        """Return the full formatted dialogue history including consultant analysis (used as consultant input).
+        Only includes complete dialogue turns (student input + teacher response + consultant analysis)."""
         formatted_history = ""
 
-        # 确保历史记录被成对处理（学生+教师），忽略最后一条未配对的学生输入
         for i in range(0, len(self.conversation_history) - 1, 2):
-            if i + 1 < len(self.conversation_history):  # 确保有配对的教师回复
+            if i + 1 < len(self.conversation_history):
                 student_message = self.conversation_history[i]
                 teacher_message = self.conversation_history[i + 1]
 
                 if student_message["role"] == "student" and teacher_message["role"] == "teacher":
-                    formatted_history += f"学生: {student_message['content']}\n"
-                    formatted_history += f"老师: {teacher_message['content']}\n"
+                    formatted_history += f"Student: {student_message['content']}\n"
+                    formatted_history += f"Teacher: {teacher_message['content']}\n"
 
-                    # 如果存在对应的顾问分析记录，则添加到历史中
+                    # Append the corresponding consultant analysis record if it exists
                     consultant_index = i // 2
                     if consultant_index < len(self.consultant_history):
                         consultant_record = self.consultant_history[consultant_index]
-                        formatted_history += f"[顾问分析]\n"
-                        formatted_history += f"评估: {consultant_record['evaluation']}\n"
-                        formatted_history += f"状态: {consultant_record['state']}\n"
-                        formatted_history += f"行动: {consultant_record['action']}\n"
+                        formatted_history += f"[Consultant Analysis]\n"
+                        formatted_history += f"Evaluation: {consultant_record['evaluation']}\n"
+                        formatted_history += f"State: {consultant_record['state']}\n"
+                        formatted_history += f"Action: {consultant_record['action']}\n"
 
-                        # 添加教学阶段轮数，但不添加总对话轮数
                         teaching_rounds = consultant_record.get("teaching_rounds", 0)
                         if teaching_rounds > 0:
-                            formatted_history += f"教学阶段轮数: {teaching_rounds}/{self.max_teaching_rounds}\n\n"
+                            formatted_history += f"Teaching stage round: {teaching_rounds}/{self.max_teaching_rounds}\n\n"
                         else:
                             formatted_history += "\n"
 
-        return formatted_history.rstrip()  # 去除字符串末尾的空白字符
+        return formatted_history.rstrip()
 
     def socratic_teaching_consultant(self, student_input: str) -> Dict[str, Any]:
-        """苏格拉底教学顾问 - 对话状态判断者和流程控制者"""
+        """Socratic teaching consultant — dialogue state evaluator and process controller."""
 
-        # 构建系统提示词
         system_prompt = f"""
-# 角色指令
-你作为苏格拉底教学顾问，需严格遵循五阶段苏格拉底教学法进行对话管理。每次响应必须完成：
-1. 判断学生是否已提出明确问题（如未提出保持在a0状态）
-2. 分析对话历史
-   - 记录连续正确回答次数及相同状态持续次数
-   - 追踪当前阶段已持续轮数
-   - 关注当前教学总轮数(上限为{self.max_teaching_rounds}轮)
-3. 确定当前教学阶段
-4. 在对应教学阶段内评估学生状态
-5. 检查响应结果是否符合阶段管理与转换规则（如不符合则重复2、3、4步直至符合）
-6. 生成合规响应
+# Role Instructions
+You are a Socratic teaching consultant. You must strictly follow the five-stage Socratic teaching method to manage the dialogue. Each response must complete the following:
+1. Determine whether the student has asked a clear question (if not, remain in state a0)
+2. Analyze the dialogue history
+   - Record the number of consecutive correct answers and the number of turns in the same state
+   - Track the number of rounds elapsed in the current stage
+   - Monitor the total teaching round count (upper limit: {self.max_teaching_rounds} rounds)
+3. Determine the current teaching stage
+4. Evaluate the student's state within the corresponding teaching stage
+5. Verify that the response complies with the stage management and transition rules (if not, repeat steps 2, 3, 4 until compliant)
+6. Generate a compliant response
 
-## 阶段管理与转换规则
-▲ 基本规则：
-   - 学生提出具体问题后（进入a1状态）才正式进入教学阶段
-   - 教学阶段严格递进顺序：a → b → c → d → e（禁止跳级/回退）
-   - 教学阶段的最大对话轮数：{self.max_teaching_rounds}轮（从a1开始计数）
-   - 答案规范：仅在d阶段可要求答案，获得正确答案后必须进入e阶段
+## Stage Management and Transition Rules
+▲ Basic Rules:
+   - Formal teaching begins only after the student asks a specific question (entering state a1)
+   - Teaching stages must advance strictly in order: a → b → c → d → e (skipping or backtracking is prohibited)
+   - Maximum dialogue rounds in the teaching stage: {self.max_teaching_rounds} (counted from a1)
+   - Answer rule: the student's answer may only be elicited in stage d; once the correct answer is obtained, the system must advance to stage e
 
-▲ 阶段推进规则（满足任一条件即可推进）：
-   - 当学生连续两次正确回答问题时，必须考虑进入下一阶段
-   - 当同一状态连续出现超过2轮对话时，应评估并推进至新状态
-   - 在b阶段停留不应超过3轮对话，超过应进入c阶段
-   - 在c阶段停留不应超过5轮对话，超过应进入d阶段
-   - 在d阶段停留不应超过3轮对话，超过应进入e阶段
-   - 当前阶段问题已充分探讨但学生未取得突破时，应转入下一阶段
+▲ Stage Advancement Rules (any one condition is sufficient to advance):
+   - When the student answers two consecutive questions correctly, the system must consider advancing to the next stage
+   - When the same state appears for more than 2 consecutive dialogue turns, evaluate and advance to a new state
+   - The system should not remain in stage b for more than 3 dialogue turns; if exceeded, advance to stage c
+   - The system should not remain in stage c for more than 5 dialogue turns; if exceeded, advance to stage d
+   - The system should not remain in stage d for more than 3 dialogue turns; if exceeded, advance to stage e
+   - When the current stage's topic has been sufficiently explored but the student has not made a breakthrough, advance to the next stage
 
-▲ 阶段推进建议：
-   - 优先考虑阶段推进，而非机械地停留在某状态
-   - 在同一状态不得重复停留
-   - 遇到边界情况，应倾向于推进到下一阶段而非反复探讨
-   - b阶段和d阶段建议轮数为1至2轮
-
----
-
-## 阶段详解
-
-### 阶段a：学生提问（单回合）
-**状态定义**  
-a0：学生尚未提出问题
-a1：学生提出问题  
-
-**转换规则**  
-- a0 → a0：学生仍未提出明确问题
-- a0 → a1：学生提出明确问题
-- a1 → 自动转入阶段b（仅1轮对话）
+▲ Stage Advancement Recommendations:
+   - Prioritize stage advancement over mechanically remaining in a state
+   - Do not repeatedly stay in the same state
+   - In edge cases, prefer advancing to the next stage rather than repeatedly revisiting the same topic
+   - Stages b and d are recommended to last 1–2 rounds
 
 ---
 
-### 阶段b：概念探查（了解学生概念掌握程度）
-**状态评估规则**  
-必须遍历b2-b7，选择最匹配状态：
+## Stage Details
 
-| 状态编号 | 触发条件|
-|----------|------------------------------|
-| b2       | 没有可用策略且问题的调查不完整 |
-| b3       | 没有可用策略且问题已经被调查 |
-| b4       | 学生的某个概念严重错误且存在相关的子问题 |
-| b5       | 想要验证学生是否真正理解该概念 |
-| b6       | 学生的练习和回答是错误的 |
-| b7       | 学生在已学过的概念上出错 |
+### Stage a: Student Questioning (single round)
+**State Definitions**
+a0: Student has not yet asked a question
+a1: Student has asked a question
 
----
-
-### 阶段c：归纳推理（找出学生归纳的规则，分析规则的正确性，并确定原理，此为主要对话阶段）
-**状态评估规则**  
-必须遍历c8-c29，选择最匹配状态：
-
-| 状态编号 | 触发条件|
-|----------|------------------------------|
-| c8       | 学生产生不完整或不一致的预测 |
-| c9       | 学生的回答是错误的 |
-| c10      | 学生的回答与他们已学过的概念不一致 |
-| c11      | 学生提出不相关因素 |
-| c12      | 学生的解释不完整 |
-| c13      | 老师提出的误导性问题成功误导学生 |
-| c14      | 出现新情境 |
-| c15      | 练习的是学生已熟悉的概念 |
-| c16      | 学生理解了自己的错误 |
-| c17      | 学生忽略了一个关键点且存在可用的子问题 |
-| c18      | 学生忽略了一个关键点但没有可用的子问题 |
-| c19      | 学生的误解类型不明确 |
-| c20      | 学生做出错误预测 |
-| c21      | 学生无法预测 |
-| c22      | 学生正确回答问题 |
-| c23      | 学生形成了部分假设 |
-| c24      | 学生提出了假设且有经验 |
-| c25      | 学生提出了假设但没有经验 |
-| c26      | 学生无法检验所提出的假设但有经验 |
-| c27      | 学生无法检验所提出的假设且缺乏经验 |
-| c28      | 学生检验所提出的假设出现错误但有经验 |
-| c29      | 学生检验所提出的假设出现错误且缺乏经验 |
+**Transition Rules**
+- a0 → a0: Student still has not asked a clear question
+- a0 → a1: Student asks a clear question
+- a1 → automatically advances to stage b (only 1 round)
 
 ---
 
-### 阶段d：规则建构（帮助学生建立新规则并要求学生应用这些规则）
-| 状态编号 | 触发条件 |
-|----------|------------------------------|
-| d30      | 老师想检查学生是否真正理解 |
-| d31      | 经过辩证过程后学生仍未理解某个概念 |
-| d32      | 学生已经调查某个问题 |
-| d33      | 所有概念都已被研究 |
+### Stage b: Concept Probing (assessing the student's grasp of concepts)
+**State Evaluation Rules**
+Must traverse b2–b7 and select the best-matching state:
 
-**强制要求**  
-仅在本阶段可获取正确答案，学生给出正确答案后必须进入e阶段
-
----
-
-### 阶段e：老师总结
-**状态定义**  
-e34：学生正确给出题目答案  
+| State | Trigger Condition |
+|-------|-------------------|
+| b2    | No available strategy and the problem investigation is incomplete |
+| b3    | No available strategy and the problem has already been investigated |
+| b4    | The student has a serious misconception about a concept and a related sub-question exists |
+| b5    | Want to verify whether the student truly understands the concept |
+| b6    | The student's exercise response is incorrect |
+| b7    | The student made an error on a concept they have already learned |
 
 ---
 
-## 输出要求
-请按照苏格拉底教学法的规则进行教学阶段管理和学生状态判断，仅输出json，不要输出其它内容。
-将所有输出内容放入以下json结构中：
+### Stage c: Inductive Reasoning (identifying the student's inductive rules, analyzing their correctness, and establishing the principle — this is the main dialogue stage)
+**State Evaluation Rules**
+Must traverse c8–c29 and select the best-matching state:
+
+| State | Trigger Condition |
+|-------|-------------------|
+| c8    | Student produces an incomplete or inconsistent prediction |
+| c9    | Student's answer is incorrect |
+| c10   | Student's answer is inconsistent with concepts they have already learned |
+| c11   | Student raises an irrelevant factor |
+| c12   | Student's explanation is incomplete |
+| c13   | The teacher's misleading question successfully misled the student |
+| c14   | A new context has arisen |
+| c15   | Practicing a concept the student is already familiar with |
+| c16   | Student has understood their own mistake |
+| c17   | Student overlooked a key point and a sub-question is available |
+| c18   | Student overlooked a key point but no sub-question is available |
+| c19   | The type of student misconception is unclear |
+| c20   | Student makes an incorrect prediction |
+| c21   | Student is unable to make a prediction |
+| c22   | Student answers the question correctly |
+| c23   | Student has formed a partial hypothesis |
+| c24   | Student has proposed a hypothesis and has relevant experience |
+| c25   | Student has proposed a hypothesis but lacks relevant experience |
+| c26   | Student cannot test the proposed hypothesis but has relevant experience |
+| c27   | Student cannot test the proposed hypothesis and lacks relevant experience |
+| c28   | Student made errors while testing the proposed hypothesis but has relevant experience |
+| c29   | Student made errors while testing the proposed hypothesis and lacks relevant experience |
+
+---
+
+### Stage d: Rule Construction (helping the student build new rules and asking them to apply these rules)
+| State | Trigger Condition |
+|-------|-------------------|
+| d30   | Teacher wants to check whether the student truly understands |
+| d31   | After the dialectical process, the student still does not understand a concept |
+| d32   | The student has already investigated the problem |
+| d33   | All concepts have been studied |
+
+**Mandatory Requirement**
+The student's correct answer may only be elicited in this stage. Once the student provides the correct answer, the system must advance to stage e.
+
+---
+
+### Stage e: Teacher Summary
+**State Definition**
+e34: Student has correctly provided the answer to the problem
+
+---
+
+## Output Requirements
+Follow the Socratic teaching rules to manage the teaching stage and evaluate the student's state. Output JSON only — do not output anything else.
+Place all output in the following JSON structure:
 {{
-    "evaluation": 确定当前对话所处的阶段，并判断当前教学阶段中的学生状态，同时给出原因,
-    "state": 所处状态的编号
+    "evaluation": Determine the current stage of the dialogue, evaluate the student's state within the current teaching stage, and provide the reasoning,
+    "state": The state number
 }}
 """
 
         user_input = f"""
-历史对话记录:
+Dialogue history:
 {self.get_full_formatted_history()}
 
-当前学生输入: {student_input}
+Current student input: {student_input}
 """
 
         try:
@@ -294,72 +304,63 @@ e34：学生正确给出题目答案
                 response_format={"type": "json_object"}
             )
 
-            # 获取原始响应内容
             raw_content = response.choices[0].message.content
 
-            # 处理可能包含markdown代码块的响应
+            # Handle responses wrapped in markdown code blocks
             if raw_content.startswith("```json") and raw_content.endswith("```"):
-                # 移除markdown代码块标记
                 raw_content = raw_content.replace("```json", "", 1)
                 raw_content = raw_content.replace("```", "", 1)
                 raw_content = raw_content.strip()
 
             try:
-                # 尝试解析JSON
                 result = json.loads(raw_content)
                 return result
             except json.JSONDecodeError as json_err:
-                # JSON解析错误，打印原始内容
-                print(f"JSON解析错误: {json_err}")
-                print(f"原始响应内容: {raw_content}")
-                # 返回默认值
+                print(f"JSON parse error: {json_err}")
+                print(f"Raw response content: {raw_content}")
                 return {
-                    "evaluation": "无法评估当前状态，JSON解析错误",
-                    "state": self.current_state  # 保持当前状态不变
+                    "evaluation": "Unable to evaluate current state — JSON parse error",
+                    "state": self.current_state
                 }
 
         except Exception as e:
-            print(f"苏格拉底教学顾问调用失败: {e}")
-            print("无法获取原始响应内容，API调用失败")
-            # 返回默认值
+            print(f"Socratic teaching consultant call failed: {e}")
+            print("Unable to retrieve raw response content — API call failed")
             return {
-                "evaluation": "无法评估当前状态，API调用失败",
-                "state": self.current_state  # 保持当前状态不变
+                "evaluation": "Unable to evaluate current state — API call failed",
+                "state": self.current_state
             }
 
     def get_action_for_state(self, state: str) -> str:
-        """根据状态获取对应的提问操作"""
-        return self.state_to_action.get(state, "继续提问")
+        """Return the teaching action corresponding to the given state."""
+        return self.state_to_action.get(state, "Continue questioning")
 
     def socrates_teacher(self, student_input: str, evaluation: str, action: str) -> str:
-        """苏格拉底教师 - 苏格拉底教学法的教师"""
+        """Socratic teacher — executes the Socratic teaching method."""
 
-        # 构建系统提示词
         system_prompt = """
-你是一位使用苏格拉底教学法的小学科学教师，擅长启发式教学。
-接下来你会收到历史对话记录、当前学生输入和苏格拉底教学顾问对当前教学对话的评估及建议操作；
-你的任务是遵循建议的操作并参考评估结果对学生提问以完成苏格拉底式教学。
-以下是你需要遵守的规则：
-- 每次只能提出一个问题（输出时请检查问题数量，如超出请删去多余问题）
-- 提出的问题必须与解题直接相关（输出时请检查问题是否偏离解题，如偏题请重新输出与解题直接相关的问题）
-- 请确保提问符合小学阶段学生的知识水平，避免过于困难
-- 语气应该非常亲切并具有鼓励性
-- 除非苏格拉底教学顾问建议的操作要求，否则不能给出过于明显的提示
-- 如果接收到的建议操作为：对题目进行总结，则总结题目且不再提出问题
+You are an elementary school science teacher who uses the Socratic teaching method, skilled in heuristic instruction.
+You will receive the dialogue history, the current student input, and the evaluation and suggested action from the Socratic teaching consultant.
+Your task is to follow the suggested action and, referencing the evaluation, pose a question to the student to carry out Socratic teaching.
+The following rules must be observed:
+- You may only ask one question per turn (check the number of questions in your output; if there are more than one, remove the extras)
+- The question must be directly related to solving the problem (check whether the question is off-topic; if so, output a question directly related to solving the problem)
+- Ensure the question is appropriate for the knowledge level of an elementary school student and is not too difficult
+- Your tone should be very warm and encouraging
+- Unless the consultant's suggested action requires it, do not give overly obvious hints
+- If the suggested action received is "Summarize the problem", summarize the problem and do not ask any further questions
         """
 
-        # 准备用户输入
         user_input = f"""
-历史对话记录:
+Dialogue history:
 {self.get_formatted_history()}
 
-当前学生输入: {student_input}
+Current student input: {student_input}
 
-苏格拉底教学顾问评估结果: {evaluation}
-苏格拉底教学顾问建议的操作: {action}
+Socratic teaching consultant evaluation: {evaluation}
+Socratic teaching consultant suggested action: {action}
 """
 
-        # 调用API - 使用教师专用客户端
         try:
             response = self.teacher_client.chat.completions.create(
                 model=self.teacher_model_name,
@@ -369,160 +370,138 @@ e34：学生正确给出题目答案
                 ]
             )
 
-            # 获取返回结果
             return response.choices[0].message.content
 
         except Exception as e:
-            print(f"苏格拉底教师调用失败: {e}")
-            return "我需要思考一下如何回答你的问题。请稍等片刻，让我组织一下思路。"
+            print(f"Socratic teacher call failed: {e}")
+            return "I need a moment to think about how to answer your question. Please wait while I organize my thoughts."
 
     def process_student_input(self, student_input: str) -> str:
-        """处理学生输入并返回苏格拉底教师的回复"""
+        """Process student input and return the Socratic teacher's response."""
 
-        # 添加学生输入到对话历史
         self.add_to_history("student", student_input)
 
-        # 调用苏格拉底教学顾问
         consultant_result = self.socratic_teaching_consultant(student_input)
 
-        # 获取状态和对应的提问操作
         previous_state = self.current_state
         state = consultant_result.get("state", self.current_state)
         action = self.get_action_for_state(state)
-        evaluation = consultant_result.get("evaluation", "无法确定当前状态")
+        evaluation = consultant_result.get("evaluation", "Unable to determine current state")
 
-        # 防止阶段回退（确保严格递进：a → b → c → d → e）
+        # Prevent stage regression (enforce strict progression: a → b → c → d → e)
         if previous_state and state:
-            prev_phase = previous_state[0]  # 获取阶段前缀（a, b, c, d, e）
+            prev_phase = previous_state[0]
             curr_phase = state[0]
 
-            # 如果当前阶段比前一阶段更早，则强制保持在当前阶段
             if (prev_phase == 'b' and curr_phase == 'a') or \
                     (prev_phase == 'c' and curr_phase in ['a', 'b']) or \
                     (prev_phase == 'd' and curr_phase in ['a', 'b', 'c']) or \
                     (prev_phase == 'e' and curr_phase in ['a', 'b', 'c', 'd']):
                 state = previous_state
                 action = self.get_action_for_state(state)
-                evaluation = f"防止阶段回退：保持在{state}状态而不是回退到{consultant_result['state']}"
+                evaluation = f"Stage regression prevented: maintaining state {state} instead of reverting to {consultant_result['state']}"
 
-        # 更新教学轮数计数器
-        # 如果进入教学阶段（a0 -> a1或更高阶段）或已在教学阶段，则计数
+        # Update the teaching round counter
         if previous_state == "a0" and state != "a0":
-            # 刚进入教学阶段，第一轮
+            # Just entered the teaching stage — first round
             self.teaching_rounds = 1
         elif previous_state != "a0" and state != "a0":
-            # 已在教学阶段，增加轮数
+            # Already in the teaching stage — increment counter
             self.teaching_rounds += 1
 
-        # 将顾问分析添加到历史记录中
         self.add_to_consultant_history(evaluation, state, action)
 
-        # 处理超过教学轮数限制的情况
+        # Handle the case where the teaching round limit is exceeded
         if self.teaching_rounds > self.max_teaching_rounds:
-            # 检查是否学生提供了正确答案（顾问判断可以进入e34阶段）
             if state == "e34":
-                # 允许转入总结阶段
-                pass
+                pass  # Allow transition to the summary stage
             elif previous_state == "d33" and state != "d33":
-                # 如果之前在d33，但现在不是d33，也不是e34，则强制回到d33
                 state = "d33"
                 action = self.get_action_for_state("d33")
-                evaluation = f"已达到教学阶段最大轮数限制({self.max_teaching_rounds}轮)，强制维持在d33阶段等待正确答案"
+                evaluation = f"Maximum teaching rounds reached ({self.max_teaching_rounds}), forcing return to d33 to await the correct answer"
             elif state != "d33":
-                # 如果不在d33或e34，则强制进入d33
                 state = "d33"
                 action = self.get_action_for_state("d33")
-                evaluation = f"已达到教学阶段最大轮数限制({self.max_teaching_rounds}轮)，强制转入规则建构阶段"
+                evaluation = f"Maximum teaching rounds reached ({self.max_teaching_rounds}), forcing transition to rule construction stage"
         elif self.teaching_rounds == self.max_teaching_rounds and state not in ["d33", "e34"]:
-            # 刚好达到最大轮数且还未进入d33或e34，强制进入d33
             state = "d33"
             action = self.get_action_for_state("d33")
-            evaluation = f"已达到教学阶段最大轮数限制({self.max_teaching_rounds}轮)，强制转入规则建构阶段"
+            evaluation = f"Maximum teaching rounds reached ({self.max_teaching_rounds}), forcing transition to rule construction stage"
 
-        # 如果开启调试模式，则打印智能体1的输出
         if self.debug_mode:
-            print("\n=== 苏格拉底教学顾问分析 ===")
+            print("\n=== Socratic Teaching Consultant Analysis ===")
             if state != "a0":
-                print(f"教学阶段对话轮数: {self.teaching_rounds}/{self.max_teaching_rounds}")
-            print(f"评估: {evaluation}")
-            print(f"状态: {state}")
-            print(f"行动: {action}")
-            print("=============================\n")
+                print(f"Teaching stage round: {self.teaching_rounds}/{self.max_teaching_rounds}")
+            print(f"Evaluation: {evaluation}")
+            print(f"State: {state}")
+            print(f"Action: {action}")
+            print("=============================================\n")
 
-        # 更新当前状态
         self.current_state = state
 
-        # 调用苏格拉底教师
         socrates_response = self.socrates_teacher(
             student_input,
             evaluation,
             action
         )
 
-        # 添加老师回复到对话历史
         self.add_to_history("teacher", socrates_response)
 
         return socrates_response
 
     def start_conversation(self) -> None:
-        """开始对话"""
-        print("苏格拉底教学系统已启动。")
-        print("请输入你的问题，与苏格拉底教师开始对话。")
-        print("(输入'exit'退出对话)")
+        """Start an interactive teaching conversation."""
+        print("Socratic teaching system started.")
+        print("Enter your question to begin a dialogue with the Socratic teacher.")
+        print("(Type 'exit' to quit)")
 
         while True:
-            student_input = input("\n你: ")
+            student_input = input("\nYou: ")
 
             if student_input.lower() == 'exit':
-                print("\n感谢使用苏格拉底教学系统，再见！")
+                print("\nThank you for using the Socratic teaching system. Goodbye!")
                 break
 
             teacher_response = self.process_student_input(student_input)
-            print(f"\n苏格拉底: {teacher_response}")
+            print(f"\nSocrates: {teacher_response}")
 
-            # 如果到达了e34状态，对话结束，询问是否继续新对话
+            # If state e34 is reached, the dialogue is complete — ask whether to start a new session
             if self.current_state == "e34":
-                print("\n对话已完成！苏格拉底教师已总结了本次学习。")
+                print("\nDialogue complete! The Socratic teacher has summarized this learning session.")
 
-                # 询问用户是否继续新的教学
                 while True:
-                    continue_choice = input("\n是否开始新的教学对话？(是/否): ")
-                    if continue_choice.lower() in ["是", "y", "yes"]:
-                        # 重置会话状态
+                    continue_choice = input("\nWould you like to start a new teaching dialogue? (yes/no): ")
+                    if continue_choice.lower() in ["yes", "y"]:
                         self.reset_session()
-                        print("\n新的苏格拉底教学对话已开始。")
-                        print("请输入你的问题，与苏格拉底教师开始对话。")
+                        print("\nA new Socratic teaching dialogue has started.")
+                        print("Enter your question to begin a dialogue with the Socratic teacher.")
                         break
-                    elif continue_choice.lower() in ["否", "n", "no"]:
-                        print("\n感谢使用苏格拉底教学系统，再见！")
-                        return  # 结束整个对话
+                    elif continue_choice.lower() in ["no", "n"]:
+                        print("\nThank you for using the Socratic teaching system. Goodbye!")
+                        return
                     else:
-                        print("无效输入，请输入'是'或'否'。")
+                        print("Invalid input. Please enter 'yes' or 'no'.")
 
-            # 如果教学轮数达到上限且处于d33状态，提示用户
+            # If the teaching round limit is reached and the system is in state d33, prompt the user
             elif self.teaching_rounds >= self.max_teaching_rounds and self.current_state == "d33":
-                print(f"\n【教学阶段已达到最大轮数({self.max_teaching_rounds}轮)，请给出最终答案以进入总结阶段】")
-
+                print(f"\n[Maximum teaching rounds reached ({self.max_teaching_rounds}). Please provide your final answer to proceed to the summary stage.]")
 
 
 if __name__ == "__main__":
 
-    # 顾问智能体API配置
-    CONSULTANT_API_KEY = "Please input your consultant API key"  # 顾问智能体的API密钥
-    CONSULTANT_BASE_URL = "Please input your consultant API base URL" # 顾问智能体的API基础URL地址
-    CONSULTANT_MODEL_NAME = "Please input your consultant model name" # 顾问智能体使用的模型名称
+    # Consultant agent API configuration
+    CONSULTANT_API_KEY = "Please input your consultant API key"
+    CONSULTANT_BASE_URL = "Please input your consultant API base URL"
+    CONSULTANT_MODEL_NAME = "Please input your consultant model name"
 
+    # Teacher agent API configuration
+    TEACHER_API_KEY = "Please input your teacher API key"
+    TEACHER_BASE_URL = "Please input your teacher API base URL"
+    TEACHER_MODEL_NAME = "Please input your teacher model name"
 
-    # 教师智能体API配置
-    TEACHER_API_KEY = "Please input your teacher API key" # 教师智能体的API密钥
-    TEACHER_BASE_URL = "Please input your teacher API base URL" # 教师智能体的API基础URL地址
-    TEACHER_MODEL_NAME = "Please input your teacher model name" # 教师智能体使用的模型名称
+    DEBUG_MODE = True
+    MAX_TEACHING_ROUNDS = 8
 
-
-    DEBUG_MODE = True  # 设置是否显示苏格拉底教学顾问的输出
-    MAX_TEACHING_ROUNDS = 8  # 设置最大教学轮数
-
-    # 创建教学系统实例
     teaching_system = SocraticTeachingSystem(
         consultant_api_key=CONSULTANT_API_KEY,
         consultant_base_url=CONSULTANT_BASE_URL,
@@ -534,5 +513,4 @@ if __name__ == "__main__":
         max_teaching_rounds=MAX_TEACHING_ROUNDS
     )
 
-    # 启动对话
     teaching_system.start_conversation()
