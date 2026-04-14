@@ -1,0 +1,208 @@
+"""
+KELE Socratic Teaching System — working copy extended from the original.
+
+This module wraps the KELE SocraticTeachingSystem with our config layer
+and adds batch evaluation for running against the SocratDataset.
+"""
+
+import json
+import sys
+import time
+from pathlib import Path
+
+from src.project.config import load_config
+
+# Add the resources path so we can import the original system
+RESOURCES_DIR = Path(__file__).resolve().parents[2] / "resources" / "KELE"
+sys.path.insert(0, str(RESOURCES_DIR))
+
+from consultant_teacher_socratic_teaching_system import SocraticTeachingSystem
+
+
+def create_system(debug: bool | None = None) -> SocraticTeachingSystem:
+    """Create a SocraticTeachingSystem from environment config."""
+    cfg = load_config()
+    return SocraticTeachingSystem(
+        consultant_api_key=cfg.consultant.api_key,
+        consultant_base_url=cfg.consultant.base_url,
+        consultant_model_name=cfg.consultant.model_name,
+        teacher_api_key=cfg.teacher.api_key,
+        teacher_base_url=cfg.teacher.base_url,
+        teacher_model_name=cfg.teacher.model_name,
+        debug_mode=debug if debug is not None else cfg.debug_mode,
+        max_teaching_rounds=cfg.max_teaching_rounds,
+    )
+
+
+def load_dataset(path: Path | None = None) -> list[dict]:
+    """Load the SocratDataset."""
+    if path is None:
+        path = RESOURCES_DIR / "SocratDataset.json"
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def run_single_dialogue(system: SocraticTeachingSystem, item: dict) -> dict:
+    """Replay a single dataset item through the system and collect outputs.
+
+    Uses the student turns from the ground-truth dialogue as input,
+    but the teacher and consultant responses come from our live system.
+    """
+    system.reset_session()
+    ground_truth = item["dialogue"]
+    generated_turns = []
+    start = time.time()
+
+    for turn in ground_truth:
+        student_input = turn["student"]
+        teacher_response = system.process_student_input(student_input)
+
+        generated_turns.append({
+            "student": student_input,
+            "state": system.current_state,
+            "teacher_response": teacher_response,
+            "ground_truth_teacher": turn["teacher"],
+            "ground_truth_state": turn["state"],
+        })
+
+        # If we hit the summary stage, stop
+        if system.current_state == "e34":
+            break
+
+    elapsed = time.time() - start
+
+    return {
+        "id": item["id"],
+        "question": item["question"],
+        "answer": item["answer"],
+        "num_turns_ground_truth": len(ground_truth),
+        "num_turns_generated": len(generated_turns),
+        "dialogue": generated_turns,
+        "elapsed_seconds": round(elapsed, 2),
+    }
+
+
+def run_batch_evaluation(
+    output_dir: Path,
+    dataset_path: Path | None = None,
+    start_id: int = 1,
+    limit: int | None = None,
+) -> None:
+    """Run the full evaluation pipeline on the dataset.
+
+    Saves each dialogue result individually (crash-safe) and writes
+    a progress log for monitoring.
+    """
+    dataset = load_dataset(dataset_path)
+    total = len(dataset)
+
+    # Filter to start_id and apply limit
+    dataset = [d for d in dataset if d["id"] >= start_id]
+    if limit is not None:
+        dataset = dataset[:limit]
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dialogues_dir = output_dir / "dialogues"
+    dialogues_dir.mkdir(exist_ok=True)
+    progress_log = output_dir / "progress.log"
+
+    system = create_system(debug=False)
+    completed = 0
+    start_time = time.time()
+
+    print(f"Starting evaluation: {len(dataset)} dialogues (of {total} total)")
+    print(f"Output: {output_dir}")
+    print(f"Teacher model: {system.teacher_model_name}")
+    print(f"Consultant model: {system.consultant_model_name}")
+    print("-" * 60)
+
+    for item in dataset:
+        item_id = item["id"]
+        out_file = dialogues_dir / f"{item_id:04d}.json"
+
+        # Skip if already completed (crash recovery)
+        if out_file.exists():
+            completed += 1
+            continue
+
+        try:
+            result = run_single_dialogue(system, item)
+            with open(out_file, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+            completed += 1
+        except Exception as e:
+            error_result = {"id": item_id, "error": str(e)}
+            with open(out_file, "w", encoding="utf-8") as f:
+                json.dump(error_result, f, ensure_ascii=False, indent=2)
+            completed += 1
+            print(f"  [ERROR] Dialogue {item_id}: {e}")
+
+        # Progress reporting
+        elapsed = time.time() - start_time
+        rate = completed / elapsed if elapsed > 0 else 0
+        remaining = (len(dataset) - completed) / rate if rate > 0 else 0
+        progress_msg = (
+            f"[{completed}/{len(dataset)}] "
+            f"{completed / len(dataset) * 100:.1f}% complete | "
+            f"{rate:.2f} dialogues/s | "
+            f"ETA: {remaining / 60:.0f}m | "
+            f"Elapsed: {elapsed / 60:.0f}m"
+        )
+        print(f"\r{progress_msg}", end="", flush=True)
+
+        with open(progress_log, "w") as f:
+            f.write(progress_msg + "\n")
+
+    print(f"\nDone. {completed} dialogues saved to {dialogues_dir}")
+
+    # Save run config
+    cfg = load_config()
+    run_config = {
+        "teacher_model": cfg.teacher.model_name,
+        "teacher_base_url": cfg.teacher.base_url,
+        "consultant_model": cfg.consultant.model_name,
+        "max_teaching_rounds": cfg.max_teaching_rounds,
+        "total_dialogues": len(dataset),
+        "completed": completed,
+        "total_elapsed_seconds": round(time.time() - start_time, 2),
+    }
+    with open(output_dir / "run_config.json", "w") as f:
+        json.dump(run_config, f, indent=2)
+
+
+def interactive() -> None:
+    """Launch an interactive Socratic teaching session."""
+    system = create_system()
+    system.start_conversation()
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="KELE Socratic Teaching System")
+    sub = parser.add_subparsers(dest="command")
+
+    # Interactive mode
+    sub.add_parser("interactive", help="Start an interactive teaching session")
+
+    # Batch evaluation mode
+    eval_parser = sub.add_parser("evaluate", help="Run batch evaluation on the dataset")
+    eval_parser.add_argument("--output", type=Path, default=Path("results/baseline"))
+    eval_parser.add_argument("--start-id", type=int, default=1, help="Resume from this dialogue ID")
+    eval_parser.add_argument("--limit", type=int, default=None, help="Max dialogues to process")
+
+    # Quick test mode — run on a handful of dialogues
+    test_parser = sub.add_parser("test", help="Quick test with a few dialogues")
+    test_parser.add_argument("--n", type=int, default=3, help="Number of dialogues to test")
+    test_parser.add_argument("--output", type=Path, default=Path("results/test"))
+
+    args = parser.parse_args()
+
+    if args.command == "interactive":
+        interactive()
+    elif args.command == "evaluate":
+        run_batch_evaluation(args.output, start_id=args.start_id, limit=args.limit)
+    elif args.command == "test":
+        run_batch_evaluation(args.output, limit=args.n)
+    else:
+        parser.print_help()
