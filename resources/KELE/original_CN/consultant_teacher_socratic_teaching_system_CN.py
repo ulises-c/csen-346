@@ -308,6 +308,11 @@ e34：学生正确给出题目答案
             try:
                 # 尝试解析JSON
                 result = json.loads(raw_content)
+                # Weaker consultant models (e.g. Qwen3.5-2B) sometimes emit
+                # `"state": 3` instead of `"state": "a0"`. Coerce to string so
+                # downstream `state[0]` phase-prefix checks don't blow up.
+                if "state" in result and not isinstance(result["state"], str):
+                    result["state"] = str(result["state"])
                 return result
             except json.JSONDecodeError as json_err:
                 # JSON解析错误，打印原始内容

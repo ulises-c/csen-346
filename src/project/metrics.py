@@ -15,9 +15,25 @@ from rouge_score import rouge_scorer
 from sacrebleu.metrics import BLEU
 
 
+class _ZhCharTokenizer:
+    """Character-level tokenizer for Chinese text.
+    rouge_score's default tokenizer strips all non-ASCII (it replaces them with
+    spaces, then keeps only alnum tokens), so raw Chinese scores 0.0. We
+    tokenize each Han character as its own token, which matches the standard
+    convention for ROUGE on Chinese.
+    """
+
+    def tokenize(self, text: str) -> list[str]:
+        return [c for c in text if not c.isspace()]
+
+
 def compute_rouge(predictions: list[str], references: list[str]) -> dict[str, float]:
-    """Compute ROUGE-1, ROUGE-2, ROUGE-L F1 scores."""
-    scorer = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL"], use_stemmer=False)
+    """Compute ROUGE-1, ROUGE-2, ROUGE-L F1 scores (character-level for Chinese)."""
+    scorer = rouge_scorer.RougeScorer(
+        ["rouge1", "rouge2", "rougeL"],
+        use_stemmer=False,
+        tokenizer=_ZhCharTokenizer(),
+    )
     scores = {"rouge1": [], "rouge2": [], "rougeL": []}
 
     for pred, ref in zip(predictions, references):
