@@ -1,0 +1,13 @@
+{
+  "experiment": "baseline",
+  "teacher_model": "SocratTeachLLM",
+  "teacher_base_url": "http://localhost:8001/v1",
+  "consultant_model": "Qwen3.5-2B",
+  "consultant_base_url": "http://localhost:8002/v1",
+  "max_teaching_rounds": 8,
+  "total_dialogues": 681,
+  "completed": 681,
+  "total_elapsed_seconds": 17928.65,
+  "started_at": "2026-04-13 23:32:21",
+  "finished_at": "2026-04-14 04:31:10"
+}

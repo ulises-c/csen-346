@@ -30,7 +30,7 @@ exec vllm serve "$MODEL_PATH" \
     --host 0.0.0.0 \
     --port "$PORT" \
     --dtype bfloat16 \
-    --max-model-len 4096 \
+    --max-model-len 8192 \
     --gpu-memory-utilization 0.32 \
     --enforce-eager \
     2>&1 | tee "$LOG_FILE"

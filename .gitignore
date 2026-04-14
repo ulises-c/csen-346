@@ -1,8 +1,40 @@
-.venv/
+# Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual envs
+.venv/
+venv/
+
+# Editor / tooling
 .claude/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Secrets
 .env
+.env.local
+
+# Logs (vLLM server, eval runs, nohup dumps)
 logs/
-results/dialogues/
+*.log
+*.nohup
+
+# Large per-dialogue outputs — reproducible from inputs + code
+# Keep metrics_summary.json, run_config.json, progress.log tracked
+results/**/dialogues/
+
+# Model weights / HF cache
+hf_models/
+*.bin
+*.safetensors
+*.gguf
+
+# Misc
+*.tmp

@@ -29,9 +29,8 @@ def compute_rouge(predictions: list[str], references: list[str]) -> dict[str, fl
 
 
 def compute_bleu(predictions: list[str], references: list[str]) -> float:
-    """Compute BLEU-4 score."""
-    bleu = BLEU(effective_order=True)
-    # sacrebleu expects references as list of lists
+    """Compute BLEU-4 score with Chinese tokenization (SocratDataset is Chinese)."""
+    bleu = BLEU(effective_order=True, tokenize="zh")
     result = bleu.corpus_score(predictions, [references])
     return result.score
 
