@@ -24,10 +24,11 @@ echo "Test: curl http://localhost:$PORT/v1/models"
 echo "---"
 
 exec vllm serve "$MODEL_PATH" \
+    --served-model-name SocratTeachLLM \
     --host 0.0.0.0 \
     --port "$PORT" \
     --dtype bfloat16 \
     --trust-remote-code \
     --max-model-len 4096 \
-    --gpu-memory-utilization 0.55 \
+    --gpu-memory-utilization 0.60 \
     2>&1 | tee "$LOG_FILE"

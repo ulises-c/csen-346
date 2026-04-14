@@ -283,7 +283,7 @@ Follow the Socratic teaching rules to manage the teaching stage and evaluate the
 Place all output in the following JSON structure:
 {{
     "evaluation": Determine the current stage of the dialogue, evaluate the student's state within the current teaching stage, and provide the reasoning,
-    "state": The state number
+    "state": The state ID as a string, e.g. "a0", "a1", "b2", "c15", "d30", "e34"
 }}
 """
 
@@ -314,6 +314,8 @@ Current student input: {student_input}
 
             try:
                 result = json.loads(raw_content)
+                if "state" in result and not isinstance(result["state"], str):
+                    result["state"] = str(result["state"])
                 return result
             except json.JSONDecodeError as json_err:
                 print(f"JSON parse error: {json_err}")
