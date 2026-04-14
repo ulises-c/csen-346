@@ -1,5 +1,6 @@
 import openai
 import json
+import time
 from typing import Dict, Any
 
 
@@ -286,14 +287,34 @@ e34：学生正确给出题目答案
 """
 
         try:
-            response = self.consultant_client.chat.completions.create(
-                model=self.consultant_model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input}
-                ],
-                response_format={"type": "json_object"}
-            )
+            # Retry 429s with exponential backoff (+ honor Retry-After when
+            # present). Hosted APIs like OpenAI bounce hard on TPM bursts;
+            # without this, a full eval run loses many turns to transient caps.
+            response = None
+            for attempt in range(6):
+                try:
+                    response = self.consultant_client.chat.completions.create(
+                        model=self.consultant_model_name,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_input}
+                        ],
+                        response_format={"type": "json_object"}
+                    )
+                    break
+                except openai.RateLimitError as rle:
+                    retry_after = None
+                    try:
+                        ra = rle.response.headers.get("retry-after") if getattr(rle, "response", None) else None
+                        if ra:
+                            retry_after = float(ra)
+                    except Exception:
+                        pass
+                    wait = retry_after if retry_after is not None else min(2 ** attempt, 30)
+                    print(f"Rate-limited (attempt {attempt+1}/6), sleeping {wait:.1f}s")
+                    time.sleep(wait)
+            if response is None:
+                raise RuntimeError("Consultant call failed after 6 retries on rate limits")
 
             # 获取原始响应内容
             raw_content = response.choices[0].message.content

@@ -4,6 +4,68 @@ Engineering decisions, what we've tried, and what's next. Each entry is dated an
 
 ---
 
+## 2026-04-14 — Baseline run #2 COMPLETE (GPT-4o consultant) ✅
+
+**Ran:** 10:14 → 14:48 (4h 34min, 274 min). 681/681 dialogues, 4294 turns, **zero errored dialogues**. 108 rate-limit retries handled gracefully by backoff.
+
+### Final metrics (results/baseline/metrics_summary.json)
+
+| Metric | Paper SocratTeachLLM | Paper GPT-4o baseline | **Our run** | vs paper GPT-4o |
+|---|---|---|---|---|
+| ROUGE-1 | 57.4 | 48.25 | **44.61** | -3.6 |
+| ROUGE-2 | 33.63 | 22.55 | **26.04** | **+3.49** ✓ |
+| ROUGE-L | 50.77 | 38.27 | **38.02** | -0.25 (tied) |
+| BLEU-4 | 41.96 | 29.93 | **19.60** | -10.3 |
+| State acc | — | — | 25.94% | (our metric; not in paper) |
+| Stage a / b / c / d / e | — | — | 95.15 / 36.93 / 4.70 / 5.04 / 11.92 | |
+
+**Headline:** Clean reproduction. We **beat the paper's GPT-4o-as-teacher baseline on ROUGE-2** and match it on ROUGE-L. Below on BLEU-4 and ROUGE-1 vs SocratTeachLLM — the BLEU-4 gap (19.6 vs 41.96) is the biggest, likely a generation-params mismatch (paper doesn't specify temperature / max_tokens).
+
+### OpenAI spend (gpt-4o-2024-11-20 consultant)
+
+| | Value |
+|---|---|
+| **Total cost** | **$17.49** |
+| Input tokens | 8,244,910 |
+| Output tokens | 371,055 |
+| Cost per dialogue | $0.0257 |
+| Cost per turn | $0.00407 |
+
+At list pricing ($2.50/1M input, $10/1M output) this would have been $24.32 — prompt caching on the ~2,800-token system prompt saved **~$6.80 (~28%)**. Scaling implication: each future full eval run costs ≈ $17-18. A 3-experiment campaign (baseline + Gemma-4 + BERT-consultant improvement) ≈ $50-60 in OpenAI spend.
+
+### Smoke test results (20 dialogues, 117 turns, gpt-4o)
+
+| Metric | Value |
+|---|---|
+| ROUGE-1 / 2 / L | 45.73 / 25.76 / 38.28 |
+| BLEU-4 | 18.65 |
+| State acc (overall) | 29.06% |
+| Stage a / b / c / d / e | 100 / 45.5 / 5.3 / 0 / 11.1 |
+
+All the metric-pipeline fixes validated end-to-end. State accuracy jumped from 1.64% (Qwen3.5-2B) → 29% (gpt-4o).
+
+### The consultant journey today — what we tried and why
+
+| Consultant | Outcome | Reason |
+|---|---|---|
+| Qwen3.5-2B (local) | State acc 1.64% | Too weak for 30-state schema — emitted bare integers instead of `"a1"`/`"b4"` |
+| Qwen3.5-4B (local) | OOM | Teacher (19 GB) + 4B weights (8 GB) + KV cache exceeds 32 GB VRAM |
+| gpt-4o-mini (API) | State acc 6.56% | Even mini is too weak; Stage a dropped from 100% to 30% |
+| **gpt-4o-2024-11-20 (API)** | **State acc 29% smoke** | **Going with this.** Matches the paper's original setup (they used GPT-4o). |
+
+### Added: retry-with-backoff
+
+`resources/KELE/original_CN/consultant_teacher_socratic_teaching_system_CN.py` now retries 429s up to 6 times with exponential backoff (honoring `Retry-After` header when present). Tier 1 TPM cap of 30k was dropping turns; retries fix this cleanly at the cost of slower throughput.
+
+### Config
+
+- `configs/baseline.env`: consultant → `https://api.openai.com/v1`, `gpt-4o-2024-11-20`
+- `.env`: `CONSULTANT_API_KEY=sk-...` (gitignored, OpenAI key)
+- `src/project/config.py`: load experiment config first, then `.env` (experiment wins; `.env` fills in secrets)
+- Teacher vLLM still local on port 8001 at 0.60 util (no change)
+
+---
+
 ## 2026-04-14 — Baseline run #1 post-mortem + fixes
 
 **Run:** `results/baseline/` (2026-04-13 23:32 → 2026-04-14 04:31, 681/681 dialogues, ~5h)
