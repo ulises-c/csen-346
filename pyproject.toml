@@ -21,7 +21,15 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.34.0",
     "pydantic>=2.10.0",
+    "google-genai>=1.0.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
