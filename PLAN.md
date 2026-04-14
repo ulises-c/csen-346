@@ -36,11 +36,12 @@
 
 **Goal:** Get the KELE system running end-to-end with SocratTeachLLM as the teacher agent.
 **Hardware:** RTX 5090 32GB (all inference and training runs on this rig).
+**Consultant model:** Qwen3.5-9B (replaces GPT-4o from original paper — fully local, zero paid APIs).
 **Setup guide:** See [`RTX5090_SETUP.md`](RTX5090_SETUP.md) for full runbook — model downloads, vLLM serving, eval pipeline, metrics export, and troubleshooting.
 
 - [x] Add `openai` to `pyproject.toml` via Poetry
 - [ ] Serve [SocratTeachLLM](https://huggingface.co/yuanpan/SocratTeachLLM) locally (no free HF Inference API available)
-- [ ] Configure API credentials for consultant (GPT-4o) and teacher (SocratTeachLLM)
+- [ ] Configure API credentials for consultant (Qwen3.5-9B, local) and teacher (SocratTeachLLM, local)
 - [ ] Run `KELE_original/consultant_teacher_socratic_teaching_system.py` on 5–10 manual test dialogues
 - [ ] Verify the 5-stage SocRule flow (a → b → c → d → e) works correctly end-to-end
 - [ ] Commit working baseline to `src/`

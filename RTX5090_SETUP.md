@@ -1,6 +1,8 @@
 # RTX 5090 Setup Runbook
 
-Step-by-step guide to get both models downloaded, served, and evaluated on the RTX 5090 32GB rig.
+Step-by-step guide to get all models downloaded, served, and evaluated on the RTX 5090 32GB rig.
+
+**Architecture:** Fully local, zero paid APIs. The consultant (Qwen3.5-9B) and teacher (SocratTeachLLM) both run on the same GPU via vLLM on separate ports.
 
 ---
 
@@ -9,12 +11,16 @@ Step-by-step guide to get both models downloaded, served, and evaluated on the R
 ```bash
 # System
 nvidia-smi                  # Confirm CUDA driver is working
-python --version            # Need 3.10+
 
-# Core packages
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-pip install vllm transformers accelerate huggingface_hub
-pip install rouge-score sacrebleu openai
+# Python 3.12 via pyenv (Arch ships 3.14 which is too new for vLLM)
+pyenv install 3.12
+cd ~/Documents/scu/CSEN-346/csen-346
+~/.pyenv/versions/3.12.*/bin/python -m venv .venv
+source .venv/bin/activate
+
+# Core packages (inside venv)
+pip install openai vllm transformers accelerate huggingface_hub
+pip install rouge-score sacrebleu
 pip install wandb                          # Training metrics & dashboards
 pip install tqdm rich                      # Progress bars & rich console output
 ```
@@ -23,123 +29,81 @@ pip install tqdm rich                      # Progress bars & rich console output
 
 ## Step 1 — Download Models
 
-Download both models upfront so we're not bottlenecked by network during experiments.
+Download all models upfront so we're not bottlenecked by network during experiments.
 
 ```bash
-# Create a local model cache
-export HF_HOME=~/hf_models
-mkdir -p $HF_HOME
+mkdir -p ~/hf_models
 
-# Model 1: SocratTeachLLM (9.4B, ~19GB, BF16)
+# Model 1: SocratTeachLLM (9.4B, GLM4-9B fine-tune, ~19GB BF16) — teacher agent
 huggingface-cli download yuanpan/SocratTeachLLM --local-dir ~/hf_models/SocratTeachLLM
 
-# Model 2: Gemma-4-31B (pick ONE quantization)
-# Option A: Full weights (~62GB) — won't fit in 32GB VRAM, need quantization at load time
-huggingface-cli download google/gemma-4-31B --local-dir ~/hf_models/gemma-4-31B
+# Model 2: Qwen3.5-9B (~17GB BF16, ~5GB Q4) — consultant agent (replaces GPT-4)
+huggingface-cli download Qwen/Qwen3.5-9B --local-dir ~/hf_models/Qwen3.5-9B
 
-# Option B (recommended): Pre-quantized GGUF for faster startup
-# Check for community Q4 quants on HF — search "gemma-4-31B GGUF" or "gemma-4-31B AWQ"
-# Example (if available):
-# huggingface-cli download <user>/gemma-4-31B-AWQ --local-dir ~/hf_models/gemma-4-31B-AWQ
+# Model 3 (Phase 1 Run 2): Gemma-4-31B — extension experiment
+# huggingface-cli download google/gemma-4-31B --local-dir ~/hf_models/gemma-4-31B
 ```
 
 ### Verify downloads
 
 ```bash
 ls -lh ~/hf_models/SocratTeachLLM/    # Expect ~19GB across 4 shards
-ls -lh ~/hf_models/gemma-4-31B/       # Expect ~62GB full or ~17GB Q4
+ls -lh ~/hf_models/Qwen3.5-9B/        # Expect ~17GB BF16
 ```
 
 ---
 
-## Step 2 — Serve SocratTeachLLM (Baseline)
+## Step 2 — Serve Both Models
 
-vLLM gives us an OpenAI-compatible API that the existing KELE code can hit directly.
-
-```bash
-# Serve SocratTeachLLM on port 8001
-vllm serve ~/hf_models/SocratTeachLLM \
-  --host 0.0.0.0 \
-  --port 8001 \
-  --dtype bfloat16 \
-  --trust-remote-code \
-  --max-model-len 4096 \
-  --gpu-memory-utilization 0.85 \
-  2>&1 | tee logs/vllm_socrat.log
-```
-
-**Important:** SocratTeachLLM uses custom code (`trust-remote-code` is required).
-
-### Test the endpoint
+Both models run simultaneously on the same GPU via vLLM on separate ports. vLLM gives us OpenAI-compatible APIs that the KELE code hits directly.
 
 ```bash
-curl http://localhost:8001/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "SocratTeachLLM",
-    "messages": [{"role": "user", "content": "Hello, can you help me with a science question?"}],
-    "max_tokens": 200
-  }'
+# Option A: One command to start both
+./scripts/serve_both.sh
+
+# Option B: Start individually in separate terminals
+./scripts/serve_socratteachllm.sh   # Teacher on port 8001
+./scripts/serve_consultant.sh       # Consultant on port 8002
 ```
+
+### Test the endpoints
+
+```bash
+curl http://localhost:8001/v1/models   # Should show SocratTeachLLM
+curl http://localhost:8002/v1/models   # Should show Qwen3.5-9B
+```
+
+### VRAM budget (both models simultaneously)
+
+| Model | Role | Precision | VRAM | Port |
+| --- | --- | --- | --- | --- |
+| SocratTeachLLM 9.4B | Teacher | BF16 | ~19GB | 8001 |
+| Qwen3.5-9B | Consultant | BF16 | ~5GB | 8002 |
+| **Total** | | | **~24GB / 32GB** | |
 
 ---
 
-## Step 3 — Serve Gemma-4-31B
+## Step 3 — Run the KELE System
 
-After baseline experiments are done, swap to Gemma.
-
-```bash
-# Kill the SocratTeachLLM server first (or use a different port)
-
-# Option A: vLLM with on-the-fly quantization
-vllm serve ~/hf_models/gemma-4-31B \
-  --host 0.0.0.0 \
-  --port 8001 \
-  --dtype bfloat16 \
-  --quantization awq \
-  --max-model-len 4096 \
-  --gpu-memory-utilization 0.90 \
-  2>&1 | tee logs/vllm_gemma.log
-
-# Option B: If using pre-quantized AWQ weights
-vllm serve ~/hf_models/gemma-4-31B-AWQ \
-  --host 0.0.0.0 \
-  --port 8001 \
-  --dtype float16 \
-  --max-model-len 4096 \
-  --gpu-memory-utilization 0.90 \
-  2>&1 | tee logs/vllm_gemma.log
-```
-
-### VRAM budget
-
-| Model | Precision | VRAM Usage | Fits in 32GB? |
-| --- | --- | --- | --- |
-| SocratTeachLLM 9.4B | BF16 | ~19GB | Yes, comfortably |
-| Gemma-4-31B | Q4 (AWQ) | ~17GB | Yes |
-| Gemma-4-31B | Q8 | ~33GB | Tight — may OOM with long contexts |
-| Gemma-4-31B | BF16 | ~62GB | No |
-
----
-
-## Step 4 — Run the KELE System
-
-Both models get served on the same OpenAI-compatible endpoint, so the code doesn't change — only the model name in the config.
+Both models are served as OpenAI-compatible endpoints. The `.env` configures which ports to hit.
 
 ```bash
-# .env file (create in project root)
-CONSULTANT_API_KEY=sk-xxxxx              # OpenAI API key for GPT-4o
-CONSULTANT_BASE_URL=https://api.openai.com/v1
-CONSULTANT_MODEL_NAME=gpt-4o
+# .env file (create from template)
+cp .env.example .env
 
-TEACHER_API_KEY=not-needed               # vLLM doesn't require a real key
+# Contents:
+CONSULTANT_API_KEY=not-needed
+CONSULTANT_BASE_URL=http://localhost:8002/v1
+CONSULTANT_MODEL_NAME=Qwen3.5-9B
+
+TEACHER_API_KEY=not-needed
 TEACHER_BASE_URL=http://localhost:8001/v1
-TEACHER_MODEL_NAME=SocratTeachLLM        # Swap to gemma-4-31B for Run 2
+TEACHER_MODEL_NAME=SocratTeachLLM
 ```
 
 ---
 
-## Step 5 — Evaluation Pipeline with Metrics Export
+## Step 4 — Evaluation Pipeline with Metrics Export
 
 ### Progress tracking during evaluation runs
 
@@ -186,7 +150,7 @@ This gives us live dashboards, automatic ETA, and run comparisons without buildi
 
 ---
 
-## Step 6 — Phase 4: BERT Classifier Training
+## Step 5 — Phase 4: BERT Classifier Training
 
 This trains the replacement consultant agent.
 
@@ -217,23 +181,27 @@ python src/project/consultant_classifier.py \
 ## Quick Reference — Command Cheatsheet
 
 ```bash
+# Activate venv (every new terminal)
+source .venv/bin/activate
+
 # Monitor GPU
 watch -n 1 nvidia-smi
 
-# Start SocratTeachLLM server
-vllm serve ~/hf_models/SocratTeachLLM --port 8001 --dtype bfloat16 --trust-remote-code
+# Start both model servers
+./scripts/serve_both.sh
 
-# Start Gemma server
-vllm serve ~/hf_models/gemma-4-31B-AWQ --port 8001 --dtype float16
+# Or individually
+./scripts/serve_socratteachllm.sh   # Teacher on port 8001
+./scripts/serve_consultant.sh       # Consultant on port 8002
 
-# Run baseline eval
-python src/project/evaluate.py --model socratteachllm --output results/baseline/
+# Quick smoke test (3 dialogues)
+python3 -m src.project.kele test --n 3 --output results/test
 
-# Run gemma eval
-python src/project/evaluate.py --model gemma --output results/gemma/
+# Full baseline evaluation (680 dialogues)
+./scripts/run_eval.sh
 
-# Compare results
-python src/project/compare_results.py results/baseline/ results/gemma/
+# Interactive session
+python3 -m src.project.kele interactive
 ```
 
 ---
@@ -242,8 +210,10 @@ python src/project/compare_results.py results/baseline/ results/gemma/
 
 | Issue | Fix |
 | --- | --- |
-| `trust_remote_code` error | Add `--trust-remote-code` flag to vLLM |
-| OOM on Gemma-4-31B | Use AWQ/Q4 quantization, reduce `--max-model-len` to 2048 |
+| `trust_remote_code` error | Add `--trust-remote-code` flag to vLLM (already in serve script) |
+| OOM with both models | Reduce `--gpu-memory-utilization` in serve scripts, or reduce `--max-model-len` to 2048 |
 | vLLM won't load ChatGLM | May need `--tokenizer-mode slow` for custom tokenizers |
 | Slow generation | Check `--gpu-memory-utilization` isn't too low, confirm no CPU offload |
-| Chinese output from SocratTeachLLM | Model was trained on Chinese data — may need Chinese prompts for teacher agent |
+| Chinese output from SocratTeachLLM | Expected — model was trained on Chinese data, dataset is Chinese |
+| NVML version mismatch | Reboot after driver update; PyTorch CUDA still works without NVML |
+| Qwen3.5 text-only load error | Need vLLM >= 0.17 (we have 0.19.0, should be fine) |
