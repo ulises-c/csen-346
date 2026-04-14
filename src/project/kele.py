@@ -19,9 +19,9 @@ sys.path.insert(0, str(RESOURCES_DIR))
 from consultant_teacher_socratic_teaching_system import SocraticTeachingSystem
 
 
-def create_system(debug: bool | None = None) -> SocraticTeachingSystem:
+def create_system(debug: bool | None = None, experiment: str | None = None) -> SocraticTeachingSystem:
     """Create a SocraticTeachingSystem from environment config."""
-    cfg = load_config()
+    cfg = load_config(experiment=experiment)
     return SocraticTeachingSystem(
         consultant_api_key=cfg.consultant.api_key,
         consultant_base_url=cfg.consultant.base_url,
@@ -34,12 +34,32 @@ def create_system(debug: bool | None = None) -> SocraticTeachingSystem:
     )
 
 
-def load_dataset(path: Path | None = None) -> list[dict]:
-    """Load the SocratDataset."""
+def load_dataset(path: Path | None = None, split: str = "test", seed: int = 42) -> list[dict]:
+    """Load the SocratDataset with train/test split.
+
+    The paper uses a 90/10 train/test split. We evaluate on the test set (~680 dialogues).
+    Args:
+        split: "test" (10%, for evaluation), "train" (90%), or "all" (full dataset).
+        seed: Random seed for reproducible splits.
+    """
     if path is None:
         path = RESOURCES_DIR / "SocratDataset.json"
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+
+    if split == "all":
+        return data
+
+    import random
+    rng = random.Random(seed)
+    indices = list(range(len(data)))
+    rng.shuffle(indices)
+
+    split_point = int(len(data) * 0.9)
+    if split == "train":
+        return [data[i] for i in sorted(indices[:split_point])]
+    else:  # test
+        return [data[i] for i in sorted(indices[split_point:])]
 
 
 def run_single_dialogue(system: SocraticTeachingSystem, item: dict) -> dict:
@@ -87,13 +107,15 @@ def run_batch_evaluation(
     dataset_path: Path | None = None,
     start_id: int = 1,
     limit: int | None = None,
+    experiment: str | None = None,
+    split: str = "test",
 ) -> None:
     """Run the full evaluation pipeline on the dataset.
 
     Saves each dialogue result individually (crash-safe) and writes
     a progress log for monitoring.
     """
-    dataset = load_dataset(dataset_path)
+    dataset = load_dataset(dataset_path, split=split)
     total = len(dataset)
 
     # Filter to start_id and apply limit
@@ -106,11 +128,11 @@ def run_batch_evaluation(
     dialogues_dir.mkdir(exist_ok=True)
     progress_log = output_dir / "progress.log"
 
-    system = create_system(debug=False)
+    system = create_system(debug=False, experiment=experiment)
     completed = 0
     start_time = time.time()
 
-    print(f"Starting evaluation: {len(dataset)} dialogues (of {total} total)")
+    print(f"Starting evaluation: {len(dataset)} dialogues (of {total} in {split} split)")
     print(f"Output: {output_dir}")
     print(f"Teacher model: {system.teacher_model_name}")
     print(f"Consultant model: {system.consultant_model_name}")
@@ -158,16 +180,28 @@ def run_batch_evaluation(
     # Save run config
     cfg = load_config()
     run_config = {
+        "experiment": output_dir.name,
         "teacher_model": cfg.teacher.model_name,
         "teacher_base_url": cfg.teacher.base_url,
         "consultant_model": cfg.consultant.model_name,
+        "consultant_base_url": cfg.consultant.base_url,
         "max_teaching_rounds": cfg.max_teaching_rounds,
         "total_dialogues": len(dataset),
         "completed": completed,
         "total_elapsed_seconds": round(time.time() - start_time, 2),
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time)),
+        "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     with open(output_dir / "run_config.json", "w") as f:
         json.dump(run_config, f, indent=2)
+
+    # Auto-compute metrics after run completes
+    print("\nComputing metrics...")
+    from src.project.metrics import compute_all_metrics, format_metrics_table
+    metrics = compute_all_metrics(dialogues_dir)
+    with open(output_dir / "metrics_summary.json", "w") as f:
+        json.dump(metrics, f, indent=2)
+    print(format_metrics_table(metrics))
 
 
 def interactive() -> None:
@@ -180,6 +214,10 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="KELE Socratic Teaching System")
+    parser.add_argument(
+        "--experiment", "-e", type=str, default=None,
+        help="Experiment config name (loads configs/<name>.env). E.g.: baseline, gemma4"
+    )
     sub = parser.add_subparsers(dest="command")
 
     # Interactive mode
@@ -187,7 +225,9 @@ if __name__ == "__main__":
 
     # Batch evaluation mode
     eval_parser = sub.add_parser("evaluate", help="Run batch evaluation on the dataset")
-    eval_parser.add_argument("--output", type=Path, default=Path("results/baseline"))
+    eval_parser.add_argument("--output", type=Path, default=None)
+    eval_parser.add_argument("--split", type=str, default="test", choices=["test", "train", "all"],
+                             help="Dataset split: test (10%%, default), train (90%%), all")
     eval_parser.add_argument("--start-id", type=int, default=1, help="Resume from this dialogue ID")
     eval_parser.add_argument("--limit", type=int, default=None, help="Max dialogues to process")
 
@@ -201,8 +241,12 @@ if __name__ == "__main__":
     if args.command == "interactive":
         interactive()
     elif args.command == "evaluate":
-        run_batch_evaluation(args.output, start_id=args.start_id, limit=args.limit)
+        output = args.output or Path(f"results/{args.experiment or 'baseline'}")
+        run_batch_evaluation(
+            output, start_id=args.start_id, limit=args.limit,
+            experiment=args.experiment, split=args.split,
+        )
     elif args.command == "test":
-        run_batch_evaluation(args.output, limit=args.n)
+        run_batch_evaluation(args.output, limit=args.n, experiment=args.experiment)
     else:
         parser.print_help()

@@ -38,9 +38,19 @@ def load_env_file(path: Path | None = None) -> None:
             os.environ.setdefault(key, value)
 
 
-def load_config() -> Config:
-    """Build a Config from environment variables (loads .env first)."""
-    load_env_file()
+def load_config(experiment: str | None = None) -> Config:
+    """Build a Config from environment variables.
+
+    If experiment is given, loads configs/<experiment>.env instead of .env.
+    Falls back to .env if no experiment is specified.
+    """
+    if experiment:
+        env_path = Path(__file__).resolve().parents[2] / "configs" / f"{experiment}.env"
+        if not env_path.exists():
+            raise FileNotFoundError(f"Experiment config not found: {env_path}")
+        load_env_file(env_path)
+    else:
+        load_env_file()
 
     def require(key: str) -> str:
         val = os.environ.get(key)

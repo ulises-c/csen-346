@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
-# Run the full baseline evaluation overnight
-# Usage: ./scripts/run_eval.sh [--limit N] [--start-id N]
+# Run evaluation for a specific experiment
+#
+# Usage:
+#   ./scripts/run_eval.sh baseline          # SocratTeachLLM teacher (default)
+#   ./scripts/run_eval.sh gemma4            # Gemma 4 31B teacher
+#   ./scripts/run_eval.sh baseline --limit 10   # Quick partial run
 
 set -euo pipefail
-
 cd "$(dirname "$0")/.."
 
-echo "=== KELE Baseline Evaluation ==="
+EXPERIMENT="${1:-baseline}"
+shift 2>/dev/null || true  # shift past experiment name, remaining args pass through
+
+echo "=== KELE Evaluation: $EXPERIMENT ==="
 echo "Start time: $(date)"
+echo "Config: configs/$EXPERIMENT.env"
 echo "GPU status:"
-nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader
+nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null || echo "(nvidia-smi unavailable)"
 echo "---"
 
-python3 -m src.project.kele evaluate \
-    --output results/baseline \
+python3 -m src.project.kele --experiment "$EXPERIMENT" evaluate \
+    --output "results/$EXPERIMENT" \
     "$@"
 
 echo "---"
 echo "End time: $(date)"
-echo "GPU status:"
-nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader
+echo "Results: results/$EXPERIMENT/"
+nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null || echo "(nvidia-smi unavailable)"

@@ -71,12 +71,12 @@ Two machines available: **M1 Max 64GB** (unified memory, MPS/MLX) and **RTX 5090
 | Gemma-4-31B (Q4, ~17GB) | ~5–10 tok/s | ~25–45 tok/s |
 | Gemma-4-31B (Q8, ~33GB) | ~8–15 tok/s | ~15–30 tok/s (VRAM-tight) |
 
-#### Full evaluation run estimates (680 dialogues × ~6 turns × ~200 tok/response ≈ 816K tokens)
+#### Full evaluation run estimates (681 test dialogues × ~6 turns × ~200 tok/response ≈ 816K tokens)
 
 | Model | M1 Max 64GB | RTX 5090 32GB |
 | --- | --- | --- |
 | SocratTeachLLM 9.4B | ~6–10 hours | ~1.5–3 hours |
-| Gemma-4-31B (Q4) | ~16–40 hours | ~4–8 hours |
+| Gemma-4-31B (FP4) | ~16–40 hours | ~4–8 hours |
 
 #### Phase 4 — BERT classifier training (42K examples, 3–5 epochs)
 
