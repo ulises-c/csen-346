@@ -18,6 +18,7 @@ class Config:
     teacher: AgentConfig
     debug_mode: bool = True
     max_teaching_rounds: int = 8
+    teacher_local_path: str = ""
 
 
 def load_env_file(path: Path | None = None) -> None:
@@ -60,4 +61,8 @@ def load_config() -> Config:
         ),
         debug_mode=os.environ.get("DEBUG_MODE", "true").lower() == "true",
         max_teaching_rounds=int(os.environ.get("MAX_TEACHING_ROUNDS", "8")),
+        teacher_local_path=os.environ.get(
+            "TEACHER_LOCAL_PATH",
+            str(Path.home() / "hf_models" / "SocratTeachLLM"),
+        ),
     )

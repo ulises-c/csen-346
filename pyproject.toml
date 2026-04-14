@@ -5,9 +5,34 @@ description = "Natural Language Processing - CSEN 346 SCU. Hugging Face and othe
 authors = [{ name = "Ulises Chavarria", email = "ulises.engineer@gmail.com" }]
 readme = "README.md"
 requires-python = "^3.12"
-dependencies = ["openai (>=2.31.0,<3.0.0)"]
-
+dependencies = [
+    "openai>=2.31.0,<3.0.0",
+    "transformers>=4.47.0",
+    "accelerate>=1.2.0",
+    "bitsandbytes>=0.45.0",
+    "huggingface-hub>=0.27.0",
+    "rouge-score>=0.1.2",
+    "sacrebleu>=2.4.0",
+    "tqdm>=4.67.0",
+    "rich>=13.9.0",
+    "datasets>=3.2.0",
+    "scikit-learn>=1.6.0",
+    "scipy>=1.15.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "pydantic>=2.10.0",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+# ---------------------------------------------------------------------------
+# NOTE: torch is intentionally NOT declared here.
+# Poetry cannot resolve the +cu126 local-version CUDA wheel alongside
+# PyPI's CPU wheel (transitive dep from transformers) for Python 3.14.
+# Install torch after `poetry install` with:
+#   poetry run pip install --index-url https://download.pytorch.org/whl/cu126 \
+#     "torch>=2.10.0"
+# See RTX3070_SETUP.md for the full install sequence.
+# ---------------------------------------------------------------------------
