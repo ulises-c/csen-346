@@ -33,7 +33,7 @@
 
 **Goal:** Get the KELE system running end-to-end with SocratTeachLLM as the teacher agent.
 
-- [ ] Add `openai` to `pyproject.toml` via Poetry
+- [x] Add `openai` to `pyproject.toml` via Poetry
 - [ ] Serve [SocratTeachLLM](https://huggingface.co/yuanpan/SocratTeachLLM) via HuggingFace Inference API or vLLM on SCU compute
 - [ ] Configure API credentials for consultant (GPT-4o or Qwen2.5-14B) and teacher (SocratTeachLLM)
 - [ ] Run `KELE_original/consultant_teacher_socratic_teaching_system.py` on 5–10 manual test dialogues

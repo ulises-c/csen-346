@@ -5,7 +5,7 @@ description = "Natural Language Processing - CSEN 346 SCU. Hugging Face and othe
 authors = [{ name = "Ulises Chavarria", email = "ulises.engineer@gmail.com" }]
 readme = "README.md"
 requires-python = "^3.12"
-dependencies = []
+dependencies = ["openai (>=2.31.0,<3.0.0)"]
 
 
 [build-system]
