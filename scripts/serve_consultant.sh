@@ -25,7 +25,7 @@ echo "---"
 
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-exec vllm serve "$MODEL_PATH" \
+exec poetry run vllm serve "$MODEL_PATH" \
     --served-model-name Qwen3.5-2B \
     --host 0.0.0.0 \
     --port "$PORT" \
