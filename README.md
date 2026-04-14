@@ -11,10 +11,12 @@ This project reproduces and extends **KELE**, a multi-agent framework for struct
 
 | Directory | Description |
 | --- | --- |
-| `KELE_original/` | Original KELE source code and dataset, translated to English (see [`KELE_original/ATTRIBUTION.md`](KELE_original/ATTRIBUTION.md)) |
 | `src/` | Our reproduction and extensions |
-| `resources/` | Research paper and reference materials |
+| `resources/KELE/` | KELE baseline — translated source, dataset, and attribution (see [`resources/KELE/ATTRIBUTION.md`](resources/KELE/ATTRIBUTION.md)) |
+| `resources/requirements/` | Course guidelines |
+| `resources/ideation/` | Topic research and project idea notes |
 | `deliverables/` | Course deliverables |
+| `PLAN.md` | Project plan with phases and deadlines |
 ## Mirroring to the org repo
 
 [ulises-c/csen-346](https://github.com/ulises-c/csen-346) is the primary development repo. It is mirrored to [SCU-CSEN346/KELE](https://github.com/SCU-CSEN346/KELE) via a dual-push remote — every `git push` publishes to both simultaneously, preserving full git history.
