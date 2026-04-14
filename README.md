@@ -17,7 +17,38 @@ This project reproduces and extends **KELE**, a multi-agent framework for struct
 | `deliverables/` | Course deliverables |
 ## Mirroring to the org repo
 
-This repo is mirrored to [SCU-CSEN346/KELE](https://github.com/SCU-CSEN346/KELE) via a dual-push remote. A regular `git push` publishes to both automatically — no extra steps needed.
+[ulises-c/csen-346](https://github.com/ulises-c/csen-346) is the primary development repo. It is mirrored to [SCU-CSEN346/KELE](https://github.com/SCU-CSEN346/KELE) via a dual-push remote — every `git push` publishes to both simultaneously, preserving full git history.
+
+### How it works
+
+`origin` is configured with two push URLs:
+
+```
+origin  git@github.com:ulises-c/csen-346.git  (fetch)
+origin  git@github.com:ulises-c/csen-346.git  (push)
+origin  git@github.com:SCU-CSEN346/KELE.git   (push)
+```
+
+A normal `git push` hits both. Fetch and pull still only come from `ulises-c/csen-346`.
+
+### Setup (first time, per machine)
+
+If you cloned from `SCU-CSEN346/KELE`, re-point your fetch remote and add the second push URL:
+
+```bash
+git remote set-url origin git@github.com:ulises-c/csen-346.git
+git remote set-url --add --push origin git@github.com:ulises-c/csen-346.git
+git remote set-url --add --push origin git@github.com:SCU-CSEN346/KELE.git
+```
+
+If you cloned from `ulises-c/csen-346`, only the two push URLs are needed:
+
+```bash
+git remote set-url --add --push origin git@github.com:ulises-c/csen-346.git
+git remote set-url --add --push origin git@github.com:SCU-CSEN346/KELE.git
+```
+
+Verify with `git remote -v` — you should see one fetch URL and two push URLs.
 
 ## Dependencies
 
