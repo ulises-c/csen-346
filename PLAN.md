@@ -35,13 +35,57 @@
 ## Phase 1 — Environment & Baseline (Now → Apr 14)
 
 **Goal:** Get the KELE system running end-to-end with SocratTeachLLM as the teacher agent.
+**Hardware:** RTX 5090 32GB (all inference and training runs on this rig).
+**Setup guide:** See [`RTX5090_SETUP.md`](RTX5090_SETUP.md) for full runbook — model downloads, vLLM serving, eval pipeline, metrics export, and troubleshooting.
 
 - [x] Add `openai` to `pyproject.toml` via Poetry
-- [ ] Serve [SocratTeachLLM](https://huggingface.co/yuanpan/SocratTeachLLM) via HuggingFace Inference API or vLLM on SCU compute
-- [ ] Configure API credentials for consultant (GPT-4o or Qwen2.5-14B) and teacher (SocratTeachLLM)
+- [ ] Serve [SocratTeachLLM](https://huggingface.co/yuanpan/SocratTeachLLM) locally (no free HF Inference API available)
+- [ ] Configure API credentials for consultant (GPT-4o) and teacher (SocratTeachLLM)
 - [ ] Run `KELE_original/consultant_teacher_socratic_teaching_system.py` on 5–10 manual test dialogues
 - [ ] Verify the 5-stage SocRule flow (a → b → c → d → e) works correctly end-to-end
 - [ ] Commit working baseline to `src/`
+
+### Model Experiments (in order)
+
+**Run 1 — SocratTeachLLM (baseline reproduction)**
+- [ ] Serve SocratTeachLLM (9.4B, GLM4-9B fine-tune) via vLLM / MLX / Ollama
+- [ ] Run full evaluation pipeline with this as the teacher agent
+- [ ] Compare results against Table 1 in the paper
+
+**Run 2 — Gemma-4-31B (extension experiment)**
+- [ ] Serve [Gemma-4-31B](https://huggingface.co/google/gemma-4-31B) locally (Q4 quantized)
+- [ ] Run the same evaluation pipeline with Gemma-4-31B as the teacher agent
+- [ ] Compare against SocratTeachLLM — does a stronger general model beat a Socratic fine-tune?
+
+### Hardware & Training Time Estimates
+
+Two machines available: **M1 Max 64GB** (unified memory, MPS/MLX) and **RTX 5090 32GB** (CUDA).
+
+#### Inference throughput (for evaluation runs)
+
+| Model | M1 Max 64GB (MLX) | RTX 5090 32GB (vLLM) |
+| --- | --- | --- |
+| SocratTeachLLM 9.4B (BF16) | ~15–25 tok/s | ~80–120 tok/s |
+| SocratTeachLLM 9.4B (Q4) | ~25–35 tok/s | ~100–150 tok/s |
+| Gemma-4-31B (Q4, ~17GB) | ~5–10 tok/s | ~25–45 tok/s |
+| Gemma-4-31B (Q8, ~33GB) | ~8–15 tok/s | ~15–30 tok/s (VRAM-tight) |
+
+#### Full evaluation run estimates (680 dialogues × ~6 turns × ~200 tok/response ≈ 816K tokens)
+
+| Model | M1 Max 64GB | RTX 5090 32GB |
+| --- | --- | --- |
+| SocratTeachLLM 9.4B | ~6–10 hours | ~1.5–3 hours |
+| Gemma-4-31B (Q4) | ~16–40 hours | ~4–8 hours |
+
+#### Phase 4 — BERT classifier training (42K examples, 3–5 epochs)
+
+| Model | M1 Max 64GB | RTX 5090 32GB |
+| --- | --- | --- |
+| distilbert-base | ~15–30 min | ~3–8 min |
+| bert-base-uncased | ~25–45 min | ~5–12 min |
+
+#### Decision: RTX 5090
+All inference and training will run on the **RTX 5090 32GB** rig. The M1 Max cannot keep up with the Gemma-4-31B evaluation timeline (~40 hrs vs ~4–8 hrs). Running everything on one machine also avoids environment duplication.
 
 **Files to create:**
 
