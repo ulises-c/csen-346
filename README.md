@@ -11,10 +11,20 @@ This project reproduces and extends **KELE**, a multi-agent framework for struct
 
 | Directory | Description |
 | --- | --- |
-| `KELE_original/` | Original KELE source code and dataset, unmodified (see [`KELE_original/ATTRIBUTION.md`](KELE_original/ATTRIBUTION.md)) |
+| `KELE_original/` | Original KELE source code and dataset, translated to English (see [`KELE_original/ATTRIBUTION.md`](KELE_original/ATTRIBUTION.md)) |
 | `src/` | Our reproduction and extensions |
 | `resources/` | Research paper and reference materials |
 | `deliverables/` | Course deliverables |
+| `scripts/` | Utility scripts |
+
+## Syncing to the org repo
+
+This repo is mirrored from [CSEN-346](https://github.com/ulises-c/csen-346/tree/main) to [SCU-CSEN346/KELE](https://github.com/SCU-CSEN346/KELE). To sync changes:
+
+```bash
+./scripts/sync_kele.sh                        # default commit message
+./scripts/sync_kele.sh "your commit message"  # custom commit message
+```
 
 ## Dependencies
 
