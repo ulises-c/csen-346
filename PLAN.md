@@ -21,16 +21,18 @@
 
 | Date               | Deliverable                                                                    |
 | ------------------ | ------------------------------------------------------------------------------ |
-| **May 5–7**        | 1st documented GitHub commit + Paper: Intro & Related Work                     |
-| **May 12–14**      | 2nd documented GitHub commit + Paper: Dataset & Methodology                    |
-| **May 19–21**      | 3rd documented GitHub commit + Paper: Evaluation & Results                     |
-| **May 26–28**      | 4th documented GitHub commit + Paper: Results, Conclusion, Limitations, Ethics |
-| **May 26 – Jun 4** | Demo & presentation (W9–10, ~3 groups/session)                                 |
-| **Jun 4**          | Final paper + final code + HuggingFace data + poster                           |
+| **Apr 14** | 1st documented GitHub commit + Paper: Intro & Related Work                          |
+| **Apr 23** | 2nd documented GitHub commit + Paper: Dataset & Methodology                         |
+| **May 5**  | 3rd documented GitHub commit + Paper: Evaluation & Results                          |
+| **May 14** | 4th documented GitHub commit + Paper: Results, Intro, Conclusion, Limitations, Ethics |
+| **May 26** | Demo & Present (~3 groups)                                                          |
+| **May 28** | Demo & Present (~3 groups)                                                          |
+| **Jun 2**  | Demo & Present (~3 groups)                                                          |
+| **Jun 4**  | Final paper + final code + HuggingFace data + poster                                |
 
 ---
 
-## Phase 1 — Environment & Baseline (Mar 31 → May 2)
+## Phase 1 — Environment & Baseline (Now → Apr 14)
 
 **Goal:** Get the KELE system running end-to-end with SocratTeachLLM as the teacher agent.
 
@@ -48,7 +50,7 @@
 
 ---
 
-## Phase 2 — Evaluation Pipeline (May 2 → May 12)
+## Phase 2 — Evaluation Pipeline (Apr 14 → Apr 23)
 
 **Goal:** Reproduce Table 1 from the paper. This phase produces the 1st and 2nd commits.
 
@@ -84,7 +86,7 @@
 
 ---
 
-## Phase 3 — Gap Analysis (May 12 → May 16)
+## Phase 3 — Gap Analysis (Apr 23 → Apr 28)
 
 **Goal:** Understand where our reproduction matches the paper and where it diverges.
 
@@ -97,7 +99,7 @@
 
 ---
 
-## Phase 4 — Improvement (May 16 → May 23)
+## Phase 4 — Improvement (Apr 28 → May 5)
 
 **Goal:** Beat the baseline on at least one meaningful metric. This produces the 3rd commit.
 
@@ -126,16 +128,16 @@ The consultant's task is a classification problem: given `(dialogue_history, stu
 
 ---
 
-## Phase 5 — Paper & Final Deliverables (May 23 → Jun 4)
+## Phase 5 — Paper & Final Deliverables (May 5 → Jun 4)
 
 **Goal:** Final paper, poster, demo, and presentation. This produces the 4th commit and final submission.
 
 ### Paper (4–6 pages, ACL template)
 
-- [ ] Introduction & Related Work — due May 5
-- [ ] Dataset & Methodology — due May 12
-- [ ] Evaluation & Results — due May 19
-- [ ] Conclusion, Limitations, Ethics — due May 26
+- [ ] Introduction & Related Work — due Apr 14
+- [ ] Dataset & Methodology — due Apr 23
+- [ ] Evaluation & Results — due May 5
+- [ ] Conclusion, Limitations, Ethics — due May 14
 - [ ] Final polish — due Jun 4
 - [ ] Run through [Agentic Reviewer by Andrew Ng](https://www.agentic-reviewer.com/) before submitting
 
