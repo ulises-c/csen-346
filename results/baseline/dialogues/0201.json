@@ -1,0 +1,45 @@
+{
+  "id": 201,
+  "question": "使用“庹”来测量时，需要注意什么（）",
+  "answer": 1,
+  "num_turns_ground_truth": 5,
+  "num_turns_generated": 5,
+  "dialogue": [
+    {
+      "student": "帮我解答一下这道题：使用“庹”来测量时，需要注意什么（）[\"保持两臂平伸\", \"手指并拢\", \"眼睛看向地面\"]",
+      "state": "a0",
+      "teacher_response": "\n好的，我们先来想一想，使用“庹”来测量时，我们需要测量什么？",
+      "ground_truth_teacher": "你知道‘庹’是如何定义的吗？",
+      "ground_truth_state": "a1"
+    },
+    {
+      "student": "我觉得‘庹’就是用手量东西吧。",
+      "state": "a0",
+      "teacher_response": "\n嗯，‘庹’确实是一种测量方法，但你觉得它和用尺子测量有什么不同呢？",
+      "ground_truth_teacher": "‘庹’是指两臂左右平伸时，两中指指尖之间的距离。你觉得在这个定义中，什么是最重要的？",
+      "ground_truth_state": "b2"
+    },
+    {
+      "student": "可能是手指的距离吧。",
+      "state": "a0",
+      "teacher_response": "\n很好，那你觉得在使用‘庹’测量时，我们需要测量的是什么呢？",
+      "ground_truth_teacher": "如果你的手臂没有平伸，手指的距离会有什么变化呢？",
+      "ground_truth_state": "c17"
+    },
+    {
+      "student": "手臂不平伸的话，手指的距离会变短。",
+      "state": "d32",
+      "teacher_response": "\nImagine you're using ‘庹’来测量一个物体的长度。如果你的手臂弯曲了，而不是平伸，你觉得测量结果会有什么变化呢？",
+      "ground_truth_teacher": "很好！所以在使用‘庹’来测量时，保持两臂平伸是不是很重要呢？你能根据这个理解回答题目吗？",
+      "ground_truth_state": "d33"
+    },
+    {
+      "student": "我觉得答案是‘保持两臂平伸’。",
+      "state": "e34",
+      "teacher_response": "\n很好！使用‘庹’来测量时，我们需要保持两臂平伸，这样才能确保测量的准确性。记住，手臂平伸时，‘庹’的长度就是两臂之间的距离。",
+      "ground_truth_teacher": "正确！保持两臂平伸是使用‘庹’进行测量时的基本要求。做得很好！",
+      "ground_truth_state": "e34"
+    }
+  ],
+  "elapsed_seconds": 30.81
+}

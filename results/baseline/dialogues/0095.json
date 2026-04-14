@@ -1,0 +1,24 @@
+{
+  "id": 95,
+  "question": "植物的主要能量来源是什么",
+  "answer": 3,
+  "num_turns_ground_truth": 8,
+  "num_turns_generated": 2,
+  "dialogue": [
+    {
+      "student": "帮我解答一下这道题：植物的主要能量来源是什么[\"土壤\", \"水分\", \"阳光\"]",
+      "state": "a1",
+      "teacher_response": "\n好的，这是一个有趣的问题！那么你觉得植物需要什么来生长呢？",
+      "ground_truth_teacher": "好的，这是个很有趣的问题！你觉得植物需要哪些东西才能生长呢？",
+      "ground_truth_state": "a1"
+    },
+    {
+      "student": "我觉得植物需要土壤，因为它们长在土里。",
+      "state": "e34",
+      "teacher_response": "\n很好！你已经正确地指出了土壤是植物生长的基础条件之一。不过，我们再想一想，植物除了需要土壤，还需要什么来获取能量呢？",
+      "ground_truth_teacher": "嗯，土壤确实很重要，那你觉得植物是从土壤里得到能量的吗？",
+      "ground_truth_state": "b4"
+    }
+  ],
+  "elapsed_seconds": 2.46
+}

@@ -1,0 +1,45 @@
+{
+  "id": 121,
+  "question": "植物都需要阳光和水分。",
+  "answer": 2,
+  "num_turns_ground_truth": 5,
+  "num_turns_generated": 5,
+  "dialogue": [
+    {
+      "student": "帮我解答一下这道题：植物都需要阳光和水分。['Yes', 'No']",
+      "state": "a0",
+      "teacher_response": "\n好的，这是一个有趣的问题！我们先来想一想，植物需要阳光和水分是为了什么呢？",
+      "ground_truth_teacher": "你能想到一些植物生长在没有阳光的地方吗？",
+      "ground_truth_state": "a1"
+    },
+    {
+      "student": "嗯，我想不出来。",
+      "state": "a0",
+      "teacher_response": "\n没关系！我们可以一起想一想。你觉得植物在没有阳光和水分的情况下会发生什么呢？",
+      "ground_truth_teacher": "你知道有些植物可以在地下或洞穴中生长吗？",
+      "ground_truth_state": "b2"
+    },
+    {
+      "student": "哦，对了，蘑菇好像是在黑暗的地方长的。",
+      "state": "a0",
+      "teacher_response": "\nGood observation about mushrooms! Now, think about plants. If we block the light from a plant, can it still grow? What if we also take away the water? What might happen then?",
+      "ground_truth_teacher": "很好！蘑菇是个好例子。那你觉得所有植物都像蘑菇一样不需要阳光吗？",
+      "ground_truth_state": "c13"
+    },
+    {
+      "student": "可能不是吧，有些植物好像需要阳光。",
+      "state": "c11",
+      "teacher_response": "\n有趣的想法！那我们来想一想，为什么有些植物需要阳光，而有些不需要呢？你能想象一下，为什么蘑菇可以在黑暗的地方生长吗？",
+      "ground_truth_teacher": "大多数植物需要阳光进行光合作用，但有些植物像蘑菇不需要。现在你能回答题目了吗？",
+      "ground_truth_state": "d33"
+    },
+    {
+      "student": "我觉得答案是'No'，因为不是所有植物都需要阳光。",
+      "state": "e34",
+      "teacher_response": "\n很好！你已经理解了这个问题。植物通常需要阳光和水分来生长，但并不是所有植物都需要阳光。比如蘑菇，它们可以在黑暗的地方生长。你做得很好！",
+      "ground_truth_teacher": "很好！你理解了，不是所有植物都需要阳光和水分。大多数植物需要，但有些特殊植物不需要。",
+      "ground_truth_state": "e34"
+    }
+  ],
+  "elapsed_seconds": 20.67
+}

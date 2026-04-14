@@ -1,0 +1,52 @@
+{
+  "id": 205,
+  "question": "在进行步测时，下列哪项因素不会影响测量结果（）",
+  "answer": 3,
+  "num_turns_ground_truth": 6,
+  "num_turns_generated": 6,
+  "dialogue": [
+    {
+      "student": "帮我解答一下这道题：在进行步测时，下列哪项因素不会影响测量结果（）[\"步幅大小\", \"地面平整度\", \"测量者的心情\"]",
+      "state": "a1",
+      "teacher_response": "\n你觉得步测时，步幅大小、地面平整度和测量者的心情，哪个因素更容易被我们控制呢？",
+      "ground_truth_teacher": "好的，我们先来想一想，步测是用来做什么的呢？",
+      "ground_truth_state": "a1"
+    },
+    {
+      "student": "步测是用来测量距离的。",
+      "state": "a1",
+      "teacher_response": "\n很好，那你觉得步测时，步幅大小、地面平整度和测量者的心情，哪个因素更容易被我们控制呢？",
+      "ground_truth_teacher": "很好！那么你觉得在测量距离时，步幅大小会有什么影响呢？",
+      "ground_truth_state": "b5"
+    },
+    {
+      "student": "步幅大小可能会影响走的步数。",
+      "state": "b6",
+      "teacher_response": "\n嗯，你说得很有道理。那我们来想一想，步测时，步幅大小和地面平整度有什么不同呢？",
+      "ground_truth_teacher": "对的！那么地面平整度呢？它会不会影响步测结果？",
+      "ground_truth_state": "c17"
+    },
+    {
+      "student": "地面不平可能会让人走得不稳。",
+      "state": "b6",
+      "teacher_response": "\n你觉得步测时，步幅大小、地面平整度和测量者的心情，哪个因素更容易被我们控制呢？",
+      "ground_truth_teacher": "很好观察！那么你觉得测量者的心情会不会影响步测结果呢？为什么？",
+      "ground_truth_state": "c11"
+    },
+    {
+      "student": "我觉得心情不会影响，因为它不会改变步数。",
+      "state": "b6",
+      "teacher_response": "\n你觉得步测时，步幅大小和地面平整度有什么不同呢？",
+      "ground_truth_teacher": "非常好！所以在进行步测时，哪项因素不会影响测量结果呢？",
+      "ground_truth_state": "d33"
+    },
+    {
+      "student": "测量者的心情不会影响测量结果。",
+      "state": "b6",
+      "teacher_response": "\n好，那我们来复习一下。步测时，步幅大小和地面平整度分别会影响什么呢？",
+      "ground_truth_teacher": "正确！测量者的心情不会影响步测结果。步幅大小和地面平整度才是关键因素。做得很好！",
+      "ground_truth_state": "e34"
+    }
+  ],
+  "elapsed_seconds": 38.12
+}

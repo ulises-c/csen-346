@@ -1,0 +1,45 @@
+{
+  "id": 59,
+  "question": "植物的叶子虽然形状多样，但是都是规则的。",
+  "answer": 2,
+  "num_turns_ground_truth": 5,
+  "num_turns_generated": 5,
+  "dialogue": [
+    {
+      "student": "植物的叶子虽然形状多样，但是都是规则的。这道题怎么做？",
+      "state": "a1",
+      "teacher_response": "\n好的，这是一个很有趣的问题！你觉得植物的叶子形状为什么会有不同的样子呢？",
+      "ground_truth_teacher": "你觉得什么样的形状是规则的呢？",
+      "ground_truth_state": "a1"
+    },
+    {
+      "student": "我觉得圆形和方形是规则的。",
+      "state": "a1",
+      "teacher_response": "\n嗯，你提到圆形和方形是规则的，那你觉得这些形状在自然界中是如何形成的呢？",
+      "ground_truth_teacher": "很好！那你能想到哪些植物的叶子是圆形或方形的吗？",
+      "ground_truth_state": "b5"
+    },
+    {
+      "student": "嗯，荷叶是圆形的，但我想不到方形的叶子。",
+      "state": "a1",
+      "teacher_response": "\n没关系，我们再想一想。你有没有见过一些植物的叶子是长方形的呢？",
+      "ground_truth_teacher": "那你觉得除了圆形，还有哪些叶子形状是规则的呢？",
+      "ground_truth_state": "c14"
+    },
+    {
+      "student": "可能还有椭圆形的吧。",
+      "state": "a1",
+      "teacher_response": "\nGreat job thinking about different shapes! Now, think about why these shapes, like circles or squares, might be considered regular in nature. What might be responsible for creating such symmetrical patterns?",
+      "ground_truth_teacher": "很好！我们可以说规则的形状有圆形、椭圆形等。那么，你觉得植物的叶子虽然形状多样，但是都是规则的吗？",
+      "ground_truth_state": "d33"
+    },
+    {
+      "student": "我觉得不是，因为有些叶子形状不规则，比如心形。",
+      "state": "a1",
+      "teacher_response": "\nGood point! You mentioned irregular shapes like the heart shape. Do you think all heart-shaped leaves are the same size and shape? What about other irregular shapes?",
+      "ground_truth_teacher": "非常好！植物的叶子形状确实多种多样，有些是规则的，有些是不规则的。你做得很棒！",
+      "ground_truth_state": "e34"
+    }
+  ],
+  "elapsed_seconds": 36.27
+}

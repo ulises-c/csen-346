@@ -1,0 +1,45 @@
+{
+  "id": 160,
+  "question": "按照不同的比较标准，比较的结果是不同的。",
+  "answer": 1,
+  "num_turns_ground_truth": 5,
+  "num_turns_generated": 5,
+  "dialogue": [
+    {
+      "student": "帮我解答一下这道题：按照不同的比较标准，比较的结果是不同的。['Yes', 'No']",
+      "state": "b5",
+      "teacher_response": "\n你能举一个例子说明，如果我们用不同的标准来比较两个物体，结果会有什么不同吗？",
+      "ground_truth_teacher": "你能想到一些我们平时用来比较事物的标准吗？",
+      "ground_truth_state": "a1"
+    },
+    {
+      "student": "嗯，可能是大小和颜色。",
+      "state": "b8",
+      "teacher_response": "\n很好！那么，如果我们用大小和颜色来比较两个苹果和一个橘子，结果会一样吗？",
+      "ground_truth_teacher": "很好！那如果我们用大小来比较两个苹果，结果会是什么样的呢？",
+      "ground_truth_state": "b5"
+    },
+    {
+      "student": "一个可能大，一个可能小。",
+      "state": "b19",
+      "teacher_response": "\n你能想象一下，如果我们用颜色来比较这两个苹果和一个橘子，结果会有什么不同吗？",
+      "ground_truth_teacher": "为什么用大小比较时会有这样的结果呢？",
+      "ground_truth_state": "c22"
+    },
+    {
+      "student": "因为一个苹果可能比另一个大。",
+      "state": "b19",
+      "teacher_response": "\n你能再想一想，如果我们用颜色来比较这两个苹果和一个橘子，结果会一定不同吗？",
+      "ground_truth_teacher": "很好！那么，如果我们用颜色来比较这两个苹果，结果会有什么不同吗？",
+      "ground_truth_state": "d33"
+    },
+    {
+      "student": "可能一个是红色，一个是绿色，所以结果会不同。",
+      "state": "b5",
+      "teacher_response": "\n你觉得颜色是一个可以用来比较苹果和橘子的标准吗？为什么？",
+      "ground_truth_teacher": "非常好！所以我们可以说，比较的结果确实会因为选择的标准不同而不同。",
+      "ground_truth_state": "e34"
+    }
+  ],
+  "elapsed_seconds": 19.79
+}

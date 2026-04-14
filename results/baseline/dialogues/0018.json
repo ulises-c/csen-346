@@ -1,0 +1,66 @@
+{
+  "id": 18,
+  "question": "如果植物没有阳光会怎么样（）",
+  "answer": 2,
+  "num_turns_ground_truth": 10,
+  "num_turns_generated": 8,
+  "dialogue": [
+    {
+      "student": "帮我解答一下这道题：如果植物没有阳光会怎么样（）[\"继续生长\", \"枯萎\", \"变色\"]",
+      "state": "b2",
+      "teacher_response": "\n好的，这是一个有趣的问题！我们先来想一想，植物需要阳光来做什么呢？",
+      "ground_truth_teacher": "你知道植物需要什么来生长吗？",
+      "ground_truth_state": "a1"
+    },
+    {
+      "student": "需要水和土壤。",
+      "state": "b2",
+      "teacher_response": "\n没错，植物确实需要水和土壤。那么，阳光对植物来说有什么特别的作用呢？",
+      "ground_truth_teacher": "除了水和土壤，植物还需要什么才能制造养分呢？",
+      "ground_truth_state": "b2"
+    },
+    {
+      "student": "需要肥料。",
+      "state": "b2",
+      "teacher_response": "\n嗯，肥料也是植物需要的。不过，阳光和肥料有什么不同呢？你能想想阳光对植物有什么特别的作用吗？",
+      "ground_truth_teacher": "植物在白天和晚上有什么不同的活动吗？",
+      "ground_truth_state": "b4"
+    },
+    {
+      "student": "白天植物会晒太阳。",
+      "state": "b2",
+      "teacher_response": "\n很好！植物确实需要阳光。那么，你知道阳光对植物的生长有什么直接的帮助吗？比如在植物生长过程中，阳光是用来做什么的呢？",
+      "ground_truth_teacher": "那你觉得植物晒太阳的时候在做什么呢？",
+      "ground_truth_state": "c12"
+    },
+    {
+      "student": "植物晒太阳的时候在长高。",
+      "state": "b2",
+      "teacher_response": "\nSo, you mentioned that plants grow when they get sunlight. Now, think about what happens if a plant doesn't get sunlight at all? Does it continue to grow, stop growing, or something else? Why do you think that would happen?",
+      "ground_truth_teacher": "植物晒太阳的时候，它们是在进行一种叫光合作用的过程。你知道光合作用是做什么的吗？",
+      "ground_truth_state": "c9"
+    },
+    {
+      "student": "不知道。",
+      "state": "b2",
+      "teacher_response": "\nIt's okay if you don't know right away. Let's think about it together. You mentioned that plants need sunlight. If they don't get sunlight, could they still grow? Why or why not?",
+      "ground_truth_teacher": "光合作用是植物用来制造养分的过程。你觉得如果没有阳光，植物还能进行光合作用吗？",
+      "ground_truth_state": "c21"
+    },
+    {
+      "student": "不能。",
+      "state": "b2",
+      "teacher_response": "\nHm, if plants can't grow without sunlight, what do you think happens to them when they don't get enough sunlight? Does it make sense that they might not grow well or might even change in some way?",
+      "ground_truth_teacher": "很好！那你能说说为什么没有阳光植物就不能进行光合作用吗？",
+      "ground_truth_state": "c22"
+    },
+    {
+      "student": "因为没有阳光，植物就不能制造养分。",
+      "state": "e34",
+      "teacher_response": "\n很好！你理解得很正确。植物需要阳光来进行光合作用，如果没有阳光，它们就无法制造养分，也就无法正常生长。所以，植物在没有阳光的情况下会枯萎。你做得很好！",
+      "ground_truth_teacher": "非常好！那么如果植物不能制造养分，它们会怎么样呢？",
+      "ground_truth_state": "c16"
+    }
+  ],
+  "elapsed_seconds": 57.43
+}
