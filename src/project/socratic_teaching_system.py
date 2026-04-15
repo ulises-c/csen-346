@@ -6,10 +6,17 @@ import openai
 
 
 class SocraticTeachingSystem:
-    def __init__(self,
-                 consultant_api_key: str, consultant_base_url: str, consultant_model_name: str,
-                 teacher_api_key: str, teacher_base_url: str, teacher_model_name: str,
-                 debug_mode: bool = False, max_teaching_rounds: int = 10):
+    def __init__(
+        self,
+        consultant_api_key: str,
+        consultant_base_url: str,
+        consultant_model_name: str,
+        teacher_api_key: str,
+        teacher_base_url: str,
+        teacher_model_name: str,
+        debug_mode: bool = False,
+        max_teaching_rounds: int = 10,
+    ):
 
         # 顾问智能体API配置
         self.consultant_api_key = consultant_api_key
@@ -26,13 +33,11 @@ class SocraticTeachingSystem:
 
         # 初始化两个独立的OpenAI客户端
         self.consultant_client = openai.Client(
-            api_key=self.consultant_api_key,
-            base_url=self.consultant_base_url
+            api_key=self.consultant_api_key, base_url=self.consultant_base_url
         )
 
         self.teacher_client = openai.Client(
-            api_key=self.teacher_api_key,
-            base_url=self.teacher_base_url
+            api_key=self.teacher_api_key, base_url=self.teacher_base_url
         )
 
         # 状态到操作的映射表
@@ -71,7 +76,7 @@ class SocraticTeachingSystem:
             "d31": "直接向学生展示正确概念和规则，并要求其重新思考这些概念和给出题目答案",
             "d32": "提出相关案例并要求预测",
             "d33": "建立一个普遍定义并要求学生给出题目答案",
-            "e34": "对题目进行总结"
+            "e34": "对题目进行总结",
         }
 
         # 初始化系统状态
@@ -95,12 +100,14 @@ class SocraticTeachingSystem:
 
     def add_to_consultant_history(self, evaluation: str, state: str, action: str) -> None:
         """添加顾问分析到历史记录"""
-        self.consultant_history.append({
-            "evaluation": evaluation,
-            "state": state,
-            "action": action,
-            "teaching_rounds": self.teaching_rounds  # 添加教学轮数
-        })
+        self.consultant_history.append(
+            {
+                "evaluation": evaluation,
+                "state": state,
+                "action": action,
+                "teaching_rounds": self.teaching_rounds,  # 添加教学轮数
+            }
+        )
 
     def get_formatted_history(self) -> str:
         """获取格式化的对话历史（仅对话内容，不包含顾问分析）
@@ -143,10 +150,11 @@ class SocraticTeachingSystem:
                         formatted_history += f"行动: {consultant_record['action']}\n"
 
                         # 添加教学阶段轮数，但不添加总对话轮数
-                        teaching_rounds = consultant_record.get(
-                            "teaching_rounds", 0)
+                        teaching_rounds = consultant_record.get("teaching_rounds", 0)
                         if teaching_rounds > 0:
-                            formatted_history += f"教学阶段轮数: {teaching_rounds}/{self.max_teaching_rounds}\n\n"
+                            formatted_history += (
+                                f"教学阶段轮数: {teaching_rounds}/{self.max_teaching_rounds}\n\n"
+                            )
                         else:
                             formatted_history += "\n"
 
@@ -298,21 +306,25 @@ e34：学生正确给出题目答案
                         model=self.consultant_model_name,
                         messages=[
                             {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_input}
+                            {"role": "user", "content": user_input},
                         ],
-                        response_format={"type": "json_object"}
+                        response_format={"type": "json_object"},
                     )
                     break
                 except openai.RateLimitError as rle:
                     retry_after = None
                     try:
-                        ra = rle.response.headers.get("retry-after") if getattr(rle, "response", None) else None
+                        ra = (
+                            rle.response.headers.get("retry-after")
+                            if getattr(rle, "response", None)
+                            else None
+                        )
                         if ra:
                             retry_after = float(ra)
                     except Exception:
                         pass
-                    wait = retry_after if retry_after is not None else min(2 ** attempt, 30)
-                    print(f"Rate-limited (attempt {attempt+1}/6), sleeping {wait:.1f}s")
+                    wait = retry_after if retry_after is not None else min(2**attempt, 30)
+                    print(f"Rate-limited (attempt {attempt + 1}/6), sleeping {wait:.1f}s")
                     time.sleep(wait)
             if response is None:
                 raise RuntimeError("Consultant call failed after 6 retries on rate limits")
@@ -343,7 +355,7 @@ e34：学生正确给出题目答案
                 # 返回默认值
                 return {
                     "evaluation": "无法评估当前状态，JSON解析错误",
-                    "state": self.current_state  # 保持当前状态不变
+                    "state": self.current_state,  # 保持当前状态不变
                 }
 
         except Exception as e:
@@ -352,7 +364,7 @@ e34：学生正确给出题目答案
             # 返回默认值
             return {
                 "evaluation": "无法评估当前状态，API调用失败",
-                "state": self.current_state  # 保持当前状态不变
+                "state": self.current_state,  # 保持当前状态不变
             }
 
     def get_action_for_state(self, state: str) -> str:
@@ -393,8 +405,8 @@ e34：学生正确给出题目答案
                 model=self.teacher_model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input}
-                ]
+                    {"role": "user", "content": user_input},
+                ],
             )
 
             # 获取返回结果
@@ -425,13 +437,17 @@ e34：学生正确给出题目答案
             curr_phase = state[0]
 
             # 如果当前阶段比前一阶段更早，则强制保持在当前阶段
-            if (prev_phase == 'b' and curr_phase == 'a') or \
-                    (prev_phase == 'c' and curr_phase in ['a', 'b']) or \
-                    (prev_phase == 'd' and curr_phase in ['a', 'b', 'c']) or \
-                    (prev_phase == 'e' and curr_phase in ['a', 'b', 'c', 'd']):
+            if (
+                (prev_phase == "b" and curr_phase == "a")
+                or (prev_phase == "c" and curr_phase in ["a", "b"])
+                or (prev_phase == "d" and curr_phase in ["a", "b", "c"])
+                or (prev_phase == "e" and curr_phase in ["a", "b", "c", "d"])
+            ):
                 state = previous_state
                 action = self.get_action_for_state(state)
-                evaluation = f"防止阶段回退：保持在{state}状态而不是回退到{consultant_result['state']}"
+                evaluation = (
+                    f"防止阶段回退：保持在{state}状态而不是回退到{consultant_result['state']}"
+                )
 
         # 更新教学轮数计数器
         # 如果进入教学阶段（a0 -> a1或更高阶段）或已在教学阶段，则计数
@@ -465,14 +481,15 @@ e34：学生正确给出题目答案
             # 刚好达到最大轮数且还未进入d33或e34，强制进入d33
             state = "d33"
             action = self.get_action_for_state("d33")
-            evaluation = f"已达到教学阶段最大轮数限制({self.max_teaching_rounds}轮)，强制转入规则建构阶段"
+            evaluation = (
+                f"已达到教学阶段最大轮数限制({self.max_teaching_rounds}轮)，强制转入规则建构阶段"
+            )
 
         # 如果开启调试模式，则打印智能体1的输出
         if self.debug_mode:
             print("\n=== 苏格拉底教学顾问分析 ===")
             if state != "a0":
-                print(
-                    f"教学阶段对话轮数: {self.teaching_rounds}/{self.max_teaching_rounds}")
+                print(f"教学阶段对话轮数: {self.teaching_rounds}/{self.max_teaching_rounds}")
             print(f"评估: {evaluation}")
             print(f"状态: {state}")
             print(f"行动: {action}")
@@ -482,11 +499,7 @@ e34：学生正确给出题目答案
         self.current_state = state
 
         # 调用苏格拉底教师
-        socrates_response = self.socrates_teacher(
-            student_input,
-            evaluation,
-            action
-        )
+        socrates_response = self.socrates_teacher(student_input, evaluation, action)
 
         # 添加老师回复到对话历史
         self.add_to_history("teacher", socrates_response)
@@ -502,7 +515,7 @@ e34：学生正确给出题目答案
         while True:
             student_input = input("\n你: ")
 
-            if student_input.lower() == 'exit':
+            if student_input.lower() == "exit":
                 print("\n感谢使用苏格拉底教学系统，再见！")
                 break
 
@@ -531,4 +544,5 @@ e34：学生正确给出题目答案
             # 如果教学轮数达到上限且处于d33状态，提示用户
             elif self.teaching_rounds >= self.max_teaching_rounds and self.current_state == "d33":
                 print(
-                    f"\n【教学阶段已达到最大轮数({self.max_teaching_rounds}轮)，请给出最终答案以进入总结阶段】")
+                    f"\n【教学阶段已达到最大轮数({self.max_teaching_rounds}轮)，请给出最终答案以进入总结阶段】"
+                )
