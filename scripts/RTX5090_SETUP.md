@@ -160,7 +160,7 @@ pip install datasets scikit-learn
 
 # Training (small model, fast even without wandb)
 python src/project/consultant_classifier.py \
-  --data resources/KELE/SocratDataset.json \
+  --data references/KELE/SocratDataset.json \
   --model distilbert-base-uncased \
   --epochs 5 \
   --batch-size 32 \
