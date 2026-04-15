@@ -6,7 +6,7 @@ authors = [{ name = "Ulises Chavarria", email = "ulises.engineer@gmail.com" }]
 readme = "README.md"
 requires-python = "^3.12"
 dependencies = [
-    "openai>=2.31.0,<3.0.0",
+    "openai (>=2.31.0,<3.0.0)",
     "transformers>=4.47.0",
     "accelerate>=1.2.0",
     "bitsandbytes>=0.45.0",
@@ -24,12 +24,15 @@ dependencies = [
     "google-genai>=1.0.0",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest>=8.0.0"]
+[tool.poetry]
+packages = [{ include = "src", from = "." }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
