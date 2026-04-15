@@ -66,7 +66,7 @@ def load_config(experiment: str | None = None, root_dir: Path | None = None) -> 
     def require(key: str) -> str:
         val = os.environ.get(key)
         if not val:
-            raise EnvironmentError(f"Missing required environment variable: {key}")
+            raise OSError(f"Missing required environment variable: {key}")
         return val
 
     return Config(

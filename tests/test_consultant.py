@@ -1,7 +1,9 @@
 import json
 import os
 import time
+
 import pytest
+
 openai = pytest.importorskip("openai")
 from src.project.config import load_env_file
 
@@ -29,14 +31,14 @@ def robust_call(func, retries=3, delay=5):
                 print(f"\n[Rate Limit] Retrying in {delay}s...")
                 time.sleep(delay)
             else:
-                pytest.skip(
-                    "Gemini Free Tier Rate Limit: Max retries exceeded.")
+                pytest.skip("Gemini Free Tier Rate Limit: Max retries exceeded.")
         except Exception as e:
             pytest.fail(f"API Error: {e}")
 
 
 def test_consultant_basic(client):
     """Test standard text response."""
+
     def call():
         r = client.chat.completions.create(
             model=CONSULTANT_MODEL,
@@ -49,6 +51,7 @@ def test_consultant_basic(client):
 
 def test_consultant_json_output(client):
     """Test JSON mode for KELE evaluation."""
+
     def call():
         r = client.chat.completions.create(
             model=CONSULTANT_MODEL,

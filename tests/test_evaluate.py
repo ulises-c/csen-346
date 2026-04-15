@@ -36,11 +36,15 @@ def test_compare_runs_uses_existing_metrics_files_when_present(tmp_path, monkeyp
     baseline.mkdir()
     gemma.mkdir()
     (baseline / "metrics_summary.json").write_text(
-        json.dumps({"rouge1": 1, "rouge2": 2, "rougeL": 3, "bleu4": 4, "state_accuracy": {"overall": 5}}),
+        json.dumps(
+            {"rouge1": 1, "rouge2": 2, "rougeL": 3, "bleu4": 4, "state_accuracy": {"overall": 5}}
+        ),
         encoding="utf-8",
     )
     (gemma / "metrics_summary.json").write_text(
-        json.dumps({"rouge1": 6, "rouge2": 7, "rougeL": 8, "bleu4": 9, "state_accuracy": {"overall": 10}}),
+        json.dumps(
+            {"rouge1": 6, "rouge2": 7, "rougeL": 8, "bleu4": 9, "state_accuracy": {"overall": 10}}
+        ),
         encoding="utf-8",
     )
 
@@ -61,12 +65,20 @@ def test_compare_runs_computes_missing_metrics_when_needed(tmp_path, monkeypatch
     baseline.mkdir()
     gemma.mkdir()
     (baseline / "metrics_summary.json").write_text(
-        json.dumps({"rouge1": 1, "rouge2": 2, "rougeL": 3, "bleu4": 4, "state_accuracy": {"overall": 5}}),
+        json.dumps(
+            {"rouge1": 1, "rouge2": 2, "rougeL": 3, "bleu4": 4, "state_accuracy": {"overall": 5}}
+        ),
         encoding="utf-8",
     )
 
     def fake_evaluate_run(path):
-        return {"rouge1": 6, "rouge2": 7, "rougeL": 8, "bleu4": 9, "state_accuracy": {"overall": 10}}
+        return {
+            "rouge1": 6,
+            "rouge2": 7,
+            "rougeL": 8,
+            "bleu4": 9,
+            "state_accuracy": {"overall": 10},
+        }
 
     monkeypatch.setattr(evaluate, "evaluate_run", fake_evaluate_run)
 

@@ -19,8 +19,8 @@ class FakeSystem:
 
     def process_student_input(self, student_input):
         idx = min(self.reset_calls_input_index, len(self._responses) - 1)
-        response = self._responses[self.reset_calls_input_index]
-        self.current_state = self._states[self.reset_calls_input_index]
+        response = self._responses[idx]
+        self.current_state = self._states[idx]
         self.reset_calls_input_index += 1
         return response
 
