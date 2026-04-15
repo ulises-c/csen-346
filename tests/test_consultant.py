@@ -1,7 +1,9 @@
 import json
 import os
 import time
+
 import pytest
+
 openai = pytest.importorskip("openai")
 from src.project.config import load_env_file
 

@@ -18,7 +18,7 @@ from src.project.config import load_config
 RESOURCES_DIR = Path(__file__).resolve().parents[2] / "resources" / "KELE"
 sys.path.insert(0, str(RESOURCES_DIR / "original_CN"))
 
-from consultant_teacher_socratic_teaching_system_CN import SocraticTeachingSystem
+from consultant_teacher_socratic_teaching_system_CN import SocraticTeachingSystem  # noqa: E402
 
 
 def create_system(debug: bool | None = None, experiment: str | None = None) -> SocraticTeachingSystem:
