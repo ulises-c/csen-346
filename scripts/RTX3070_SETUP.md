@@ -176,7 +176,7 @@ No changes needed. DistilBERT fits easily in 8 GB.
 
 ```bash
 poetry run python src/project/consultant_classifier.py \
-  --data resources/KELE/SocratDataset.json \
+  --data references/KELE/SocratDataset.json \
   --model distilbert-base-uncased \
   --epochs 5 \
   --batch-size 16 \

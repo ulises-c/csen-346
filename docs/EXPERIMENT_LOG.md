@@ -55,7 +55,7 @@ All the metric-pipeline fixes validated end-to-end. State accuracy jumped from 1
 
 ### Added: retry-with-backoff
 
-`resources/KELE/original_CN/consultant_teacher_socratic_teaching_system_CN.py` now retries 429s up to 6 times with exponential backoff (honoring `Retry-After` header when present). Tier 1 TPM cap of 30k was dropping turns; retries fix this cleanly at the cost of slower throughput.
+`references/KELE/original_CN/consultant_teacher_socratic_teaching_system_CN.py` now retries 429s up to 6 times with exponential backoff (honoring `Retry-After` header when present). Tier 1 TPM cap of 30k was dropping turns; retries fix this cleanly at the cost of slower throughput.
 
 ### Config
 
@@ -79,13 +79,13 @@ All the metric-pipeline fixes validated end-to-end. State accuracy jumped from 1
 
 ### Problems identified
 
-1. **Language mismatch (critical).** SocratDataset is Chinese; ground-truth teacher turns are Chinese. The KELE system prompts in `resources/KELE/consultant_teacher_socratic_teaching_system.py` had been translated to English, so SocratTeachLLM replied in English. Zero overlap with references → BLEU/ROUGE collapse.
+1. **Language mismatch (critical).** SocratDataset is Chinese; ground-truth teacher turns are Chinese. The KELE system prompts in `references/KELE/consultant_teacher_socratic_teaching_system.py` had been translated to English, so SocratTeachLLM replied in English. Zero overlap with references → BLEU/ROUGE collapse.
 2. **sacrebleu tokenizer.** `compute_bleu` used the default `13a` (English) tokenizer. For Chinese we need `tokenize="zh"`.
 3. **Consultant context overflow.** 111 consultant calls (2.8% of 3978 turns) hit the 4096-token limit on Qwen3.5-2B. Those turns fell back to "stay in current state", further depressing state accuracy.
 
 ### Fixes applied (2026-04-14)
 
-- [x] `src/project/kele.py` — import from `resources/KELE/original_CN/consultant_teacher_socratic_teaching_system_CN.py` (Chinese system prompts).
+- [x] `src/project/kele.py` — import from `references/KELE/original_CN/consultant_teacher_socratic_teaching_system_CN.py` (Chinese system prompts).
 - [x] `src/project/metrics.py` — `BLEU(effective_order=True, tokenize="zh")`.
 - [x] `scripts/serve_consultant.sh` — `--max-model-len 4096 → 8192`. See Option A below.
 

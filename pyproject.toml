@@ -49,7 +49,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-exclude = ["resources/"]
+exclude = ["references/"]
 
 [tool.ruff.lint]
 select = [
@@ -69,7 +69,7 @@ ignore = [
 "tests/*" = ["F401", "E402"]
 # Trailing spaces in the CN file are intentional markdown line-break syntax (  \n)
 # inside the system-prompt string.
-"resources/KELE/original_CN/*" = ["W291"]
+"references/KELE/original_CN/*" = ["W291"]
 
 # ---------------------------------------------------------------------------
 # NOTE: torch is intentionally NOT declared here.

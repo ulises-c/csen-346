@@ -6,7 +6,7 @@ Quick-reference TODO list of charts, tables, and statistics to produce for the p
 
 ## 1. Dataset Analysis
 
-> Source: `resources/KELE/SocratDataset.json` (6,803 dialogues, 42,892 turns)
+> Source: `references/KELE/SocratDataset.json` (6,803 dialogues, 42,892 turns)
 
 - [ ] **Dialogue length distribution** — histogram of `dialogueRound` (turns per dialogue, range 5–12). Show mean (6.3) and std. Useful framing stat for the intro.
 - [ ] **Stage turn distribution** — bar chart of total turns per stage (a: 6,803 · b: 7,480 · c: 14,445 · d: 7,361 · e: 6,803). Stage c is ~2× any other — motivates why c is the hardest to predict.
@@ -89,4 +89,4 @@ Quick-reference TODO list of charts, tables, and statistics to produce for the p
 - Use `matplotlib` / `seaborn` for all charts. Save as PDF for Overleaf, PNG for slides.
 - Parse dialogue JSON files with a single pass script (`src/project/viz.py` — to be created) that computes all per-dialogue stats in one sweep.
 - Grade/chapter heatmap requires parsing Chinese grade strings (e.g., `"1小学一年级上册"`) — write a normalization helper.
-- State confusion matrix needs the 34 state labels loaded from `resources/KELE/SocratDataset.json` — extract unique states during the single-pass script.
+- State confusion matrix needs the 34 state labels loaded from `references/KELE/SocratDataset.json` — extract unique states during the single-pass script.

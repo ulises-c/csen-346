@@ -5,16 +5,35 @@ This project reproduces and extends **KELE**, a multi-agent framework for struct
 
 - **Paper:** Peng et al., "KELE: A Multi-Agent Framework for Structured Socratic Teaching with Large Language Models", *Findings of EMNLP 2025* — [aclanthology.org/2025.findings-emnlp.888](https://aclanthology.org/2025.findings-emnlp.888/)
 - **Original repository:** https://github.com/yuanpan1020/KELE
-- **SocratTeachLLM model:** https://huggingface.co/yuanpan/SocratTeachLLM
+- **SocratTeachLLM model (our fork):** https://huggingface.co/ulises-c/SocratTeachLLM
+- **SocratTeachLLM model (original):** https://huggingface.co/yuanpan/SocratTeachLLM
+
+## Hugging Face
+
+The teacher agent model ([SocratTeachLLM](https://huggingface.co/ulises-c/SocratTeachLLM)) is hosted on Hugging Face. Our fork lives at `ulises-c/SocratTeachLLM` and is the model used by default in this project.
+
+**What we use HF for:**
+- Downloading SocratTeachLLM for local serving (`hf download ulises-c/SocratTeachLLM`)
+- Free inference via the [Inference Providers API](https://huggingface.co/docs/inference-providers/en/index) (rate-limited, no local GPU needed for quick tests)
+- Model versioning — experiment checkpoints and variants can be pushed as separate revisions
+
+**Useful HF CLI commands:**
+```bash
+# Download the model for local serving
+hf download ulises-c/SocratTeachLLM --local-dir ~/hf_models/SocratTeachLLM
+
+# Check your HF auth
+hf auth whoami
+```
 
 ## Repository Structure
 
 | Directory | Description |
 | --- | --- |
 | `src/` | Our reproduction and extensions |
-| `resources/KELE/` | KELE baseline — translated source, dataset, and attribution (see [`resources/KELE/ATTRIBUTION.md`](resources/KELE/ATTRIBUTION.md)) |
-| `resources/requirements/` | Course guidelines |
-| `resources/ideation/` | Topic research and project idea notes |
+| `references/` | Immutable reference data — do not modify or import directly (see [`references/README.md`](references/README.md)) |
+| `references/KELE/` | KELE baseline — translated source, dataset, and attribution (see [`references/KELE/ATTRIBUTION.md`](references/KELE/ATTRIBUTION.md)) |
+| `references/requirements/` | Course guidelines |
 | `deliverables/` | Course deliverables |
 | `docs/` | Working plans and internal documentation |
 ## Mirroring to the org repo
