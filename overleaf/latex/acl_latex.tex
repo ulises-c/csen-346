@@ -51,21 +51,23 @@ Table~\ref{tab:reproduction} summarizes our baseline reproduction against the or
 \begin{table}[t]
   \centering
   \small
-  \begin{tabular}{lcccc}
+  \resizebox{\columnwidth}{!}{%
+  \begin{tabular}{@{}lcccc@{}}
     \toprule
     \textbf{System} & \textbf{R-1} & \textbf{R-2} & \textbf{R-L} & \textbf{BLEU-4} \\
     \midrule
-    \multicolumn{5}{l}{\emph{Peng et al.\ (2025) --- original results}} \\
-    \quad GPT-4o (teacher)        & 48.25 & 22.55 & 38.27 & 29.93 \\
-    \quad SocratTeachLLM          & \textbf{57.40} & \textbf{33.63} & \textbf{50.77} & \textbf{41.96} \\
+    \multicolumn{5}{@{}l}{\emph{Peng et al.\ (2025) --- original results}} \\
+    \;\; GPT-4o (teacher)         & 48.25 & 22.55 & 38.27 & 29.93 \\
+    \;\; SocratTeachLLM           & \textbf{57.40} & \textbf{33.63} & \textbf{50.77} & \textbf{41.96} \\
     \midrule
-    \multicolumn{5}{l}{\emph{Our reproduction}} \\
-    \quad SocratTeachLLM          & 44.61 & 26.04 & 38.02 & 19.60 \\
+    \multicolumn{5}{@{}l}{\emph{Our reproduction}} \\
+    \;\; SocratTeachLLM           & 44.61 & 26.04 & 38.02 & 19.60 \\
     \midrule
-    \multicolumn{5}{l}{\emph{Delta (ours vs.\ original SocratTeachLLM)}} \\
-    \quad                         & --12.79 & --7.59 & --12.75 & --22.36 \\
+    \multicolumn{5}{@{}l}{\emph{Delta (ours vs.\ original SocratTeachLLM)}} \\
+    \;\;                          & --12.79 & --7.59 & --12.75 & --22.36 \\
     \bottomrule
-  \end{tabular}
+  \end{tabular}%
+  }
   \caption{Reproduction comparison on the 681-dialogue test split. R-1/2/L = ROUGE-1/2/L (F1). Both the original and our system use GPT-4o as the consultant and SocratTeachLLM as the teacher. Our ROUGE-L closely matches the paper's GPT-4o teacher baseline (38.02 vs.\ 38.27), and our ROUGE-2 exceeds it (26.04 vs.\ 22.55), confirming that SocratTeachLLM provides meaningful gains over a general-purpose teacher. The BLEU-4 gap likely stems from undocumented generation parameters in the original work.}
   \label{tab:reproduction}
 \end{table}
