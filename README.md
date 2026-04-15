@@ -16,7 +16,7 @@ This project reproduces and extends **KELE**, a multi-agent framework for struct
 | `resources/requirements/` | Course guidelines |
 | `resources/ideation/` | Topic research and project idea notes |
 | `deliverables/` | Course deliverables |
-| `PLAN.md` | Project plan with phases and deadlines |
+| `docs/` | Working plans and internal documentation |
 ## Mirroring to the org repo
 
 [ulises-c/csen-346](https://github.com/ulises-c/csen-346) is the primary development repo. It is mirrored to [SCU-CSEN346/KELE](https://github.com/SCU-CSEN346/KELE) via a dual-push remote — every `git push` publishes to both simultaneously, preserving full git history.
@@ -180,7 +180,7 @@ TEACHER_SERVER_API_KEY=replace-this-with-a-long-random-secret \
 
 Then point your tunnel at `http://127.0.0.1:8001`.
 
-See [`ONLINE_SETUP.md`](ONLINE_SETUP.md) for the full public-serving flow.
+See [`scripts/ONLINE_SETUP.md`](scripts/ONLINE_SETUP.md) for the full public-serving flow.
 
 ### Run helper scripts
 
@@ -203,7 +203,7 @@ If you have access to SCU WAVE GPU nodes, use the included cluster config and Sl
 sbatch scripts/slurm/wave_eval.slurm
 ```
 
-See [`WAVE_SETUP.md`](WAVE_SETUP.md) for the full setup and model-path overrides.
+See [`scripts/WAVE_SETUP.md`](scripts/WAVE_SETUP.md) for the full setup and model-path overrides.
 
 ## Configuration
 
