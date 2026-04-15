@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# pre-commit: mirrors the CI lint → test pipeline locally.
+# Runs against the entire repo (not just staged files) to match CI behaviour.
+set -euo pipefail
+
+BOLD='\033[1m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RESET='\033[0m'
+
+pass() { echo -e "${GREEN}✓${RESET} $*"; }
+fail() { echo -e "${RED}✗${RESET} $*"; }
+info() { echo -e "${BOLD}→${RESET} $*"; }
+
+# Resolve the poetry binary (prefer the one on PATH, then the common install location).
+POETRY="${POETRY:-poetry}"
+if ! command -v "$POETRY" &>/dev/null; then
+  POETRY="$HOME/.local/bin/poetry"
+fi
+
+if ! command -v "$POETRY" &>/dev/null; then
+  echo -e "${RED}pre-commit: poetry not found. Install it or set \$POETRY.${RESET}" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Step 1: Formatting (ruff format --check)
+# ---------------------------------------------------------------------------
+info "Checking formatting (ruff format --check) …"
+if "$POETRY" run ruff format --check .; then
+  pass "Formatting OK"
+else
+  fail "Formatting check failed. Run 'ruff format .' to fix."
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Step 2: Linting (ruff check)
+# ---------------------------------------------------------------------------
+info "Checking linting (ruff check) …"
+if "$POETRY" run ruff check .; then
+  pass "Linting OK"
+else
+  fail "Linting failed. Run 'ruff check --fix .' to auto-fix where possible."
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Step 3: Tests (poetry run pytest — mirrors `poetry run test` in CI)
+# Note: using pytest directly avoids ambiguity with the shell builtin `test`.
+# ---------------------------------------------------------------------------
+info "Running tests …"
+if "$POETRY" run pytest; then
+  pass "Tests passed"
+else
+  fail "Tests failed."
+  exit 1
+fi
+
+echo -e "\n${GREEN}${BOLD}All checks passed.${RESET}"

@@ -1,4 +1,4 @@
-.PHONY: help run \
+.PHONY: help run install-hooks \
         post-eval-shutdown run-eval \
         serve-both serve-consultant serve-gemma4 serve-socratteachllm serve-teacher-online
 
@@ -7,6 +7,7 @@ help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "  run                   Show how to launch the project via poetry"
+	@echo "  install-hooks         Install git hooks from hooks/ into .git/hooks/"
 	@echo ""
 	@echo "  Scripts (scripts/):"
 	@echo "  post-eval-shutdown    Run scripts/post_eval_shutdown.sh"
@@ -28,6 +29,18 @@ run:
 	@echo ""
 	@echo "  poetry run test            # run tests (or: make test)"
 	@echo "  poetry run lint            # lint source  (or: make lint)"
+
+# ── Developer setup ──────────────────────────────────────────────────────────
+
+install-hooks:
+	@echo "Installing git hooks from hooks/ → .git/hooks/ …"
+	@for hook in hooks/*; do \
+	  name=$$(basename $$hook); \
+	  cp "$$hook" ".git/hooks/$$name"; \
+	  chmod +x ".git/hooks/$$name"; \
+	  echo "  installed $$name"; \
+	done
+	@echo "Done. Hooks will run automatically on git operations."
 
 # ── scripts/ targets ─────────────────────────────────────────────────────────
 
