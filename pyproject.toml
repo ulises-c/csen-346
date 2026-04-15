@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Natural Language Processing - CSEN 346 SCU. Hugging Face and other resources"
 authors = [{ name = "Ulises Chavarria", email = "ulises.engineer@gmail.com" }]
 readme = "README.md"
-requires-python = "^3.12"
+requires-python = ">=3.12"
 dependencies = [
     "openai (>=2.31.0,<3.0.0)",
     "transformers>=4.47.0",
@@ -28,6 +28,8 @@ dependencies = [
 kele = "src.project.kele:main"
 kele-eval = "src.project.evaluate:main"
 serve-teacher = "src.project.serve_teacher:main"
+test = "src.project.scripts:test"
+lint = "src.project.scripts:lint"
 
 [tool.poetry]
 packages = [{ include = "src", from = "." }]
@@ -38,6 +40,18 @@ addopts = "-v -ra"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0"
+ruff = ">=0.9.0"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["E402"]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
