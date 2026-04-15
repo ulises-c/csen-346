@@ -7,6 +7,7 @@ import sys
 def test() -> None:
     """Run pytest, forwarding any extra CLI args."""
     import pytest
+
     sys.exit(pytest.main(sys.argv[1:]))
 
 
