@@ -51,7 +51,7 @@ fi
 # Note: using pytest directly avoids ambiguity with the shell builtin `test`.
 # ---------------------------------------------------------------------------
 info "Running tests …"
-if "$POETRY" run pytest; then
+if "$POETRY" run pytest -rs; then
   pass "Tests passed"
 else
   fail "Tests failed."
