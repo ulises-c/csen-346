@@ -1,7 +1,8 @@
-import openai
 import json
 import time
-from typing import Dict, Any
+from typing import Any
+
+import openai
 
 
 class SocraticTeachingSystem:
@@ -136,7 +137,7 @@ class SocraticTeachingSystem:
                     consultant_index = i // 2
                     if consultant_index < len(self.consultant_history):
                         consultant_record = self.consultant_history[consultant_index]
-                        formatted_history += f"[顾问分析]\n"
+                        formatted_history += "[顾问分析]\n"
                         formatted_history += f"评估: {consultant_record['evaluation']}\n"
                         formatted_history += f"状态: {consultant_record['state']}\n"
                         formatted_history += f"行动: {consultant_record['action']}\n"
@@ -151,7 +152,7 @@ class SocraticTeachingSystem:
 
         return formatted_history.rstrip()  # 去除字符串末尾的空白字符
 
-    def socratic_teaching_consultant(self, student_input: str) -> Dict[str, Any]:
+    def socratic_teaching_consultant(self, student_input: str) -> dict[str, Any]:
         """苏格拉底教学顾问 - 对话状态判断者和流程控制者"""
 
         # 构建系统提示词
