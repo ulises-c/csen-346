@@ -1,5 +1,6 @@
 import openai
 import json
+import time
 from typing import Dict, Any
 
 
@@ -193,11 +194,11 @@ class SocraticTeachingSystem:
 ## 阶段详解
 
 ### 阶段a：学生提问（单回合）
-**状态定义**  
+**状态定义**
 a0：学生尚未提出问题
-a1：学生提出问题  
+a1：学生提出问题
 
-**转换规则**  
+**转换规则**
 - a0 → a0：学生仍未提出明确问题
 - a0 → a1：学生提出明确问题
 - a1 → 自动转入阶段b（仅1轮对话）
@@ -205,7 +206,7 @@ a1：学生提出问题
 ---
 
 ### 阶段b：概念探查（了解学生概念掌握程度）
-**状态评估规则**  
+**状态评估规则**
 必须遍历b2-b7，选择最匹配状态：
 
 | 状态编号 | 触发条件|
@@ -220,7 +221,7 @@ a1：学生提出问题
 ---
 
 ### 阶段c：归纳推理（找出学生归纳的规则，分析规则的正确性，并确定原理，此为主要对话阶段）
-**状态评估规则**  
+**状态评估规则**
 必须遍历c8-c29，选择最匹配状态：
 
 | 状态编号 | 触发条件|
@@ -258,14 +259,14 @@ a1：学生提出问题
 | d32      | 学生已经调查某个问题 |
 | d33      | 所有概念都已被研究 |
 
-**强制要求**  
+**强制要求**
 仅在本阶段可获取正确答案，学生给出正确答案后必须进入e阶段
 
 ---
 
 ### 阶段e：老师总结
-**状态定义**  
-e34：学生正确给出题目答案  
+**状态定义**
+e34：学生正确给出题目答案
 
 ---
 
@@ -286,14 +287,34 @@ e34：学生正确给出题目答案
 """
 
         try:
-            response = self.consultant_client.chat.completions.create(
-                model=self.consultant_model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input}
-                ],
-                response_format={"type": "json_object"}
-            )
+            # Retry 429s with exponential backoff (+ honor Retry-After when
+            # present). Hosted APIs like OpenAI bounce hard on TPM bursts;
+            # without this, a full eval run loses many turns to transient caps.
+            response = None
+            for attempt in range(6):
+                try:
+                    response = self.consultant_client.chat.completions.create(
+                        model=self.consultant_model_name,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_input}
+                        ],
+                        response_format={"type": "json_object"}
+                    )
+                    break
+                except openai.RateLimitError as rle:
+                    retry_after = None
+                    try:
+                        ra = rle.response.headers.get("retry-after") if getattr(rle, "response", None) else None
+                        if ra:
+                            retry_after = float(ra)
+                    except Exception:
+                        pass
+                    wait = retry_after if retry_after is not None else min(2 ** attempt, 30)
+                    print(f"Rate-limited (attempt {attempt+1}/6), sleeping {wait:.1f}s")
+                    time.sleep(wait)
+            if response is None:
+                raise RuntimeError("Consultant call failed after 6 retries on rate limits")
 
             # 获取原始响应内容
             raw_content = response.choices[0].message.content
@@ -308,6 +329,11 @@ e34：学生正确给出题目答案
             try:
                 # 尝试解析JSON
                 result = json.loads(raw_content)
+                # Weaker consultant models (e.g. Qwen3.5-2B) sometimes emit
+                # `"state": 3` instead of `"state": "a0"`. Coerce to string so
+                # downstream `state[0]` phase-prefix checks don't blow up.
+                if "state" in result and not isinstance(result["state"], str):
+                    result["state"] = str(result["state"])
                 return result
             except json.JSONDecodeError as json_err:
                 # JSON解析错误，打印原始内容
@@ -505,34 +531,3 @@ e34：学生正确给出题目答案
             elif self.teaching_rounds >= self.max_teaching_rounds and self.current_state == "d33":
                 print(
                     f"\n【教学阶段已达到最大轮数({self.max_teaching_rounds}轮)，请给出最终答案以进入总结阶段】")
-
-
-if __name__ == "__main__":
-
-    # 顾问智能体API配置
-    CONSULTANT_API_KEY = "Please input your consultant API key"  # 顾问智能体的API密钥
-    CONSULTANT_BASE_URL = "Please input your consultant API base URL"  # 顾问智能体的API基础URL地址
-    CONSULTANT_MODEL_NAME = "Please input your consultant model name"  # 顾问智能体使用的模型名称
-
-    # 教师智能体API配置
-    TEACHER_API_KEY = "Please input your teacher API key"  # 教师智能体的API密钥
-    TEACHER_BASE_URL = "Please input your teacher API base URL"  # 教师智能体的API基础URL地址
-    TEACHER_MODEL_NAME = "Please input your teacher model name"  # 教师智能体使用的模型名称
-
-    DEBUG_MODE = True  # 设置是否显示苏格拉底教学顾问的输出
-    MAX_TEACHING_ROUNDS = 8  # 设置最大教学轮数
-
-    # 创建教学系统实例
-    teaching_system = SocraticTeachingSystem(
-        consultant_api_key=CONSULTANT_API_KEY,
-        consultant_base_url=CONSULTANT_BASE_URL,
-        consultant_model_name=CONSULTANT_MODEL_NAME,
-        teacher_api_key=TEACHER_API_KEY,
-        teacher_base_url=TEACHER_BASE_URL,
-        teacher_model_name=TEACHER_MODEL_NAME,
-        debug_mode=DEBUG_MODE,
-        max_teaching_rounds=MAX_TEACHING_ROUNDS
-    )
-
-    # 启动对话
-    teaching_system.start_conversation()

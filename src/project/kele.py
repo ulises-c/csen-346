@@ -6,19 +6,13 @@ and adds batch evaluation for running against the SocratDataset.
 """
 
 import json
-import sys
 import time
 from pathlib import Path
 
 from src.project.config import load_config
+from src.project.socratic_teaching_system import SocraticTeachingSystem
 
-# Add the resources path so we can import the original system.
-# We use the original Chinese prompts (original_CN/) because SocratDataset is
-# Chinese and the teacher must reply in Chinese to match ground-truth references.
 RESOURCES_DIR = Path(__file__).resolve().parents[2] / "resources" / "KELE"
-sys.path.insert(0, str(RESOURCES_DIR / "original_CN"))
-
-from consultant_teacher_socratic_teaching_system_CN import SocraticTeachingSystem  # noqa: E402
 
 
 def create_system(
