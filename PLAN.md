@@ -4,14 +4,16 @@
 
 ## Status
 
+_Updated from repo state on 2026-04-14._
+
 | Item                            | Status         |
 | ------------------------------- | -------------- |
 | Paper selected & presented      | ✅ Done        |
 | Repo structure set up           | ✅ Done        |
 | KELE code obtained & translated | ✅ Done        |
 | SocratDataset obtained          | ✅ Done        |
-| Baseline running                | ⬜ Not started |
-| Evaluation pipeline             | ⬜ Not started |
+| Baseline running                | ✅ Done        |
+| Evaluation pipeline             | ✅ Done        |
 | Improvement implemented         | ⬜ Not started |
 | Paper written                   | ⬜ Not started |
 
@@ -40,18 +42,18 @@
 **Setup guide:** See [`RTX5090_SETUP.md`](RTX5090_SETUP.md) for full runbook — model downloads, vLLM serving, eval pipeline, metrics export, and troubleshooting.
 
 - [x] Add `openai` to `pyproject.toml` via Poetry
-- [ ] Serve [SocratTeachLLM](https://huggingface.co/yuanpan/SocratTeachLLM) locally (no free HF Inference API available)
-- [ ] Configure API credentials for consultant (Qwen3.5-9B, local) and teacher (SocratTeachLLM, local)
-- [ ] Run `KELE_original/consultant_teacher_socratic_teaching_system.py` on 5–10 manual test dialogues
-- [ ] Verify the 5-stage SocRule flow (a → b → c → d → e) works correctly end-to-end
-- [ ] Commit working baseline to `src/`
+- [x] Serve [SocratTeachLLM](https://huggingface.co/yuanpan/SocratTeachLLM) locally (via vLLM)
+- [x] Configure API credentials for consultant and teacher
+- [x] Run manual smoke tests before full evaluation
+- [x] Verify the 5-stage SocRule flow (a → b → c → d → e) works correctly end-to-end
+- [x] Commit working baseline to `src/`
 
 ### Model Experiments (in order)
 
 **Run 1 — SocratTeachLLM (baseline reproduction)**
-- [ ] Serve SocratTeachLLM (9.4B, GLM4-9B fine-tune) via vLLM / MLX / Ollama
-- [ ] Run full evaluation pipeline with this as the teacher agent
-- [ ] Compare results against Table 1 in the paper
+- [x] Serve SocratTeachLLM (9.4B, GLM4-9B fine-tune) via vLLM / MLX / Ollama
+- [x] Run full evaluation pipeline with this as the teacher agent
+- [x] Compare results against Table 1 in the paper
 
 **Run 2 — Gemma-4-31B (extension experiment)**
 - [ ] Serve [Gemma-4-31B](https://huggingface.co/google/gemma-4-31B) locally (Q4 quantized)
@@ -101,9 +103,9 @@ All inference and training will run on the **RTX 5090 32GB** rig. The M1 Max can
 
 ### Automated metrics (ROUGE-1/2/L, BLEU-4)
 
-- [ ] Split `KELE_original/SocratDataset.json` into train (90%) and test (10%) — matching the paper
-- [ ] Run the system on the test set and collect teacher responses
-- [ ] Score with `rouge-score` and `sacrebleu` against ground-truth responses
+- [x] Split `KELE_original/SocratDataset.json` into train (90%) and test (10%) — matching the paper
+- [x] Run the system on the test set and collect teacher responses
+- [x] Score with `rouge-score` and `sacrebleu` against ground-truth responses
 
 ### Single-turn metrics (PRR, NDAR, SPR, IAR)
 
@@ -121,6 +123,13 @@ All inference and training will run on the **RTX 5090 32GB** rig. The M1 Max can
 - [ ] Run teacher-only (no consultant) and compare — confirms consultant adds value
 - [ ] Run GLM4-9B base vs. SocratTeachLLM — confirms fine-tuning helped
 
+**Current baseline:** Completed on 2026-04-14 for the 681-dialogue test split.
+- ROUGE-1: 44.61
+- ROUGE-2: 26.04
+- ROUGE-L: 38.02
+- BLEU-4: 19.60
+- State accuracy: 25.94%
+
 **Target:** Results within ~5% of Table 1 across all 13 metrics.
 
 **Files to create:**
@@ -135,8 +144,8 @@ All inference and training will run on the **RTX 5090 32GB** rig. The M1 Max can
 
 **Goal:** Understand where our reproduction matches the paper and where it diverges.
 
-- [ ] Document which metrics hit parity and which fall short
-- [ ] Diagnose causes of gaps (consultant model choice, prompt differences, eval methodology)
+- [x] Document which metrics hit parity and which fall short
+- [x] Diagnose causes of gaps (consultant model choice, prompt differences, eval methodology)
 - [ ] Confirm the paper's two stated limitations hold in our run:
   - PRR ~75% (~25% of turns have relevance issues)
   - Domain specificity (system trained only on elementary science)
