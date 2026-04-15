@@ -21,10 +21,15 @@ class Config:
     teacher_local_path: str = ""
 
 
+def repo_root() -> Path:
+    """Return the repository root directory."""
+    return Path(__file__).resolve().parents[2]
+
+
 def load_env_file(path: Path | None = None) -> None:
     """Load a .env file into os.environ. Minimal implementation — no dependency needed."""
     if path is None:
-        path = Path(__file__).resolve().parents[2] / ".env"
+        path = repo_root() / ".env"
     if not path.exists():
         return
     with open(path) as f:
@@ -38,22 +43,25 @@ def load_env_file(path: Path | None = None) -> None:
             os.environ.setdefault(key, value)
 
 
-def load_config(experiment: str | None = None) -> Config:
+def load_config(experiment: str | None = None, root_dir: Path | None = None) -> Config:
     """Build a Config from environment variables.
 
     If experiment is given, loads configs/<experiment>.env instead of .env.
     Falls back to .env if no experiment is specified.
     """
+    if root_dir is None:
+        root_dir = repo_root()
+
     # Precedence: experiment config wins (loaded first via setdefault), .env
     # fills in anything the experiment didn't set (e.g. CONSULTANT_API_KEY =
     # OpenAI secret). This lets .env hold shared secrets while each experiment
     # chooses its own base_url / model.
     if experiment:
-        env_path = Path(__file__).resolve().parents[2] / "configs" / f"{experiment}.env"
+        env_path = root_dir / "configs" / f"{experiment}.env"
         if not env_path.exists():
             raise FileNotFoundError(f"Experiment config not found: {env_path}")
         load_env_file(env_path)
-    load_env_file()
+    load_env_file(root_dir / ".env")
 
     def require(key: str) -> str:
         val = os.environ.get(key)
