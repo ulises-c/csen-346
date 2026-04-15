@@ -42,20 +42,34 @@ addopts = "-v -ra"
 pytest = ">=8.0.0"
 ruff = ">=0.9.0"
 
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
-ignore = ["E501"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*.py" = ["E402"]
-
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = ["resources/"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (undefined names, unused imports)
+    "I",   # isort (import ordering)
+    "UP",  # pyupgrade (modern Python syntax)
+]
+ignore = [
+    "E501", # line too long — ruff format handles this
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files stub out optional deps with sys.modules patches before importing, so
+# E402 (import not at top) and F401 (unused imports) are intentional.
+"tests/*" = ["F401", "E402"]
+# Trailing spaces in the CN file are intentional markdown line-break syntax (  \n)
+# inside the system-prompt string.
+"resources/KELE/original_CN/*" = ["W291"]
 
 # ---------------------------------------------------------------------------
 # NOTE: torch is intentionally NOT declared here.

@@ -39,7 +39,7 @@ def test_load_env_file_strips_quotes(tmp_path, monkeypatch):
     clear_config_env(monkeypatch)
     env_file = tmp_path / ".env"
     env_file.write_text(
-        'CONSULTANT_MODEL_NAME="gpt-4o"\nTEACHER_API_KEY=\'secret\'\n',
+        "CONSULTANT_MODEL_NAME=\"gpt-4o\"\nTEACHER_API_KEY='secret'\n",
         encoding="utf-8",
     )
 

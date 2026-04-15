@@ -27,15 +27,23 @@ def test_run_batch_evaluation_creates_expected_output_files(tmp_path, monkeypatc
         {"id": 1, "question": "Q1", "answer": "A1", "dialogue": []},
         {"id": 2, "question": "Q2", "answer": "A2", "dialogue": []},
     ]
-    metrics = {"rouge1": 1.0, "state_accuracy": {"overall": 50.0, "per_stage": {}, "total_turns": 2}}
-    system = SimpleNamespace(teacher_model_name="teacher-model", consultant_model_name="consultant-model")
+    metrics = {
+        "rouge1": 1.0,
+        "state_accuracy": {"overall": 50.0, "per_stage": {}, "total_turns": 2},
+    }
+    system = SimpleNamespace(
+        teacher_model_name="teacher-model", consultant_model_name="consultant-model"
+    )
 
     monkeypatch.setattr(kele, "load_dataset", lambda *args, **kwargs: dataset)
     monkeypatch.setattr(kele, "create_system", lambda *args, **kwargs: system)
     monkeypatch.setattr(
         kele,
         "run_single_dialogue",
-        lambda _system, item: {"id": item["id"], "dialogue": [{"state": "a1", "ground_truth_state": "a1"}]},
+        lambda _system, item: {
+            "id": item["id"],
+            "dialogue": [{"state": "a1", "ground_truth_state": "a1"}],
+        },
     )
     monkeypatch.setattr(kele, "load_config", lambda *args, **kwargs: fake_config())
     install_fake_metrics(monkeypatch, metrics)
@@ -62,7 +70,9 @@ def test_run_batch_evaluation_skips_existing_dialogue_files(tmp_path, monkeypatc
     (dialogues_dir / "0001.json").write_text(json.dumps(existing), encoding="utf-8")
 
     seen_ids = []
-    system = SimpleNamespace(teacher_model_name="teacher-model", consultant_model_name="consultant-model")
+    system = SimpleNamespace(
+        teacher_model_name="teacher-model", consultant_model_name="consultant-model"
+    )
 
     monkeypatch.setattr(kele, "load_dataset", lambda *args, **kwargs: dataset)
     monkeypatch.setattr(kele, "create_system", lambda *args, **kwargs: system)
@@ -82,7 +92,9 @@ def test_run_batch_evaluation_skips_existing_dialogue_files(tmp_path, monkeypatc
 
 def test_run_batch_evaluation_writes_error_json_for_failed_dialogue(tmp_path, monkeypatch):
     dataset = [{"id": 1, "question": "Q1", "answer": "A1", "dialogue": []}]
-    system = SimpleNamespace(teacher_model_name="teacher-model", consultant_model_name="consultant-model")
+    system = SimpleNamespace(
+        teacher_model_name="teacher-model", consultant_model_name="consultant-model"
+    )
 
     monkeypatch.setattr(kele, "load_dataset", lambda *args, **kwargs: dataset)
     monkeypatch.setattr(kele, "create_system", lambda *args, **kwargs: system)

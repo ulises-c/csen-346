@@ -21,7 +21,9 @@ sys.path.insert(0, str(RESOURCES_DIR / "original_CN"))
 from consultant_teacher_socratic_teaching_system_CN import SocraticTeachingSystem  # noqa: E402
 
 
-def create_system(debug: bool | None = None, experiment: str | None = None) -> SocraticTeachingSystem:
+def create_system(
+    debug: bool | None = None, experiment: str | None = None
+) -> SocraticTeachingSystem:
     """Create a SocraticTeachingSystem from environment config."""
     cfg = load_config(experiment=experiment)
     return SocraticTeachingSystem(
@@ -53,6 +55,7 @@ def load_dataset(path: Path | None = None, split: str = "test", seed: int = 42) 
         return data
 
     import random
+
     rng = random.Random(seed)
     indices = list(range(len(data)))
     rng.shuffle(indices)
@@ -79,13 +82,15 @@ def run_single_dialogue(system: SocraticTeachingSystem, item: dict) -> dict:
         student_input = turn["student"]
         teacher_response = system.process_student_input(student_input)
 
-        generated_turns.append({
-            "student": student_input,
-            "state": system.current_state,
-            "teacher_response": teacher_response,
-            "ground_truth_teacher": turn["teacher"],
-            "ground_truth_state": turn["state"],
-        })
+        generated_turns.append(
+            {
+                "student": student_input,
+                "state": system.current_state,
+                "teacher_response": teacher_response,
+                "ground_truth_teacher": turn["teacher"],
+                "ground_truth_state": turn["state"],
+            }
+        )
 
         # If we hit the summary stage, stop
         if system.current_state == "e34":
@@ -200,6 +205,7 @@ def run_batch_evaluation(
     # Auto-compute metrics after run completes
     print("\nComputing metrics...")
     from src.project.metrics import compute_all_metrics, format_metrics_table
+
     metrics = compute_all_metrics(dialogues_dir)
     with open(output_dir / "metrics_summary.json", "w") as f:
         json.dump(metrics, f, indent=2)
@@ -218,8 +224,11 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="KELE Socratic Teaching System")
     parser.add_argument(
-        "--experiment", "-e", type=str, default=None,
-        help="Experiment config name (loads configs/<name>.env). E.g.: baseline, gemma4"
+        "--experiment",
+        "-e",
+        type=str,
+        default=None,
+        help="Experiment config name (loads configs/<name>.env). E.g.: baseline, gemma4",
     )
     sub = parser.add_subparsers(dest="command")
 
@@ -229,8 +238,13 @@ def main() -> None:
     # Batch evaluation mode
     eval_parser = sub.add_parser("evaluate", help="Run batch evaluation on the dataset")
     eval_parser.add_argument("--output", type=Path, default=None)
-    eval_parser.add_argument("--split", type=str, default="test", choices=["test", "train", "all"],
-                             help="Dataset split: test (10%%, default), train (90%%), all")
+    eval_parser.add_argument(
+        "--split",
+        type=str,
+        default="test",
+        choices=["test", "train", "all"],
+        help="Dataset split: test (10%%, default), train (90%%), all",
+    )
     eval_parser.add_argument("--start-id", type=int, default=1, help="Resume from this dialogue ID")
     eval_parser.add_argument("--limit", type=int, default=None, help="Max dialogues to process")
 
@@ -246,8 +260,11 @@ def main() -> None:
     elif args.command == "evaluate":
         output = args.output or Path(f"results/{args.experiment or 'baseline'}")
         run_batch_evaluation(
-            output, start_id=args.start_id, limit=args.limit,
-            experiment=args.experiment, split=args.split,
+            output,
+            start_id=args.start_id,
+            limit=args.limit,
+            experiment=args.experiment,
+            split=args.split,
         )
     elif args.command == "test":
         run_batch_evaluation(args.output, limit=args.n, experiment=args.experiment)
