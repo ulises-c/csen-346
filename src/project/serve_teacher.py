@@ -166,7 +166,8 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """CLI entry point for serving the local teacher model."""
     import uvicorn
 
     runtime_config = get_runtime_config()
@@ -176,3 +177,7 @@ if __name__ == "__main__":
         port=runtime_config["port"],
         log_level="info",
     )
+
+
+if __name__ == "__main__":
+    main()

@@ -84,7 +84,8 @@ def compare_runs(dirs: list[Path]) -> None:
     print(f"\nSaved comparison to {comparison_file}")
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """CLI entry point for evaluating saved KELE runs."""
     parser = argparse.ArgumentParser(description="Evaluate KELE run results")
     parser.add_argument("dirs", type=Path, nargs="+", help="Results directories to evaluate")
     parser.add_argument("--compare", action="store_true", help="Compare multiple runs side-by-side")
@@ -95,3 +96,7 @@ if __name__ == "__main__":
     else:
         for d in args.dirs:
             evaluate_run(d)
+
+
+if __name__ == "__main__":
+    main()

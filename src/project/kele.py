@@ -212,7 +212,8 @@ def interactive() -> None:
     system.start_conversation()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """CLI entry point for the KELE runner."""
     import argparse
 
     parser = argparse.ArgumentParser(description="KELE Socratic Teaching System")
@@ -252,3 +253,7 @@ if __name__ == "__main__":
         run_batch_evaluation(args.output, limit=args.n, experiment=args.experiment)
     else:
         parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

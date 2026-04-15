@@ -55,3 +55,142 @@ Verify with `git remote -v` — you should see one fetch URL and two push URLs.
 ## Dependencies
 
 [Poetry](https://python-poetry.org/) - Python package manager
+
+## Python Environment
+
+This repo targets Python `3.12` and uses Poetry for dependency management.
+
+### Initial setup
+
+```bash
+poetry env use python3.12
+poetry install --with dev
+```
+
+If you want to confirm the virtualenv Poetry is using:
+
+```bash
+poetry env info
+poetry run python -V
+poetry run which pytest
+```
+
+### Torch note
+
+`torch` is intentionally not declared in `pyproject.toml` because the CUDA wheel installation is environment-specific. After `poetry install`, install the appropriate PyTorch build manually for your machine.
+
+Example for CUDA 12.6:
+
+```bash
+poetry run pip install --index-url https://download.pytorch.org/whl/cu126 "torch>=2.10.0"
+```
+
+## Common Poetry Commands
+
+Poetry now exposes the main repo entry points directly:
+
+- `poetry run kele`
+- `poetry run kele-eval`
+- `poetry run serve-teacher`
+
+These map to the main modules in `src/project/`.
+
+### Run tests
+
+Run the offline/default test suite:
+
+```bash
+poetry run pytest
+```
+
+Show skip reasons too:
+
+```bash
+poetry run pytest -rs
+```
+
+Run a single test file:
+
+```bash
+poetry run pytest tests/test_metrics.py
+```
+
+Some tests are conditional and will skip if the required dependency or runtime is not present:
+
+- `tests/test_consultant.py` needs `openai` and relevant API credentials
+- `tests/test_metrics.py` / `tests/test_evaluate.py` need `rouge-score` and `sacrebleu`
+- `tests/test_serve_teacher.py` needs `fastapi`
+
+### Run the KELE CLI
+
+Show CLI help:
+
+```bash
+poetry run kele --help
+```
+
+Quick smoke test on a few dialogues:
+
+```bash
+poetry run kele --experiment baseline test --n 3 --output results/test
+```
+
+Run a full evaluation:
+
+```bash
+poetry run kele --experiment baseline evaluate --output results/baseline
+```
+
+### Evaluate saved results
+
+Recompute metrics for one run:
+
+```bash
+poetry run kele-eval results/baseline
+```
+
+Compare two runs side-by-side:
+
+```bash
+poetry run kele-eval --compare results/baseline results/gemma4
+```
+
+### Start the local teacher server
+
+```bash
+poetry run serve-teacher
+```
+
+With a custom local model path:
+
+```bash
+TEACHER_LOCAL_PATH=~/hf_models/SocratTeachLLM poetry run serve-teacher
+```
+
+### Run helper scripts
+
+The repo also includes shell scripts under `scripts/` for multi-process workflows such as model serving and long evaluation runs.
+
+Examples:
+
+```bash
+./scripts/run_eval.sh baseline
+./scripts/serve_socratteachllm.sh
+./scripts/serve_consultant.sh
+./scripts/serve_both.sh
+```
+
+## Configuration
+
+Runtime settings are loaded from:
+
+- `configs/<experiment>.env` for experiment-specific values
+- `.env` for shared secrets and local overrides
+
+Typical usage pattern:
+
+```bash
+poetry run kele --experiment baseline test --n 3 --output results/test
+```
+
+This loads `configs/baseline.env` first, then fills in any missing values from `.env`.

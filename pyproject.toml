@@ -24,12 +24,17 @@ dependencies = [
     "google-genai>=1.0.0",
 ]
 
+[project.scripts]
+kele = "src.project.kele:main"
+kele-eval = "src.project.evaluate:main"
+serve-teacher = "src.project.serve_teacher:main"
+
 [tool.poetry]
 packages = [{ include = "src", from = "." }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v"
+addopts = "-v -ra"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0"
