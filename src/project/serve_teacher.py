@@ -23,7 +23,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from src.project.config import load_env_file
@@ -57,6 +57,7 @@ def get_runtime_config() -> dict[str, str | int]:
         "host": os.getenv("TEACHER_HOST", "0.0.0.0"),
         "port": int(os.getenv("TEACHER_PORT", "8001")),
         "max_new_tokens": int(os.getenv("MAX_NEW_TOKENS", "512")),
+        "api_key": os.getenv("TEACHER_SERVER_API_KEY", ""),
     }
 
 
@@ -99,15 +100,47 @@ def create_app() -> FastAPI:
             app.state.runtime = load_runtime(app.state.runtime_config["model_path"])
         return app.state.runtime
 
+    def require_api_key(
+        authorization: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ) -> None:
+        expected_api_key = str(app.state.runtime_config.get("api_key", "")).strip()
+        if not expected_api_key:
+            return
+
+        bearer_token = ""
+        if authorization:
+            scheme, _, token = authorization.partition(" ")
+            if scheme.lower() == "bearer":
+                bearer_token = token.strip()
+
+        if bearer_token == expected_api_key or x_api_key == expected_api_key:
+            return
+
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    @app.get("/healthz")
+    def healthz():
+        return {"status": "ok", "model_loaded": app.state.runtime is not None}
+
     @app.get("/v1/models")
-    def list_models():
+    def list_models(
+        authorization: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ):
+        require_api_key(authorization=authorization, x_api_key=x_api_key)
         return {
             "object": "list",
             "data": [{"id": "SocratTeachLLM", "object": "model"}],
         }
 
     @app.post("/v1/chat/completions")
-    def chat_completions(req: ChatRequest):
+    def chat_completions(
+        req: ChatRequest,
+        authorization: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ):
+        require_api_key(authorization=authorization, x_api_key=x_api_key)
         if req.stream:
             raise HTTPException(status_code=501, detail="Streaming not supported")
 

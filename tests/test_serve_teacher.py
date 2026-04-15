@@ -75,6 +75,15 @@ def test_list_models_returns_expected_shape():
     assert payload["data"][0]["id"] == "SocratTeachLLM"
 
 
+def test_healthz_reports_runtime_state():
+    client = make_client(FakeTokenizer())
+
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "model_loaded": True}
+
+
 def test_chat_completions_rejects_streaming(monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", FakeTorch)
     client = make_client(FakeTokenizer())
@@ -118,3 +127,34 @@ def test_chat_completions_uses_manual_prompt_fallback_when_template_fails(monkey
     assert response.status_code == 200
     assert "User: 解释蒸发" in tokenizer.last_prompt
     assert tokenizer.last_prompt.endswith("\nAssistant:")
+
+
+def test_list_models_requires_api_key_when_configured(monkeypatch):
+    monkeypatch.setenv("TEACHER_SERVER_API_KEY", "secret-token")
+    app = serve_teacher.create_app()
+    client = TestClient(app)
+
+    unauthorized = client.get("/v1/models")
+    authorized = client.get(
+        "/v1/models",
+        headers={"Authorization": "Bearer secret-token"},
+    )
+
+    assert unauthorized.status_code == 401
+    assert authorized.status_code == 200
+
+
+def test_chat_completions_accepts_x_api_key_header(monkeypatch):
+    monkeypatch.setitem(sys.modules, "torch", FakeTorch)
+    monkeypatch.setenv("TEACHER_SERVER_API_KEY", "secret-token")
+    app = serve_teacher.create_app()
+    app.state.runtime = (FakeTokenizer(), FakeModel())
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={"messages": [{"role": "user", "content": "你好"}]},
+        headers={"x-api-key": "secret-token"},
+    )
+
+    assert response.status_code == 200

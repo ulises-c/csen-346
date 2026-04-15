@@ -167,6 +167,21 @@ With a custom local model path:
 TEACHER_LOCAL_PATH=~/hf_models/SocratTeachLLM poetry run serve-teacher
 ```
 
+### Run online from your own machine
+
+If you want a public HTTPS endpoint backed by your local RTX 3070, use the
+online-serving helper plus a tunnel such as Cloudflare Tunnel or ngrok.
+
+```bash
+TEACHER_LOCAL_PATH=~/hf_models/SocratTeachLLM \
+TEACHER_SERVER_API_KEY=replace-this-with-a-long-random-secret \
+./scripts/serve_teacher_online.sh
+```
+
+Then point your tunnel at `http://127.0.0.1:8001`.
+
+See [`ONLINE_SETUP.md`](ONLINE_SETUP.md) for the full public-serving flow.
+
 ### Run helper scripts
 
 The repo also includes shell scripts under `scripts/` for multi-process workflows such as model serving and long evaluation runs.
@@ -179,6 +194,16 @@ Examples:
 ./scripts/serve_consultant.sh
 ./scripts/serve_both.sh
 ```
+
+### Run on SCU WAVE nodes
+
+If you have access to SCU WAVE GPU nodes, use the included cluster config and Slurm job:
+
+```bash
+sbatch scripts/slurm/wave_eval.slurm
+```
+
+See [`WAVE_SETUP.md`](WAVE_SETUP.md) for the full setup and model-path overrides.
 
 ## Configuration
 

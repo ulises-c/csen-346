@@ -9,6 +9,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+TEACHER_PORT="${TEACHER_PORT:-8001}"
+CONSULTANT_PORT="${CONSULTANT_PORT:-8002}"
+TEACHER_LOG_FILE="${TEACHER_LOG_FILE:-logs/vllm_socrat.log}"
+CONSULTANT_LOG_FILE="${CONSULTANT_LOG_FILE:-logs/vllm_consultant.log}"
+
 mkdir -p logs
 
 echo "=== Starting KELE Model Servers ==="
@@ -35,29 +40,29 @@ wait_for_port() {
     return 1
 }
 
-echo "Starting SocratTeachLLM (teacher) on port 8001..."
+echo "Starting SocratTeachLLM (teacher) on port $TEACHER_PORT..."
 ./scripts/serve_socratteachllm.sh &
 TEACHER_PID=$!
 
-wait_for_port 8001 || { echo "Teacher failed to start — see logs/vllm_socrat.log"; exit 1; }
+wait_for_port "$TEACHER_PORT" || { echo "Teacher failed to start — see $TEACHER_LOG_FILE"; exit 1; }
 
 echo ""
-echo "Starting Qwen3.5-2B (consultant) on port 8002..."
+echo "Starting consultant on port $CONSULTANT_PORT..."
 ./scripts/serve_consultant.sh &
 CONSULTANT_PID=$!
 
-wait_for_port 8002 || { echo "Consultant failed to start — see logs/vllm_consultant.log"; exit 1; }
+wait_for_port "$CONSULTANT_PORT" || { echo "Consultant failed to start — see $CONSULTANT_LOG_FILE"; exit 1; }
 
 echo ""
 echo "---"
-echo "Teacher PID:     $TEACHER_PID (port 8001)"
-echo "Consultant PID:  $CONSULTANT_PID (port 8002)"
+echo "Teacher PID:     $TEACHER_PID (port $TEACHER_PORT)"
+echo "Consultant PID:  $CONSULTANT_PID (port $CONSULTANT_PORT)"
 echo "To stop both:    kill $TEACHER_PID $CONSULTANT_PID"
 
 echo ""
 echo "=== Both servers running ==="
-echo "Test teacher:     curl http://localhost:8001/v1/models"
-echo "Test consultant:  curl http://localhost:8002/v1/models"
+echo "Test teacher:     curl http://localhost:$TEACHER_PORT/v1/models"
+echo "Test consultant:  curl http://localhost:$CONSULTANT_PORT/v1/models"
 echo "Run evaluation:   ./scripts/run_eval.sh"
 
 wait

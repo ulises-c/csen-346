@@ -19,7 +19,7 @@ echo "GPU status:"
 nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null || echo "(nvidia-smi unavailable)"
 echo "---"
 
-python3 -m src.project.kele --experiment "$EXPERIMENT" evaluate \
+poetry run python -m src.project.kele --experiment "$EXPERIMENT" evaluate \
     --output "results/$EXPERIMENT" \
     "$@"
 
