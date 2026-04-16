@@ -71,8 +71,13 @@ poetry run huggingface-cli download Qwen/Qwen3.5-9B --local-dir ~/hf_models/Qwen
 ## Submitting the job
 
 ```bash
-sbatch scripts/slurm/wave_eval.slurm
+JOB=$(sbatch scripts/slurm/wave_eval.slurm | awk '{print $NF}')
+tail -f logs/slurm-${JOB}.out
 ```
+
+`sbatch` prints the job ID on submit (`Submitted batch job 12345`); the
+one-liner captures it so you can tail the log immediately. If you already
+submitted and missed it, `squeue -u $USER` lists your running jobs.
 
 That job:
 
