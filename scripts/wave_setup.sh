@@ -23,14 +23,31 @@ echo "Log: $(pwd)/$LOG_FILE"
 # ── Redirect all caches off the home directory ────────────────────────────────
 # Home dir quota on WAVE is tiny. Poetry venv + pip cache + cuda-bindings alone
 # can exceed it. Point everything at project (persistent) or scratch (ephemeral).
+# If the class directories aren't provisioned yet, fall back to ~/csen346-cache
+# and warn loudly.
 PROJECT_SPACE=/WAVE/projects/CSEN-346-Sp26
 SCRATCH_SPACE=/WAVE/scratch/CSEN-346-Sp26
+FALLBACK="$HOME/csen346-cache"
 
-# Virtualenv: project space — survives between sessions, shared path per user
+_try_mkdir() { mkdir -p "$1" 2>/dev/null; }
+
+if _try_mkdir "$PROJECT_SPACE" && _try_mkdir "$SCRATCH_SPACE"; then
+    warn_fallback=false
+else
+    warn_fallback=true
+    warn "Cannot write to $PROJECT_SPACE or $SCRATCH_SPACE"
+    warn "The class directories may not be provisioned yet."
+    warn "Contact your sysadmin to request access, then re-run."
+    warn "Falling back to $FALLBACK — watch your home quota!"
+    PROJECT_SPACE="$FALLBACK"
+    SCRATCH_SPACE="$FALLBACK"
+fi
+
+# Virtualenv: project space — survives between sessions
 export POETRY_VIRTUALENVS_PATH="$PROJECT_SPACE/.virtualenvs"
-# Poetry package cache: scratch — fast, throwaway
+# Poetry package cache: scratch — throwaway
 export POETRY_CACHE_DIR="$SCRATCH_SPACE/.cache/poetry"
-# pip download/wheel cache: scratch — fast, throwaway
+# pip download/wheel cache: scratch — throwaway
 export PIP_CACHE_DIR="$SCRATCH_SPACE/.cache/pip"
 # pip needs a writable TMPDIR for large wheel unpacking
 export TMPDIR="$SCRATCH_SPACE/.tmp/$USER"
