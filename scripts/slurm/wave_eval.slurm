@@ -17,6 +17,9 @@
 
 set -euo pipefail
 
+# Ensure Poetry (installed to ~/.local/bin by wave_setup.sh) is on PATH.
+export PATH="$HOME/.local/bin:$PATH"
+
 REPO_DIR="${REPO_DIR:-$HOME/csen-346}"
 EXPERIMENT="${EXPERIMENT:-wave}"
 TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-${HF_HOME:-$HOME/hf_models}/SocratTeachLLM}"
