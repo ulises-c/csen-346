@@ -30,21 +30,39 @@ echo ""
 
 # ── 1. Python ≥ 3.12 ──────────────────────────────────────────────────────────
 step "Checking Python"
+
+# Load Python 3.12 module if not already available.
+# 'module' is a shell function sourced from the environment init; it may not
+# exist in non-interactive scripts, so guard the call.
+_has_python312() {
+    for cmd in python3.12 python3 python; do
+        command -v "$cmd" &>/dev/null || continue
+        ver=$("$cmd" --version 2>&1 | awk '{print $2}')
+        major="${ver%%.*}"; rest="${ver#*.}"; minor="${rest%%.*}"
+        [[ "$major" -ge 3 && "$minor" -ge 12 ]] && return 0
+    done
+    return 1
+}
+
+if ! _has_python312; then
+    if command -v module &>/dev/null; then
+        info "Python >=3.12 not in PATH — loading Python/3.12.3-GCCcore-14.2.0 module..."
+        module load Python/3.12.3-GCCcore-14.2.0
+    else
+        die "Python >=3.12 not found and 'module' command unavailable. Source the module init or load Python 3.12 manually."
+    fi
+fi
+
 PYTHON=""
 for cmd in python3.12 python3 python; do
-    if command -v "$cmd" &>/dev/null; then
-        ver=$("$cmd" --version 2>&1 | awk '{print $2}')
-        major="${ver%%.*}"
-        rest="${ver#*.}"; minor="${rest%%.*}"
-        if [[ "$major" -ge 3 && "$minor" -ge 12 ]]; then
-            PYTHON="$cmd"
-            break
-        fi
+    command -v "$cmd" &>/dev/null || continue
+    ver=$("$cmd" --version 2>&1 | awk '{print $2}')
+    major="${ver%%.*}"; rest="${ver#*.}"; minor="${rest%%.*}"
+    if [[ "$major" -ge 3 && "$minor" -ge 12 ]]; then
+        PYTHON="$cmd"; break
     fi
 done
-if [[ -z "$PYTHON" ]]; then
-    die "Python >=3.12 not found. Try: module load python/3.12 (or similar) and re-run."
-fi
+[[ -n "$PYTHON" ]] || die "Python >=3.12 not found even after module load. Check available modules with: module spider Python"
 info "Using $PYTHON — $("$PYTHON" --version)"
 
 # ── 2. Poetry ─────────────────────────────────────────────────────────────────

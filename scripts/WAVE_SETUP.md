@@ -35,32 +35,42 @@ bash scripts/wave_setup.sh --models
 `--models` downloads SocratTeachLLM and Qwen3.5-9B to `~/hf_models/`.
 Omit it if you want to install deps first and download models separately.
 
-> **Note — broken PyTorch module:** `module load PyTorch/2.9.1-CUDA-13.0`
-> references `CUDA/13.0.0` which does not exist on the cluster. The setup
-> script installs PyTorch directly via `pip` from the `cu128` wheel index
-> (WAVE ships CUDA 12.x), bypassing the broken module entirely.
+> **Python module:** The setup script automatically runs
+> `module load Python/3.12.3-GCCcore-14.2.0` if Python 3.12 isn't already
+> in your PATH. The SLURM job script does the same on the compute node.
+>
+> **Broken PyTorch module:** `PyTorch/2.9.1-CUDA-13.0` references
+> `CUDA/13.0.0` which does not exist on the cluster — avoid it.
+> The setup script installs PyTorch directly via `pip` from the `cu128`
+> wheel index (WAVE ships CUDA 12.x), bypassing it entirely.
+> (`PyTorch/2.10.0-Python-3.12` and `PyTorch/2.11.0-Python-3.12` are also
+> available and working, but we install via pip to control the exact version
+> vLLM is paired with.)
 
 <details>
 <summary>Manual steps (if you prefer not to use the script)</summary>
 
 ```bash
-# 1. Install Poetry if missing
+# 1. Load Python 3.12
+module load Python/3.12.3-GCCcore-14.2.0
+
+# 2. Install Poetry if missing
 export PATH="$HOME/.local/bin:$PATH"
 curl -sSL https://install.python-poetry.org | python3.12 -
 
-# 2. Project deps
+# 3. Project deps
 poetry env use python3.12
 poetry install --with dev
 
-# 3. PyTorch — use cu128, NOT cu126 (WAVE CUDA is 12.x, not 12.6)
+# 4. PyTorch — use cu128, NOT cu126 (WAVE CUDA is 12.x, not 12.6)
 poetry run pip install \
     torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cu128
 
-# 4. vLLM
+# 5. vLLM
 poetry run pip install "vllm>=0.7"
 
-# 5. Models (login node only — compute nodes may lack internet)
+# 6. Models (login node only — compute nodes may lack internet)
 mkdir -p ~/hf_models
 poetry run huggingface-cli download ulises-c/SocratTeachLLM --local-dir ~/hf_models/SocratTeachLLM
 poetry run huggingface-cli download Qwen/Qwen3.5-9B --local-dir ~/hf_models/Qwen3.5-9B

@@ -20,6 +20,9 @@ set -euo pipefail
 # Ensure Poetry (installed to ~/.local/bin by wave_setup.sh) is on PATH.
 export PATH="$HOME/.local/bin:$PATH"
 
+# Load Python 3.12 so Poetry can find the right interpreter on the compute node.
+module load Python/3.12.3-GCCcore-14.2.0
+
 REPO_DIR="${REPO_DIR:-$HOME/csen-346}"
 EXPERIMENT="${EXPERIMENT:-wave}"
 TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-${HF_HOME:-$HOME/hf_models}/SocratTeachLLM}"
