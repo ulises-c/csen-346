@@ -110,7 +110,7 @@ if [[ "$DOWNLOAD_MODELS" == true ]]; then
     mkdir -p "$HF_HOME"
 
     info "Downloading SocratTeachLLM → $HF_HOME/SocratTeachLLM"
-    poetry run huggingface-cli download yuanpan/SocratTeachLLM \
+    poetry run huggingface-cli download ulises-c/SocratTeachLLM \
         --local-dir "$HF_HOME/SocratTeachLLM"
 
     info "Downloading Qwen3.5-9B → $HF_HOME/Qwen3.5-9B"

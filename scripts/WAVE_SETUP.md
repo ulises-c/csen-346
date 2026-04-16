@@ -62,7 +62,7 @@ poetry run pip install "vllm>=0.7"
 
 # 5. Models (login node only — compute nodes may lack internet)
 mkdir -p ~/hf_models
-poetry run huggingface-cli download yuanpan/SocratTeachLLM --local-dir ~/hf_models/SocratTeachLLM
+poetry run huggingface-cli download ulises-c/SocratTeachLLM --local-dir ~/hf_models/SocratTeachLLM
 poetry run huggingface-cli download Qwen/Qwen3.5-9B --local-dir ~/hf_models/Qwen3.5-9B
 ```
 
