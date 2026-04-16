@@ -145,6 +145,13 @@ step "Installing vLLM"
 poetry run pip install --quiet "vllm>=0.7"
 info "vLLM installed: $(poetry run python -c 'import vllm; print(vllm.__version__)')"
 
+# ── 5a. Pin packages to satisfy vLLM's constraints ────────────────────────────
+# poetry install may upgrade transformers/setuptools beyond what vLLM supports.
+# Pin them back so vLLM doesn't break at runtime.
+step "Pinning vLLM-compatible package versions"
+poetry run pip install --quiet "transformers<5.0.0" "setuptools<81.0.0"
+info "Pinned transformers and setuptools."
+
 # ── 6. Sanity check ───────────────────────────────────────────────────────────
 step "Sanity check"
 poetry run python - <<'PY'
@@ -174,9 +181,9 @@ info "All imports OK."
 # ── 7. Model downloads (optional) ─────────────────────────────────────────────
 if [[ "$DOWNLOAD_MODELS" == true ]]; then
     step "Downloading models"
-    # Default to the shared class project space so the team shares one copy.
+    # Default to project space (or fallback if no write access — see above).
     # Override by setting HF_HOME before running this script.
-    HF_HOME="${HF_HOME:-/WAVE/projects/CSEN-346-Sp26/hf_models}"
+    HF_HOME="${HF_HOME:-$PROJECT_SPACE/hf_models}"
     mkdir -p "$HF_HOME"
     info "Model destination: $HF_HOME"
 
