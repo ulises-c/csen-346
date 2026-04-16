@@ -1,5 +1,33 @@
 # WAVE Setup
 
+## Class policy
+
+> Follow the WAVE documentation to work on our HPC cluster. You all should
+> have accounts with access to:
+>
+> | Path | Purpose |
+> |---|---|
+> | `/WAVE/projects/CSEN-346-Sp26` | Persistent project files (code, models) |
+> | `/WAVE/scratch/CSEN-346-Sp26` | Fast scratch space (large temp files) |
+>
+> - **Class quota:** 400 GB total
+> - **Per-person budget:** ≤ 30 GB — be mindful of shared space
+> - **GPUs:** request 1–2 at a time; don't hold idle allocations
+> - **End of quarter:** all WAVE data will be erased — make sure final
+>   model weights are on Hugging Face and all code is committed to GitHub
+>   before the deadline
+
+Store shared model downloads in the project space so the whole team
+shares one copy instead of everyone downloading ~40 GB separately:
+
+```bash
+export HF_HOME=/WAVE/projects/CSEN-346-Sp26/hf_models
+```
+
+This is the default used by `wave_setup.sh --models` and `wave_eval.slurm`.
+
+---
+
 This repo can run on SCU WAVE GPU nodes. The strategy is:
 
 1. Request a node with **2 GPUs**
@@ -23,41 +51,72 @@ the defaults are tuned for 32 GB. See "Targeting a specific node" below if you n
 
 ## One-time setup on WAVE
 
-Clone the repo and install dependencies:
+Clone the repo on the **login node**, then run the setup script (it handles
+Poetry, PyTorch, vLLM, and model downloads all in one shot):
 
 ```bash
 git clone <your-repo-url>
 cd csen-346
+bash scripts/wave_setup.sh --models
+```
+
+`--models` downloads SocratTeachLLM and Qwen3.5-9B to `~/hf_models/`.
+Omit it if you want to install deps first and download models separately.
+
+> **Python module:** The setup script automatically runs
+> `module load Python/3.12.3-GCCcore-14.2.0` if Python 3.12 isn't already
+> in your PATH. The SLURM job script does the same on the compute node.
+>
+> **Broken PyTorch module:** `PyTorch/2.9.1-CUDA-13.0` references
+> `CUDA/13.0.0` which does not exist on the cluster — avoid it.
+> The setup script installs PyTorch directly via `pip` from the `cu128`
+> wheel index (WAVE ships CUDA 12.x), bypassing it entirely.
+> (`PyTorch/2.10.0-Python-3.12` and `PyTorch/2.11.0-Python-3.12` are also
+> available and working, but we install via pip to control the exact version
+> vLLM is paired with.)
+
+<details>
+<summary>Manual steps (if you prefer not to use the script)</summary>
+
+```bash
+# 1. Load Python 3.12
+module load Python/3.12.3-GCCcore-14.2.0
+
+# 2. Install Poetry if missing
+export PATH="$HOME/.local/bin:$PATH"
+curl -sSL https://install.python-poetry.org | python3.12 -
+
+# 3. Project deps
 poetry env use python3.12
 poetry install --with dev
-```
 
-Install the CUDA PyTorch wheel separately (Poetry can't resolve the +cu126 local version):
+# 4. PyTorch — use cu128, NOT cu126 (WAVE CUDA is 12.x, not 12.6)
+poetry run pip install \
+    torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu128
 
-```bash
-poetry run pip install --index-url https://download.pytorch.org/whl/cu126 "torch>=2.10.0"
-```
-
-Install vLLM:
-
-```bash
+# 5. vLLM
 poetry run pip install "vllm>=0.7"
+
+# 6. Models (login node only — compute nodes may lack internet)
+export HF_HOME=/WAVE/projects/CSEN-346-Sp26/hf_models
+mkdir -p "$HF_HOME"
+poetry run hf download ulises-c/SocratTeachLLM --local-dir "$HF_HOME/SocratTeachLLM"
+poetry run hf download Qwen/Qwen3.5-9B --local-dir "$HF_HOME/Qwen3.5-9B"
 ```
 
-Download models (do this from the login node or a data-transfer node — compute nodes
-may not have outbound internet access):
-
-```bash
-mkdir -p ~/hf_models
-poetry run huggingface-cli download yuanpan/SocratTeachLLM --local-dir ~/hf_models/SocratTeachLLM
-poetry run huggingface-cli download Qwen/Qwen3.5-9B --local-dir ~/hf_models/Qwen3.5-9B
-```
+</details>
 
 ## Submitting the job
 
 ```bash
-sbatch scripts/slurm/wave_eval.slurm
+JOB=$(sbatch scripts/slurm/wave_eval.slurm | awk '{print $NF}')
+tail -f logs/slurm-${JOB}.out
 ```
+
+`sbatch` prints the job ID on submit (`Submitted batch job 12345`); the
+one-liner captures it so you can tail the log immediately. If you already
+submitted and missed it, `squeue -u $USER` lists your running jobs.
 
 That job:
 
