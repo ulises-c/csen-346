@@ -1,5 +1,33 @@
 # WAVE Setup
 
+## Class policy
+
+> Follow the WAVE documentation to work on our HPC cluster. You all should
+> have accounts with access to:
+>
+> | Path | Purpose |
+> |---|---|
+> | `/WAVE/projects/CSEN-346-Sp26` | Persistent project files (code, models) |
+> | `/WAVE/scratch/CSEN-346-Sp26` | Fast scratch space (large temp files) |
+>
+> - **Class quota:** 400 GB total
+> - **Per-person budget:** ≤ 30 GB — be mindful of shared space
+> - **GPUs:** request 1–2 at a time; don't hold idle allocations
+> - **End of quarter:** all WAVE data will be erased — make sure final
+>   model weights are on Hugging Face and all code is committed to GitHub
+>   before the deadline
+
+Store shared model downloads in the project space so the whole team
+shares one copy instead of everyone downloading ~40 GB separately:
+
+```bash
+export HF_HOME=/WAVE/projects/CSEN-346-Sp26/hf_models
+```
+
+This is the default used by `wave_setup.sh --models` and `wave_eval.slurm`.
+
+---
+
 This repo can run on SCU WAVE GPU nodes. The strategy is:
 
 1. Request a node with **2 GPUs**
@@ -71,9 +99,10 @@ poetry run pip install \
 poetry run pip install "vllm>=0.7"
 
 # 6. Models (login node only — compute nodes may lack internet)
-mkdir -p ~/hf_models
-poetry run huggingface-cli download ulises-c/SocratTeachLLM --local-dir ~/hf_models/SocratTeachLLM
-poetry run huggingface-cli download Qwen/Qwen3.5-9B --local-dir ~/hf_models/Qwen3.5-9B
+export HF_HOME=/WAVE/projects/CSEN-346-Sp26/hf_models
+mkdir -p "$HF_HOME"
+poetry run hf download ulises-c/SocratTeachLLM --local-dir "$HF_HOME/SocratTeachLLM"
+poetry run hf download Qwen/Qwen3.5-9B --local-dir "$HF_HOME/Qwen3.5-9B"
 ```
 
 </details>

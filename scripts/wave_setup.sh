@@ -124,15 +124,18 @@ info "All imports OK."
 # ── 7. Model downloads (optional) ─────────────────────────────────────────────
 if [[ "$DOWNLOAD_MODELS" == true ]]; then
     step "Downloading models"
-    HF_HOME="${HF_HOME:-$HOME/hf_models}"
+    # Default to the shared class project space so the team shares one copy.
+    # Override by setting HF_HOME before running this script.
+    HF_HOME="${HF_HOME:-/WAVE/projects/CSEN-346-Sp26/hf_models}"
     mkdir -p "$HF_HOME"
+    info "Model destination: $HF_HOME"
 
     info "Downloading SocratTeachLLM → $HF_HOME/SocratTeachLLM"
-    poetry run huggingface-cli download ulises-c/SocratTeachLLM \
+    poetry run hf download ulises-c/SocratTeachLLM \
         --local-dir "$HF_HOME/SocratTeachLLM"
 
     info "Downloading Qwen3.5-9B → $HF_HOME/Qwen3.5-9B"
-    poetry run huggingface-cli download Qwen/Qwen3.5-9B \
+    poetry run hf download Qwen/Qwen3.5-9B \
         --local-dir "$HF_HOME/Qwen3.5-9B"
 
     info "Models downloaded to $HF_HOME"

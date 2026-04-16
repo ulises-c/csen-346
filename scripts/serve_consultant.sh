@@ -20,7 +20,7 @@ mkdir -p logs
 if [ ! -d "$MODEL_PATH" ]; then
     echo "ERROR: Model not found at $MODEL_PATH"
     echo "Download it first:"
-    echo "  huggingface-cli download Qwen/$MODEL_NAME --local-dir $MODEL_PATH"
+    echo "  hf download Qwen/$MODEL_NAME --local-dir $MODEL_PATH"
     exit 1
 fi
 

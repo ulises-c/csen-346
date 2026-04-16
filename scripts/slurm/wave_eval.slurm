@@ -42,7 +42,7 @@ echo "---"
 # module load cuda
 # module load python
 
-export HF_HOME="${HF_HOME:-$HOME/hf_models}"
+export HF_HOME="${HF_HOME:-/WAVE/projects/CSEN-346-Sp26/hf_models}"
 export TEACHER_HOST=127.0.0.1
 export TEACHER_PORT=8001
 export TEACHER_LOG_FILE="logs/vllm_teacher-${SLURM_JOB_ID}.log"
