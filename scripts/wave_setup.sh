@@ -29,9 +29,14 @@ PROJECT_SPACE=/WAVE/projects/CSEN-346-Sp26
 SCRATCH_SPACE=/WAVE/scratch/CSEN-346-Sp26
 FALLBACK="$HOME/csen346-cache"
 
-_try_mkdir() { mkdir -p "$1" 2>/dev/null; }
+# Test actual write access by touching a temp file inside the directory.
+_can_write() {
+    local dir="$1"
+    local probe="$dir/.wave_setup_write_test_$$"
+    [[ -d "$dir" ]] && touch "$probe" 2>/dev/null && rm -f "$probe"
+}
 
-if _try_mkdir "$PROJECT_SPACE" && _try_mkdir "$SCRATCH_SPACE"; then
+if _can_write "$PROJECT_SPACE" && _can_write "$SCRATCH_SPACE"; then
     warn_fallback=false
 else
     warn_fallback=true
