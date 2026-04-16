@@ -14,6 +14,12 @@ for arg in "$@"; do
     [[ "$arg" == "--models" ]] && DOWNLOAD_MODELS=true
 done
 
+# ── Logging — tee all output (stdout + stderr) to a log file ──────────────────
+mkdir -p logs
+LOG_FILE="logs/wave_setup.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "Log file: $LOG_FILE"
+
 # ── Colours ───────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BOLD='\033[1m'; NC='\033[0m'
 info() { echo -e "${GREEN}[setup]${NC} $*"; }
