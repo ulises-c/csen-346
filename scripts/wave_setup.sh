@@ -14,6 +14,14 @@ for arg in "$@"; do
     [[ "$arg" == "--models" ]] && DOWNLOAD_MODELS=true
 done
 
+
+# ── Colours & helpers (defined early — used by cache-redirect block below) ────
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BOLD='\033[1m'; NC='\033[0m'
+info() { echo -e "${GREEN}[setup]${NC} $*"; }
+warn() { echo -e "${YELLOW}[warn]${NC}  $*"; }
+die()  { echo -e "${RED}[error]${NC} $*" >&2; exit 1; }
+step() { echo -e "\n${BOLD}── $* ──${NC}"; }
+
 # ── Logging — tee stdout+stderr to logs/wave_setup.log (repo-relative) ────────
 mkdir -p logs
 LOG_FILE="logs/wave_setup.log"
@@ -62,13 +70,6 @@ echo "Virtualenvs : $POETRY_VIRTUALENVS_PATH"
 echo "Poetry cache: $POETRY_CACHE_DIR"
 echo "pip cache   : $PIP_CACHE_DIR"
 echo "TMPDIR      : $TMPDIR"
-
-# ── Colours ───────────────────────────────────────────────────────────────────
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BOLD='\033[1m'; NC='\033[0m'
-info() { echo -e "${GREEN}[setup]${NC} $*"; }
-warn() { echo -e "${YELLOW}[warn]${NC}  $*"; }
-die()  { echo -e "${RED}[error]${NC} $*" >&2; exit 1; }
-step() { echo -e "\n${BOLD}── $* ──${NC}"; }
 
 echo ""
 echo -e "${BOLD}KELE / WAVE HPC Setup${NC}"
