@@ -23,11 +23,20 @@ export PATH="$HOME/.local/bin:$PATH"
 # Load Python 3.12 so Poetry can find the right interpreter on the compute node.
 module load Python/3.12.3-GCCcore-14.2.0
 
+# Mirror the cache layout from wave_setup.sh so Poetry finds the right venv.
+PROJECT_SPACE=/WAVE/projects/CSEN-346-Sp26
+SCRATCH_SPACE=/WAVE/scratch/CSEN-346-Sp26
+export POETRY_VIRTUALENVS_PATH="$PROJECT_SPACE/.virtualenvs"
+export POETRY_CACHE_DIR="$SCRATCH_SPACE/.cache/poetry"
+export PIP_CACHE_DIR="$SCRATCH_SPACE/.cache/pip"
+export TMPDIR="$SCRATCH_SPACE/.tmp/$USER"
+export HF_HOME="${HF_HOME:-$PROJECT_SPACE/hf_models}"
+
 REPO_DIR="${REPO_DIR:-$HOME/csen-346}"
 EXPERIMENT="${EXPERIMENT:-wave}"
-TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-${HF_HOME:-$HOME/hf_models}/SocratTeachLLM}"
+TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-$HF_HOME/SocratTeachLLM}"
 CONSULTANT_LOCAL_MODEL_NAME="${CONSULTANT_LOCAL_MODEL_NAME:-Qwen3.5-9B}"
-CONSULTANT_MODEL_PATH="${CONSULTANT_MODEL_PATH:-${HF_HOME:-$HOME/hf_models}/Qwen3.5-9B}"
+CONSULTANT_MODEL_PATH="${CONSULTANT_MODEL_PATH:-$HF_HOME/Qwen3.5-9B}"
 
 cd "$REPO_DIR"
 mkdir -p logs
@@ -38,11 +47,6 @@ hostname
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 echo "---"
 
-# Adjust these if the cluster needs module loads. Keep them commented until needed.
-# module load cuda
-# module load python
-
-export HF_HOME="${HF_HOME:-/WAVE/projects/CSEN-346-Sp26/hf_models}"
 export TEACHER_HOST=127.0.0.1
 export TEACHER_PORT=8001
 export TEACHER_LOG_FILE="logs/vllm_teacher-${SLURM_JOB_ID}.log"

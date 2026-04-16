@@ -14,11 +14,32 @@ for arg in "$@"; do
     [[ "$arg" == "--models" ]] && DOWNLOAD_MODELS=true
 done
 
-# ── Logging — tee all output (stdout + stderr) to a log file ──────────────────
+# ── Logging — tee stdout+stderr to logs/wave_setup.log (repo-relative) ────────
 mkdir -p logs
 LOG_FILE="logs/wave_setup.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
-echo "Log file: $LOG_FILE"
+echo "Log: $(pwd)/$LOG_FILE"
+
+# ── Redirect all caches off the home directory ────────────────────────────────
+# Home dir quota on WAVE is tiny. Poetry venv + pip cache + cuda-bindings alone
+# can exceed it. Point everything at project (persistent) or scratch (ephemeral).
+PROJECT_SPACE=/WAVE/projects/CSEN-346-Sp26
+SCRATCH_SPACE=/WAVE/scratch/CSEN-346-Sp26
+
+# Virtualenv: project space — survives between sessions, shared path per user
+export POETRY_VIRTUALENVS_PATH="$PROJECT_SPACE/.virtualenvs"
+# Poetry package cache: scratch — fast, throwaway
+export POETRY_CACHE_DIR="$SCRATCH_SPACE/.cache/poetry"
+# pip download/wheel cache: scratch — fast, throwaway
+export PIP_CACHE_DIR="$SCRATCH_SPACE/.cache/pip"
+# pip needs a writable TMPDIR for large wheel unpacking
+export TMPDIR="$SCRATCH_SPACE/.tmp/$USER"
+
+mkdir -p "$POETRY_VIRTUALENVS_PATH" "$POETRY_CACHE_DIR" "$PIP_CACHE_DIR" "$TMPDIR"
+echo "Virtualenvs : $POETRY_VIRTUALENVS_PATH"
+echo "Poetry cache: $POETRY_CACHE_DIR"
+echo "pip cache   : $PIP_CACHE_DIR"
+echo "TMPDIR      : $TMPDIR"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BOLD='\033[1m'; NC='\033[0m'
