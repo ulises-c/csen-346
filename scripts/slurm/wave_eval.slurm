@@ -104,3 +104,5 @@ echo
 echo "---"
 
 ./scripts/run_eval.sh "$EXPERIMENT"
+
+echo "=== Job complete: $(date) ==="
