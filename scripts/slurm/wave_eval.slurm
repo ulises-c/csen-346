@@ -48,6 +48,12 @@ hostname
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 echo "---"
 
+# V100 (compute capability 7.0) does not support bfloat16 — use float16.
+# Override TEACHER_DTYPE / CONSULTANT_DTYPE if running on a newer GPU (e.g.
+# L40S, A100) that supports bfloat16.
+export TEACHER_DTYPE="${TEACHER_DTYPE:-float16}"
+export CONSULTANT_DTYPE="${CONSULTANT_DTYPE:-float16}"
+
 export TEACHER_HOST=127.0.0.1
 export TEACHER_PORT=8001
 export TEACHER_LOG_FILE="logs/vllm_teacher-${SLURM_JOB_ID}.log"

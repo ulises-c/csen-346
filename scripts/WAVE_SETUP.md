@@ -35,7 +35,9 @@ This repo can run on SCU WAVE GPU nodes. The strategy is:
 3. Serve the consultant (Qwen3.5-9B) on GPU 1
 4. Run the KELE evaluation against `localhost`
 
-Both models run in BF16. Each gets a dedicated GPU, so a V100 32GB per model is enough.
+Both models run in FP16 (`float16`) on V100 nodes — V100s have compute
+capability 7.0 and do not support BF16 (requires 8.0+). On newer nodes
+(L40S, A100) you can override: `export TEACHER_DTYPE=bfloat16 CONSULTANT_DTYPE=bfloat16`.
 
 ## WAVE GPU nodes you might land on
 
@@ -184,8 +186,8 @@ CUDA_VISIBLE_DEVICES=1 ./scripts/serve_consultant.sh &
 
 | Model | Role | VRAM | GPU utilization setting |
 |---|---|---|---|
-| SocratTeachLLM 9.4B | Teacher | ~19 GB | 0.85 (27 GB on V100, 41 GB on L40S) |
-| Qwen3.5-9B | Consultant | ~17 GB | 0.85 (27 GB on V100, 41 GB on L40S) |
+| SocratTeachLLM 9.4B | Teacher | ~19 GB | 0.85 (27 GB on V100, 41 GB on L40S) | float16 on V100, bfloat16 on L40S+ |
+| Qwen3.5-9B | Consultant | ~17 GB | 0.85 (27 GB on V100, 41 GB on L40S) | float16 on V100, bfloat16 on L40S+ |
 
 Each model is on its own GPU, so V100 32GB nodes are fine.
 
