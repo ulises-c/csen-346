@@ -110,13 +110,20 @@ poetry run hf download Qwen/Qwen3.5-9B --local-dir "$HF_HOME/Qwen3.5-9B"
 ## Submitting the job
 
 ```bash
+mkdir -p logs
 JOB=$(sbatch scripts/slurm/wave_eval.slurm | awk '{print $NF}')
+echo "Job $JOB queued — waiting for log..."
+until [ -f logs/slurm-${JOB}.out ]; do sleep 10; done
 tail -f logs/slurm-${JOB}.out
 ```
 
 `sbatch` prints the job ID on submit (`Submitted batch job 12345`); the
-one-liner captures it so you can tail the log immediately. If you already
-submitted and missed it, `squeue -u $USER` lists your running jobs.
+one-liner captures it, waits for the log file to appear (the job may be
+queued for a few minutes before a GPU node is allocated), then tails it.
+
+If you already submitted and missed the job ID: `squeue -u $USER`
+
+To cancel a job: `scancel <JOBID>`
 
 That job:
 
