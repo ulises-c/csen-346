@@ -9,6 +9,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Initialize pyenv shims if pyenv is installed — needed in non-interactive shells
+# where ~/.bashrc hasn't run and the shims would otherwise exit 127.
+if command -v pyenv &>/dev/null; then
+    eval "$(pyenv init -)"
+fi
+
 DOWNLOAD_MODELS=false
 for arg in "$@"; do
     [[ "$arg" == "--models" ]] && DOWNLOAD_MODELS=true
