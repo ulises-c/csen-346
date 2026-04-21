@@ -114,7 +114,7 @@ poetry run hf download Qwen/Qwen3.5-9B --local-dir "$HF_HOME/Qwen3.5-9B"
 ```bash
 mkdir -p logs
 JOB=$(sbatch scripts/slurm/wave_eval.slurm | awk '{print $NF}')
-printf "[%s] Job %s submitted\n  Status : squeue -u \$USER\n  Logs   : tail -f logs/slurm-%s.out  (or tail -f logs/*-%s/run.log)\n  Cancel : scancel %s\n" \
+printf "[%s] Job %s submitted\n  Status : squeue -u \$USER\n  Logs   : tail -f logs/*%s*/slurm.out\n  Cancel : scancel %s\n" \
     "$(date '+%Y-%m-%d %H:%M:%S')" "$JOB" "$JOB" "$JOB" | tee logs/job-${JOB}.submitted
 ```
 
@@ -124,15 +124,19 @@ Once the job starts a timestamped run directory is created:
 
 ```
 logs/
-  slurm-<JOBID>.out          ← SLURM's captured stdout (all output)
-  slurm-<JOBID>.err          ← SLURM stderr (usually empty)
-  2026-04-20T14-30-00-<JOBID>/
-    run.log                  ← copy of all job output (same as slurm-*.out)
-    vllm_teacher.log         ← teacher server output
-    vllm_consultant.log      ← consultant server output
-    slurm.out  → ../slurm-<JOBID>.out   (symlink for one-stop browsing)
-    slurm.err  → ../slurm-<JOBID>.err
+  2026-04-20T14-30-00-<JOBID>/   ← everything for this run in one place
+    slurm.out                    ← SLURM's captured stdout (written by SLURM)
+    slurm.err                    ← SLURM stderr (usually empty)
+    run.log                      ← tee of all job output (same content as slurm.out)
+    vllm_teacher.log             ← teacher server output
+    vllm_consultant.log          ← consultant server output
+    job.submitted                ← submission metadata (written at sbatch time)
 ```
+
+> **How it works:** `submit_wave.sh` pre-creates `logs/<JOBID>/` so SLURM can
+> write its output files there. When the job starts it renames the dir to add
+> the ISO timestamp prefix — Linux keeps open file descriptors alive across
+> renames so the log files keep writing without interruption.
 
 `run.log` contains:
 
@@ -142,13 +146,13 @@ logs/
 - **Eval progress** — live dialogue output
 - **End time** — printed on completion
 
-To tail live (once the run dir appears — a few seconds after the job starts):
+To tail live (the glob works before and after the timestamp rename):
 
 ```bash
-tail -f logs/slurm-<JOBID>.out                    # full SLURM capture
-tail -f logs/*-<JOBID>/run.log                    # same, in the run dir
-tail -f logs/*-<JOBID>/vllm_teacher.log           # teacher server only
-tail -f logs/*-<JOBID>/vllm_consultant.log        # consultant server only
+tail -f logs/*<JOBID>*/slurm.out                  # full SLURM capture
+tail -f logs/*<JOBID>*/run.log                    # same, tee'd copy
+tail -f logs/*<JOBID>*/vllm_teacher.log           # teacher server only
+tail -f logs/*<JOBID>*/vllm_consultant.log        # consultant server only
 ```
 
 If you already submitted and missed the job ID: `squeue -u $USER`

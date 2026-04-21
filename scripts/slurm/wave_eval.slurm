@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=kele-wave
-#SBATCH --output=logs/slurm-%j.out
-#SBATCH --error=logs/slurm-%j.err
+#SBATCH --output=logs/%j/slurm.out
+#SBATCH --error=logs/%j/slurm.err
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -43,15 +43,14 @@ cd "$REPO_DIR"
 mkdir -p logs
 
 # ── Timestamped run directory ─────────────────────────────────────────────────
-# All logs for this run (vLLM servers + main output) land in one place.
-# Format: logs/YYYY-MM-DDTHH-MM-SS-<jobid>/
-# (colons replaced with dashes — POSIX-safe, still ISO 8601-readable)
+# submit_wave.sh pre-created logs/$SLURM_JOB_ID/ so SLURM could write
+# slurm.out / slurm.err there (#SBATCH --output=logs/%j/slurm.out).
+# Rename it now to add an ISO 8601 timestamp prefix.  Linux keeps open file
+# descriptors alive across renames, so SLURM's log file keeps writing without
+# interruption.  Everything for this run ends up in one directory.
 RUN_DIR="logs/$(date -u +%Y-%m-%dT%H-%M-%S)-${SLURM_JOB_ID}"
-mkdir -p "$RUN_DIR"
-# Symlink SLURM's captured output into the run dir for one-stop browsing.
-ln -sf "../slurm-${SLURM_JOB_ID}.out" "$RUN_DIR/slurm.out" 2>/dev/null || true
-ln -sf "../slurm-${SLURM_JOB_ID}.err" "$RUN_DIR/slurm.err" 2>/dev/null || true
-# Tee all subsequent stdout/stderr into run.log (SLURM .out still gets it too).
+mv "logs/${SLURM_JOB_ID}" "$RUN_DIR"
+# Tee all subsequent stdout/stderr into run.log (slurm.out still gets it too).
 exec > >(tee "$RUN_DIR/run.log") 2>&1
 
 echo "=== KELE WAVE job ==="
