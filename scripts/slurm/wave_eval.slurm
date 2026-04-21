@@ -42,7 +42,20 @@ CONSULTANT_MODEL_PATH="${CONSULTANT_MODEL_PATH:-$HF_HOME/Qwen3.5-9B}"
 cd "$REPO_DIR"
 mkdir -p logs
 
+# ── Timestamped run directory ─────────────────────────────────────────────────
+# All logs for this run (vLLM servers + main output) land in one place.
+# Format: logs/YYYY-MM-DDTHH-MM-SS-<jobid>/
+# (colons replaced with dashes — POSIX-safe, still ISO 8601-readable)
+RUN_DIR="logs/$(date -u +%Y-%m-%dT%H-%M-%S)-${SLURM_JOB_ID}"
+mkdir -p "$RUN_DIR"
+# Symlink SLURM's captured output into the run dir for one-stop browsing.
+ln -sf "../slurm-${SLURM_JOB_ID}.out" "$RUN_DIR/slurm.out" 2>/dev/null || true
+ln -sf "../slurm-${SLURM_JOB_ID}.err" "$RUN_DIR/slurm.err" 2>/dev/null || true
+# Tee all subsequent stdout/stderr into run.log (SLURM .out still gets it too).
+exec > >(tee "$RUN_DIR/run.log") 2>&1
+
 echo "=== KELE WAVE job ==="
+echo "Run dir: $RUN_DIR"
 date
 hostname
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
@@ -56,7 +69,7 @@ echo "---"
 
 export TEACHER_HOST=127.0.0.1
 export TEACHER_PORT=8001
-export TEACHER_LOG_FILE="logs/vllm_teacher-${SLURM_JOB_ID}.log"
+export TEACHER_LOG_FILE="$RUN_DIR/vllm_teacher.log"
 export TEACHER_MODEL_NAME=SocratTeachLLM
 export TEACHER_MODEL_PATH
 # 0.85 leaves ~15% headroom for CUDA overhead — safe on V100 32GB and larger.
@@ -65,7 +78,7 @@ export TEACHER_MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-4096}"
 
 export CONSULTANT_HOST=127.0.0.1
 export CONSULTANT_PORT=8002
-export CONSULTANT_LOG_FILE="logs/vllm_consultant-${SLURM_JOB_ID}.log"
+export CONSULTANT_LOG_FILE="$RUN_DIR/vllm_consultant.log"
 export CONSULTANT_LOCAL_MODEL_NAME
 export CONSULTANT_MODEL_PATH
 export CONSULTANT_GPU_MEMORY_UTILIZATION="${CONSULTANT_GPU_MEMORY_UTILIZATION:-0.85}"

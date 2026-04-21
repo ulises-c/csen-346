@@ -114,19 +114,42 @@ poetry run hf download Qwen/Qwen3.5-9B --local-dir "$HF_HOME/Qwen3.5-9B"
 ```bash
 mkdir -p logs
 JOB=$(sbatch scripts/slurm/wave_eval.slurm | awk '{print $NF}')
-printf "[%s] Job %s submitted\n  Status : squeue -u \$USER\n  Logs   : tail -f logs/slurm-%s.out\n  Cancel : scancel %s\n" \
+printf "[%s] Job %s submitted\n  Status : squeue -u \$USER\n  Logs   : tail -f logs/slurm-%s.out  (or tail -f logs/*-%s/run.log)\n  Cancel : scancel %s\n" \
     "$(date '+%Y-%m-%d %H:%M:%S')" "$JOB" "$JOB" "$JOB" | tee logs/job-${JOB}.submitted
 ```
 
 This returns immediately — no blocking wait. A `logs/job-<JOBID>.submitted`
 file is written instantly with submission time and the commands you need.
-Once the job starts, `logs/slurm-<JOBID>.out` appears and contains:
+Once the job starts a timestamped run directory is created:
+
+```
+logs/
+  slurm-<JOBID>.out          ← SLURM's captured stdout (all output)
+  slurm-<JOBID>.err          ← SLURM stderr (usually empty)
+  2026-04-20T14-30-00-<JOBID>/
+    run.log                  ← copy of all job output (same as slurm-*.out)
+    vllm_teacher.log         ← teacher server output
+    vllm_consultant.log      ← consultant server output
+    slurm.out  → ../slurm-<JOBID>.out   (symlink for one-stop browsing)
+    slurm.err  → ../slurm-<JOBID>.err
+```
+
+`run.log` contains:
 
 - **Start time** — printed by the job at launch
 - **GPU info** — `nvidia-smi` output
 - **Server readiness** — port health checks
 - **Eval progress** — live dialogue output
 - **End time** — printed on completion
+
+To tail live (once the run dir appears — a few seconds after the job starts):
+
+```bash
+tail -f logs/slurm-<JOBID>.out                    # full SLURM capture
+tail -f logs/*-<JOBID>/run.log                    # same, in the run dir
+tail -f logs/*-<JOBID>/vllm_teacher.log           # teacher server only
+tail -f logs/*-<JOBID>/vllm_consultant.log        # consultant server only
+```
 
 If you already submitted and missed the job ID: `squeue -u $USER`
 

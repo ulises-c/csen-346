@@ -11,12 +11,18 @@ cd "$(dirname "$0")/.."
 
 TEACHER_PORT="${TEACHER_PORT:-8001}"
 CONSULTANT_PORT="${CONSULTANT_PORT:-8002}"
-TEACHER_LOG_FILE="${TEACHER_LOG_FILE:-logs/vllm_socrat.log}"
-CONSULTANT_LOG_FILE="${CONSULTANT_LOG_FILE:-logs/vllm_consultant.log}"
 
-mkdir -p logs
+# ── Timestamped run directory ─────────────────────────────────────────────────
+# All logs for this run land in one place: logs/YYYY-MM-DDTHH-MM-SS/
+# Callers can override log paths via env vars before invoking this script.
+RUN_DIR="${RUN_DIR:-logs/$(date -u +%Y-%m-%dT%H-%M-%S)}"
+mkdir -p "$RUN_DIR"
+TEACHER_LOG_FILE="${TEACHER_LOG_FILE:-$RUN_DIR/vllm_teacher.log}"
+CONSULTANT_LOG_FILE="${CONSULTANT_LOG_FILE:-$RUN_DIR/vllm_consultant.log}"
+export TEACHER_LOG_FILE CONSULTANT_LOG_FILE
 
 echo "=== Starting KELE Model Servers ==="
+echo "Run dir: $RUN_DIR"
 echo "GPU status before:"
 nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader 2>/dev/null || echo "(nvidia-smi unavailable)"
 echo "---"
