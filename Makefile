@@ -12,7 +12,7 @@ help:
 	@echo ""
 	@echo "  Scripts (scripts/):"
 	@echo "  post-eval-shutdown    Run scripts/post_eval_shutdown.sh"
-	@echo "  run-eval              Run scripts/run_eval.sh  (EXP=baseline|l40s|gemma4, default: baseline)"
+	@echo "  run-eval              Run scripts/run_eval.sh  (GPU=baseline|l40s|gemma4, default: baseline)"
 	@echo "  setup-l40s            Run scripts/l40s_setup.sh (one-time setup for dual L40S machine)"
 	@echo "  serve-both            Run scripts/serve_both.sh (single GPU, shared VRAM)"
 	@echo "  serve-dual-gpu        Run scripts/serve_dual_gpu.sh (2 GPUs, teacher→GPU0 consultant→GPU1)"
@@ -56,10 +56,10 @@ setup-l40s:
 post-eval-shutdown:
 	bash scripts/post_eval_shutdown.sh
 
-EXP ?= baseline
+GPU ?= baseline
 
 run-eval:
-	bash scripts/run_eval.sh $(EXP)
+	bash scripts/run_eval.sh $(GPU)
 
 serve-both:
 	bash scripts/serve_both.sh
