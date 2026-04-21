@@ -59,6 +59,11 @@ setup-l40s:
 post-eval-shutdown:
 	bash scripts/post_eval_shutdown.sh
 
+# TODO: auto-detect GPU config from hardware — query nvidia-smi for compute
+# capability and total VRAM per device, then select the appropriate configs/
+# file automatically (e.g. 2×24GB CC≥8.6 → 3090ti, 2×48GB CC≥8.9 → l40s,
+# single GPU → serve-both, V100/CC<8.0 → float16 + enforce-eager, etc.).
+# Planned: make run-eval with no GPU= arg runs detection and picks the config.
 GPU ?= baseline
 
 run-eval:
