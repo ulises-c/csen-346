@@ -48,11 +48,11 @@ hostname
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 echo "---"
 
-# V100 (compute capability 7.0) does not support bfloat16 — use float16.
-# Override TEACHER_DTYPE / CONSULTANT_DTYPE if running on a newer GPU (e.g.
-# L40S, A100) that supports bfloat16.
-export TEACHER_DTYPE="${TEACHER_DTYPE:-float16}"
-export CONSULTANT_DTYPE="${CONSULTANT_DTYPE:-float16}"
+# dtype and --enforce-eager are auto-selected by each serve script based on
+# the GPU's compute capability (CC < 8.0 → float16 + --enforce-eager,
+# CC ≥ 8.0 → bfloat16).  Override here only if you need to force a value:
+#   export TEACHER_DTYPE=float16
+#   export CONSULTANT_DTYPE=float16
 
 export TEACHER_HOST=127.0.0.1
 export TEACHER_PORT=8001

@@ -186,8 +186,8 @@ CUDA_VISIBLE_DEVICES=1 ./scripts/serve_consultant.sh &
 
 | Model | Role | VRAM | GPU utilization setting |
 |---|---|---|---|
-| SocratTeachLLM 9.4B | Teacher | ~19 GB | 0.85 (27 GB on V100, 41 GB on L40S) | float16 on V100, bfloat16 on L40S+ |
-| Qwen3.5-9B | Consultant | ~17 GB | 0.85 (27 GB on V100, 41 GB on L40S) | float16 on V100, bfloat16 on L40S+ |
+| SocratTeachLLM 9.4B | Teacher | ~19 GB | 0.85 (27 GB on V100, 41 GB on L40S) | auto: float16 + --enforce-eager on V100 (CC 7.0); bfloat16 on L40S/A100+ (CC ≥ 8.0) |
+| Qwen3.5-9B | Consultant | ~17 GB | 0.85 (27 GB on V100, 41 GB on L40S) | auto: float16 + --enforce-eager on V100 (CC 7.0); bfloat16 on L40S/A100+ (CC ≥ 8.0) |
 
 Each model is on its own GPU, so V100 32GB nodes are fine.
 
