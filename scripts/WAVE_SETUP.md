@@ -286,7 +286,64 @@ Each model is on its own GPU, so V100 32GB nodes are fine.
 
 - Model servers bind to `127.0.0.1` — traffic stays private to the job.
 - The Slurm script kills both servers automatically when the job ends.
-- Full eval (681 dialogues) estimated time: 2–4 hrs on V100, 1.5–2.5 hrs on L40S.
+- Full eval (681 dialogues) estimated time: **~34 hrs on V100, ~8–12 hrs on L40S/A100**.
 - If a single GPU has enough VRAM for both models (e.g. you get an L40S 48GB and
   only need one), you can simplify to `--gres=gpu:1` and remove the `CUDA_VISIBLE_DEVICES`
   pinning from the slurm script.
+
+## V100 (CC 7.0) runtime notes
+
+Observed behavior from a real run on gpu03. Applies to any CC < 8.0 node.
+
+### What works differently vs newer GPUs
+
+| Behavior | V100 (CC 7.0) | L40S / A100 (CC ≥ 8.0) |
+|---|---|---|
+| dtype | `float16` (auto-selected) | `bfloat16` |
+| CUDA graphs | Disabled (`--enforce-eager`) | Enabled |
+| FlashAttention 2 | ❌ Not supported — falls back to Triton attention | ✅ |
+| Triton attention kernel | ✅ Used for both models | Not needed |
+
+### Expected log messages on V100
+
+These appear at startup and are **normal — not bugs**:
+
+```
+ERROR Cannot use FA version 2... FA2 is only supported on devices with compute capability >= 8
+INFO  Using TRITON_ATTN attention backend
+```
+vLLM logs this at ERROR level but it's just informational — FA2 is unavailable so it
+falls back to the Triton kernel, which works fine.
+
+```
+WARNING Using a slow tokenizer. This might cause a significant slowdown.
+```
+SocratTeachLLM (ChatGLM) has no fast Rust tokenizer. Python tokenization runs on CPU
+before every call. Adds a small but real overhead per turn.
+
+```
+WARNING Default vLLM sampling parameters overridden by generation_config.json:
+        {'temperature': 0.8, 'top_p': 0.8}
+```
+SocratTeachLLM's own `generation_config.json` sets sampling params. This is intentional
+— the model is not using greedy decoding.
+
+### Qwen3.5-9B is a Mamba hybrid
+
+Qwen3.5-9B uses a mixed attention + state-space (Mamba) architecture, which causes:
+
+- **Slow warmup** — `init engine took 36.92 seconds` vs 3.24s for the teacher. Expected.
+- **FLA kernel** — vLLM uses `Triton/FLA GDN prefill kernel` for Mamba layers.
+- **Shape warning during warmup** — `UserWarning: seq_len (16) < num_heads (32)` appears
+  during profiling. Non-fatal, does not affect inference correctness.
+
+### Why eval is slow on V100
+
+Each dialogue makes ~10 serial LLM calls (5 turns × consultant + teacher). On V100:
+
+- No CUDA graph batching (eager mode means per-call Python overhead)
+- ~25 tokens/s generation throughput per request
+- Slow tokenizer on teacher adds CPU time per call
+
+Result: **~3 min/dialogue → ~34 hrs for 681 dialogues**. Within the 48h partition limit.
+The `gpu` partition default is 48h (`sinfo -p gpu -o "%.P %.l"` confirms `2-00:00:00`).
