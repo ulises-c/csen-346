@@ -74,7 +74,7 @@ export CONSULTANT_MAX_MODEL_LEN="${CONSULTANT_MAX_MODEL_LEN:-8192}"
 wait_for_port() {
     local port=$1
     echo -n "Waiting for port $port..."
-    for i in $(seq 1 240); do
+    for i in $(seq 1 600); do
         if curl -fsS "http://127.0.0.1:${port}/v1/models" > /dev/null 2>&1; then
             echo " ready (~$((i*2))s)"
             return 0

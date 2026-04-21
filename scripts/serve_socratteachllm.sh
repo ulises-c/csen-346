@@ -40,4 +40,5 @@ exec poetry run vllm serve "$MODEL_PATH" \
     --trust-remote-code \
     --max-model-len "$MAX_MODEL_LEN" \
     --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION" \
+    --enforce-eager \
     2>&1 | tee "$LOG_FILE"
