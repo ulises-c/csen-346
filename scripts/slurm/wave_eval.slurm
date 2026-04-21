@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=96G
 #SBATCH --gres=gpu:2
-#SBATCH --time=12:00:00
+# No --time: uses gpu partition default (48h max), covers any eval run.
 # Note: --gres=gpu:2 requests any two available GPUs.
 # WAVE has V100 32GB nodes (gpu[01-04]) and L40S 48GB nodes (oignat01).
 # Both work. If you want to target a specific node type:
