@@ -357,7 +357,8 @@ Each dialogue makes ~10 serial LLM calls (5 turns × consultant + teacher). On V
 - Slow tokenizer on teacher adds CPU time per call
 
 Result: **~3 min/dialogue → ~34 hrs for 681 dialogues**. Within the 48h partition limit.
-The `gpu` partition default is 48h (`sinfo -p gpu -o "%.P %.l"` confirms `2-00:00:00`).
+The `gpu` partition **maximum** is 48h (`sinfo -p gpu -o "%.P %.l"` confirms `2-00:00:00`).
+The partition **default** (no `--time`) is 1h — much shorter. Always request the full 48h explicitly.
 
 ### Observed eval times by setup
 

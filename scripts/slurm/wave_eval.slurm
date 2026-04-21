@@ -8,7 +8,9 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=96G
 #SBATCH --gres=gpu:2
-# No --time: uses gpu partition default (48h max), covers any eval run.
+#SBATCH --time=48:00:00
+# 48h = gpu partition maximum (sinfo -p gpu -o "%.P %.l" → 2-00:00:00).
+# Without --time SLURM uses the partition *default* (1h on WAVE), not the max.
 # Note: --gres=gpu:2 requests any two available GPUs.
 # WAVE has V100 32GB nodes (gpu[01-04]) and L40S 48GB nodes (oignat01).
 # Both work. If you want to target a specific node type:
