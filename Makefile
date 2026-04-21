@@ -1,4 +1,4 @@
-.PHONY: help run install-hooks \
+.PHONY: help run install-hooks slurm \
         post-eval-shutdown run-eval \
         serve-both serve-consultant serve-gemma4 serve-socratteachllm serve-teacher-online
 
@@ -17,6 +17,9 @@ help:
 	@echo "  serve-gemma4          Run scripts/serve_gemma4.sh"
 	@echo "  serve-socratteachllm  Run scripts/serve_socratteachllm.sh"
 	@echo "  serve-teacher-online  Run scripts/serve_teacher_online.sh"
+	@echo ""
+	@echo "  WAVE HPC (SLURM):"
+	@echo "  slurm                 git pull + sbatch wave_eval.slurm + print status"
 
 # ── Entry point ──────────────────────────────────────────────────────────────
 
@@ -64,3 +67,8 @@ serve-socratteachllm:
 
 serve-teacher-online:
 	bash scripts/serve_teacher_online.sh
+
+# ── WAVE HPC ──────────────────────────────────────────────────────────────────
+
+slurm:
+	bash scripts/slurm/submit_wave.sh
