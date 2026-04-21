@@ -1,13 +1,16 @@
 #!/bin/bash
 #SBATCH --job-name=kele-wave
-#SBATCH --output=logs/slurm-%j.out
-#SBATCH --error=logs/slurm-%j.err
+#SBATCH --output=logs/%j/slurm.out
+#SBATCH --error=logs/%j/slurm.err
+#SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=96G
 #SBATCH --gres=gpu:2
-#SBATCH --time=08:00:00
+#SBATCH --time=48:00:00
+# 48h = gpu partition maximum (sinfo -p gpu -o "%.P %.l" → 2-00:00:00).
+# Without --time SLURM uses the partition *default* (1h on WAVE), not the max.
 # Note: --gres=gpu:2 requests any two available GPUs.
 # WAVE has V100 32GB nodes (gpu[01-04]) and L40S 48GB nodes (oignat01).
 # Both work. If you want to target a specific node type:
@@ -17,29 +20,57 @@
 
 set -euo pipefail
 
+# Ensure Poetry (installed to ~/.local/bin by wave_setup.sh) is on PATH.
+export PATH="$HOME/.local/bin:$PATH"
+
+# Load Python 3.12 so Poetry can find the right interpreter on the compute node.
+module load Python/3.12.3-GCCcore-14.2.0
+
+# Mirror the cache layout from wave_setup.sh so Poetry finds the right venv.
+PROJECT_SPACE=/WAVE/projects/CSEN-346-Sp26
+SCRATCH_SPACE=/WAVE/scratch/CSEN-346-Sp26
+export POETRY_VIRTUALENVS_PATH="$PROJECT_SPACE/.virtualenvs"
+export POETRY_CACHE_DIR="$SCRATCH_SPACE/.cache/poetry"
+export PIP_CACHE_DIR="$SCRATCH_SPACE/.cache/pip"
+export TMPDIR="$SCRATCH_SPACE/.tmp/$USER"
+export HF_HOME="${HF_HOME:-$PROJECT_SPACE/hf_models}"
+
 REPO_DIR="${REPO_DIR:-$HOME/csen-346}"
 EXPERIMENT="${EXPERIMENT:-wave}"
-TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-${HF_HOME:-$HOME/hf_models}/SocratTeachLLM}"
+TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-$HF_HOME/SocratTeachLLM}"
 CONSULTANT_LOCAL_MODEL_NAME="${CONSULTANT_LOCAL_MODEL_NAME:-Qwen3.5-9B}"
-CONSULTANT_MODEL_PATH="${CONSULTANT_MODEL_PATH:-${HF_HOME:-$HOME/hf_models}/Qwen3.5-9B}"
+CONSULTANT_MODEL_PATH="${CONSULTANT_MODEL_PATH:-$HF_HOME/Qwen3.5-9B}"
 
 cd "$REPO_DIR"
 mkdir -p logs
 
+# ── Timestamped run directory ─────────────────────────────────────────────────
+# submit_wave.sh pre-created logs/$SLURM_JOB_ID/ so SLURM could write
+# slurm.out / slurm.err there (#SBATCH --output=logs/%j/slurm.out).
+# Rename it now to add an ISO 8601 timestamp prefix.  Linux keeps open file
+# descriptors alive across renames, so SLURM's log file keeps writing without
+# interruption.  Everything for this run ends up in one directory.
+RUN_DIR="logs/$(date -u +%Y-%m-%dT%H-%M-%S)-${SLURM_JOB_ID}"
+mv "logs/${SLURM_JOB_ID}" "$RUN_DIR"
+# Tee all subsequent stdout/stderr into run.log (slurm.out still gets it too).
+exec > >(tee "$RUN_DIR/run.log") 2>&1
+
 echo "=== KELE WAVE job ==="
+echo "Run dir: $RUN_DIR"
 date
 hostname
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
 echo "---"
 
-# Adjust these if the cluster needs module loads. Keep them commented until needed.
-# module load cuda
-# module load python
+# dtype and --enforce-eager are auto-selected by each serve script based on
+# the GPU's compute capability (CC < 8.0 → float16 + --enforce-eager,
+# CC ≥ 8.0 → bfloat16).  Override here only if you need to force a value:
+#   export TEACHER_DTYPE=float16
+#   export CONSULTANT_DTYPE=float16
 
-export HF_HOME="${HF_HOME:-$HOME/hf_models}"
 export TEACHER_HOST=127.0.0.1
 export TEACHER_PORT=8001
-export TEACHER_LOG_FILE="logs/vllm_teacher-${SLURM_JOB_ID}.log"
+export TEACHER_LOG_FILE="$RUN_DIR/vllm_teacher.log"
 export TEACHER_MODEL_NAME=SocratTeachLLM
 export TEACHER_MODEL_PATH
 # 0.85 leaves ~15% headroom for CUDA overhead — safe on V100 32GB and larger.
@@ -48,7 +79,7 @@ export TEACHER_MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-4096}"
 
 export CONSULTANT_HOST=127.0.0.1
 export CONSULTANT_PORT=8002
-export CONSULTANT_LOG_FILE="logs/vllm_consultant-${SLURM_JOB_ID}.log"
+export CONSULTANT_LOG_FILE="$RUN_DIR/vllm_consultant.log"
 export CONSULTANT_LOCAL_MODEL_NAME
 export CONSULTANT_MODEL_PATH
 export CONSULTANT_GPU_MEMORY_UTILIZATION="${CONSULTANT_GPU_MEMORY_UTILIZATION:-0.85}"
@@ -57,7 +88,7 @@ export CONSULTANT_MAX_MODEL_LEN="${CONSULTANT_MAX_MODEL_LEN:-8192}"
 wait_for_port() {
     local port=$1
     echo -n "Waiting for port $port..."
-    for i in $(seq 1 240); do
+    for i in $(seq 1 600); do
         if curl -fsS "http://127.0.0.1:${port}/v1/models" > /dev/null 2>&1; then
             echo " ready (~$((i*2))s)"
             return 0
@@ -93,3 +124,5 @@ echo
 echo "---"
 
 ./scripts/run_eval.sh "$EXPERIMENT"
+
+echo "=== Job complete: $(date) ==="

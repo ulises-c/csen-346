@@ -1,6 +1,7 @@
-.PHONY: help run install-hooks \
+.PHONY: help run install-hooks slurm \
         post-eval-shutdown run-eval \
-        serve-both serve-consultant serve-gemma4 serve-socratteachllm serve-teacher-online
+        serve-both serve-dual-gpu serve-consultant serve-gemma4 serve-socratteachllm serve-teacher-online \
+        setup-l40s
 
 # Default target
 help:
@@ -12,11 +13,16 @@ help:
 	@echo "  Scripts (scripts/):"
 	@echo "  post-eval-shutdown    Run scripts/post_eval_shutdown.sh"
 	@echo "  run-eval              Run scripts/run_eval.sh"
-	@echo "  serve-both            Run scripts/serve_both.sh"
+	@echo "  setup-l40s            Run scripts/l40s_setup.sh (one-time setup for dual L40S machine)"
+	@echo "  serve-both            Run scripts/serve_both.sh (single GPU, shared VRAM)"
+	@echo "  serve-dual-gpu        Run scripts/serve_dual_gpu.sh (2 GPUs, teacher→GPU0 consultant→GPU1)"
 	@echo "  serve-consultant      Run scripts/serve_consultant.sh"
 	@echo "  serve-gemma4          Run scripts/serve_gemma4.sh"
 	@echo "  serve-socratteachllm  Run scripts/serve_socratteachllm.sh"
 	@echo "  serve-teacher-online  Run scripts/serve_teacher_online.sh"
+	@echo ""
+	@echo "  WAVE HPC (SLURM):"
+	@echo "  slurm                 git pull + sbatch wave_eval.slurm + print status"
 
 # ── Entry point ──────────────────────────────────────────────────────────────
 
@@ -44,6 +50,9 @@ install-hooks:
 
 # ── scripts/ targets ─────────────────────────────────────────────────────────
 
+setup-l40s:
+	bash scripts/l40s_setup.sh
+
 post-eval-shutdown:
 	bash scripts/post_eval_shutdown.sh
 
@@ -52,6 +61,9 @@ run-eval:
 
 serve-both:
 	bash scripts/serve_both.sh
+
+serve-dual-gpu:
+	bash scripts/serve_dual_gpu.sh
 
 serve-consultant:
 	bash scripts/serve_consultant.sh
@@ -64,3 +76,8 @@ serve-socratteachllm:
 
 serve-teacher-online:
 	bash scripts/serve_teacher_online.sh
+
+# ── WAVE HPC ──────────────────────────────────────────────────────────────────
+
+slurm:
+	bash scripts/slurm/submit_wave.sh

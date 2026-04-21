@@ -12,7 +12,7 @@ from pathlib import Path
 from src.project.config import load_config
 from src.project.socratic_teaching_system import SocraticTeachingSystem
 
-RESOURCES_DIR = Path(__file__).resolve().parents[2] / "resources" / "KELE"
+RESOURCES_DIR = Path(__file__).resolve().parents[2] / "references" / "KELE"
 
 
 def create_system(
