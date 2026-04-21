@@ -9,6 +9,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Strip pyenv shims from PATH entirely. pyenv shims exit 127 when pyenv doesn't
+# manage the Python version in use, and Poetry's own internals also call bare
+# `python` through PATH — so shims must be gone before any poetry invocation.
+if [[ -n "${PYENV_ROOT:-}" ]] || echo "$PATH" | grep -q '\.pyenv'; then
+    export PATH="$(echo "$PATH" | tr ':' '\n' | grep -v '\.pyenv' | tr '\n' ':' | sed 's/:$//')"
+    unset PYENV_VERSION PYENV_ROOT 2>/dev/null || true
+fi
+
 DOWNLOAD_MODELS=false
 for arg in "$@"; do
     [[ "$arg" == "--models" ]] && DOWNLOAD_MODELS=true
@@ -128,8 +136,34 @@ poetry --version
 
 # ── 5. Project dependencies ───────────────────────────────────────────────────
 step "Installing project deps (poetry install)"
-poetry env use "$PYTHON"
-poetry install --with dev --no-interaction
+# Resolve the real Python binary path, bypassing pyenv shims (which exit 127
+# when pyenv doesn't manage that version, even if the system has it).
+_real_python_path() {
+    local cmd="$1"
+    # Prefer well-known system paths so we never hit a shim.
+    for dir in /usr/bin /usr/local/bin /opt/homebrew/bin; do
+        [[ -x "$dir/$cmd" ]] && echo "$dir/$cmd" && return
+    done
+    # Fallback: first non-pyenv entry on PATH.
+    which -a "$cmd" 2>/dev/null | grep -v '\.pyenv' | head -1
+}
+PYTHON_PATH=$(_real_python_path "$PYTHON")
+[[ -n "$PYTHON_PATH" ]] || PYTHON_PATH="$PYTHON"
+info "Resolved Python path: $PYTHON_PATH"
+poetry env use "$PYTHON_PATH"
+
+# Ubuntu 24.04 ships a Python 3.12 tarfile.py backported from 3.13 that calls
+# os.path.realpath(..., strict=os.path.ALLOW_MISSING), but ALLOW_MISSING only
+# exists in 3.13+. Inject a sitecustomize.py via PYTHONPATH to add the
+# missing attribute before pip's tarfile extraction runs.
+_PATCH_DIR=$(mktemp -d)
+cat > "$_PATCH_DIR/sitecustomize.py" <<'PYEOF'
+import os
+if not hasattr(os.path, 'ALLOW_MISSING'):
+    os.path.ALLOW_MISSING = 0
+PYEOF
+PYTHONPATH="${_PATCH_DIR}${PYTHONPATH:+:$PYTHONPATH}" poetry install --with dev --no-interaction
+rm -rf "$_PATCH_DIR"
 
 # ── 6. PyTorch ───────────────────────────────────────────────────────────────
 step "Installing PyTorch ($TORCH_INDEX)"

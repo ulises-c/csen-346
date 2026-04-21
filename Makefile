@@ -12,7 +12,10 @@ help:
 	@echo ""
 	@echo "  Scripts (scripts/):"
 	@echo "  post-eval-shutdown    Run scripts/post_eval_shutdown.sh"
-	@echo "  run-eval              Run scripts/run_eval.sh"
+	@echo "  run-eval              Run scripts/run_eval.sh  (GPU=<config>, default: baseline)
+                          Dual-GPU configs: GPU=l40s  GPU=3090ti
+                          Other configs:    GPU=baseline  GPU=gemma4
+                          Tested hardware:  RTX 5090, RTX 3090 Ti, AMD R9700, NVIDIA L40S, V100 32GB"
 	@echo "  setup-l40s            Run scripts/l40s_setup.sh (one-time setup for dual L40S machine)"
 	@echo "  serve-both            Run scripts/serve_both.sh (single GPU, shared VRAM)"
 	@echo "  serve-dual-gpu        Run scripts/serve_dual_gpu.sh (2 GPUs, teacher→GPU0 consultant→GPU1)"
@@ -56,8 +59,15 @@ setup-l40s:
 post-eval-shutdown:
 	bash scripts/post_eval_shutdown.sh
 
+# TODO: auto-detect GPU config from hardware — query nvidia-smi for compute
+# capability and total VRAM per device, then select the appropriate configs/
+# file automatically (e.g. 2×24GB CC≥8.6 → 3090ti, 2×48GB CC≥8.9 → l40s,
+# single GPU → serve-both, V100/CC<8.0 → float16 + enforce-eager, etc.).
+# Planned: make run-eval with no GPU= arg runs detection and picks the config.
+GPU ?= baseline
+
 run-eval:
-	bash scripts/run_eval.sh
+	bash scripts/run_eval.sh $(GPU)
 
 serve-both:
 	bash scripts/serve_both.sh
