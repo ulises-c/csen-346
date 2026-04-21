@@ -83,10 +83,14 @@ OLLAMA_HOST=0.0.0.0 ollama serve
 Set these env vars on the host PC before running the eval:
 
 ```bash
-export CONSULTANT_BASE_URL=http://<mac-ip>:11434/v1
+export CONSULTANT_BASE_URL=http://Ulisess-Mac-mini.local:11434/v1
 export CONSULTANT_MODEL_NAME=qwen3.5:9b
 export CONSULTANT_API_KEY=ollama          # Ollama ignores the key; required by OpenAI client
 ```
+
+`.local` hostnames are resolved via Bonjour (mDNS) — no DNS or router config
+needed as long as both devices are on the same LAN. If it doesn't resolve,
+fall back to the IP address (see below).
 
 Then run:
 
@@ -94,17 +98,28 @@ Then run:
 ./scripts/run_eval.sh local
 ```
 
-### Finding the Mac Mini's IP
+### Addressing the Mac Mini
+
+**Preferred — `.local` hostname (no config needed):**
+
+```bash
+# Confirm the hostname on the Mac Mini:
+scutil --get LocalHostName   # → Ulisess-Mac-mini
+# Reachable as: Ulisess-Mac-mini.local
+```
+
+macOS broadcasts this automatically via Bonjour. Works on any device on the
+same LAN without touching DNS or your router.
+
+**Fallback — IP address:**
 
 ```bash
 # On the Mac Mini:
 ipconfig getifaddr en0
-
-# Or check System Settings → Network → Wi-Fi / Ethernet → Details → IP Address
 ```
 
-For a stable IP, assign a DHCP reservation in your router using the Mac Mini's
-MAC address — this prevents the IP changing between sessions.
+If you want a stable IP, assign a DHCP reservation in your router using the
+Mac Mini's MAC address so it never changes between sessions.
 
 ---
 

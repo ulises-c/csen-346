@@ -65,16 +65,18 @@ else
     echo "Model loaded."
 fi
 
+MAC_HOSTNAME=$(scutil --get LocalHostName 2>/dev/null || echo "")
 MAC_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "<mac-ip>")
+MAC_ADDR="${MAC_HOSTNAME:+${MAC_HOSTNAME}.local}${MAC_HOSTNAME:-$MAC_IP}"
 
 echo ""
 echo "=== Consultant ready ==="
-echo "OpenAI-compatible endpoint: http://${MAC_IP}:${PORT}/v1"
+echo "OpenAI-compatible endpoint: http://${MAC_ADDR}:${PORT}/v1"
 echo ""
 echo "On the host PC, set:"
-echo "  export CONSULTANT_BASE_URL=http://${MAC_IP}:${PORT}/v1"
+echo "  export CONSULTANT_BASE_URL=http://${MAC_ADDR}:${PORT}/v1"
 echo "  export CONSULTANT_MODEL_NAME=${MODEL}"
 echo "  export CONSULTANT_API_KEY=ollama"
 echo ""
 echo "Test from host PC:"
-echo "  curl http://${MAC_IP}:${PORT}/v1/models"
+echo "  curl http://${MAC_ADDR}:${PORT}/v1/models"

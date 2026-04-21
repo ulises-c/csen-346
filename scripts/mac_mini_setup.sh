@@ -78,14 +78,18 @@ else
     warn "  OLLAMA_HOST=0.0.0.0 ollama serve"
 fi
 
-# ── 6. Print this machine's LAN IP ───────────────────────────────────────────
+# ── 6. Print this machine's address ──────────────────────────────────────────
+MAC_HOSTNAME=$(scutil --get LocalHostName 2>/dev/null || echo "")
 MAC_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "unknown")
+MAC_ADDR="${MAC_HOSTNAME:+${MAC_HOSTNAME}.local}"
+MAC_ADDR="${MAC_ADDR:-$MAC_IP}"
 echo ""
-echo -e "${BOLD}Mac Mini IP: $MAC_IP${NC}"
+echo -e "${BOLD}Mac Mini address: $MAC_ADDR${NC}"
+echo "(IP fallback: $MAC_IP)"
 echo ""
 echo "From the host PC, set these before running the eval:"
 echo ""
-echo "  export CONSULTANT_BASE_URL=http://${MAC_IP}:11434/v1"
+echo "  export CONSULTANT_BASE_URL=http://${MAC_ADDR}:11434/v1"
 echo "  export CONSULTANT_MODEL_NAME=qwen3.5:9b"
 echo "  export CONSULTANT_API_KEY=ollama"
 echo ""
