@@ -151,7 +151,19 @@ PYTHON_PATH=$(_real_python_path "$PYTHON")
 [[ -n "$PYTHON_PATH" ]] || PYTHON_PATH="$PYTHON"
 info "Resolved Python path: $PYTHON_PATH"
 poetry env use "$PYTHON_PATH"
-poetry install --with dev --no-interaction
+
+# Ubuntu 24.04 ships a Python 3.12 tarfile.py backported from 3.13 that calls
+# os.path.realpath(..., strict=os.path.ALLOW_MISSING), but ALLOW_MISSING only
+# exists in 3.13+. Inject a sitecustomize.py via PYTHONPATH to add the
+# missing attribute before pip's tarfile extraction runs.
+_PATCH_DIR=$(mktemp -d)
+cat > "$_PATCH_DIR/sitecustomize.py" <<'PYEOF'
+import os
+if not hasattr(os.path, 'ALLOW_MISSING'):
+    os.path.ALLOW_MISSING = 0
+PYEOF
+PYTHONPATH="${_PATCH_DIR}${PYTHONPATH:+:$PYTHONPATH}" poetry install --with dev --no-interaction
+rm -rf "$_PATCH_DIR"
 
 # ── 6. PyTorch ───────────────────────────────────────────────────────────────
 step "Installing PyTorch ($TORCH_INDEX)"
