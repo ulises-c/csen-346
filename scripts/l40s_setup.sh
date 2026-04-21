@@ -134,7 +134,21 @@ poetry --version
 
 # ── 5. Project dependencies ───────────────────────────────────────────────────
 step "Installing project deps (poetry install)"
-poetry env use "$PYTHON"
+# Resolve the real Python binary path, bypassing pyenv shims (which exit 127
+# when pyenv doesn't manage that version, even if the system has it).
+_real_python_path() {
+    local cmd="$1"
+    # Prefer well-known system paths so we never hit a shim.
+    for dir in /usr/bin /usr/local/bin /opt/homebrew/bin; do
+        [[ -x "$dir/$cmd" ]] && echo "$dir/$cmd" && return
+    done
+    # Fallback: first non-pyenv entry on PATH.
+    which -a "$cmd" 2>/dev/null | grep -v '\.pyenv' | head -1
+}
+PYTHON_PATH=$(_real_python_path "$PYTHON")
+[[ -n "$PYTHON_PATH" ]] || PYTHON_PATH="$PYTHON"
+info "Resolved Python path: $PYTHON_PATH"
+poetry env use "$PYTHON_PATH"
 poetry install --with dev --no-interaction
 
 # ── 6. PyTorch ───────────────────────────────────────────────────────────────
