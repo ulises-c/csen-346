@@ -112,6 +112,12 @@ poetry run hf download Qwen/Qwen3.5-9B --local-dir "$HF_HOME/Qwen3.5-9B"
 ## Submitting the job
 
 ```bash
+make slurm        # git pull + sbatch + print status commands
+```
+
+Or manually:
+
+```bash
 mkdir -p logs
 JOB=$(sbatch scripts/slurm/wave_eval.slurm | awk '{print $NF}')
 printf "[%s] Job %s submitted\n  Status : squeue -u \$USER\n  Logs   : tail -f logs/*%s*/slurm.out\n  Cancel : scancel %s\n" \
@@ -164,6 +170,64 @@ That job:
 - starts Qwen3.5-9B on `127.0.0.1:8002` (GPU 1)
 - waits for both servers to be ready
 - runs `./scripts/run_eval.sh wave`
+
+## Monitoring a running job
+
+Replace `<JOBID>` with your actual job ID (e.g. `892952`). Never include the `<>`.
+
+### Queue / status
+
+```bash
+squeue -u $USER                        # all your jobs
+squeue -j <JOBID>                      # one job
+squeue -p gpu                          # everyone on the gpu partition
+watch -n 10 squeue -u $USER            # auto-refresh every 10s
+```
+
+ST column meanings: `PD` = pending, `R` = running, `CG` = completing, `F` = failed.
+
+### GPU utilization (must run on compute node)
+
+`nvidia-smi` is not available on the login node — use `srun` to reach the compute node your job is already on:
+
+```bash
+# One-shot snapshot
+srun --jobid=<JOBID> nvidia-smi
+
+# Watch live (refresh every 2s)
+srun --jobid=<JOBID> --pty watch -n 2 nvidia-smi
+```
+
+### Logs
+
+```bash
+tail -f logs/*<JOBID>*/slurm.out          # all job output (servers + eval)
+tail -f logs/*<JOBID>*/run.log            # same, tee'd copy
+tail -f logs/*<JOBID>*/vllm_teacher.log   # teacher server only
+tail -f logs/*<JOBID>*/vllm_consultant.log
+```
+
+### Eval progress
+
+```bash
+grep "complete" logs/*<JOBID>*/slurm.out  # all progress lines at once
+tail -f logs/*<JOBID>*/slurm.out | grep "complete"  # live
+```
+
+### Disk usage
+
+```bash
+quota -s                                  # your home dir quota
+du -sh /WAVE/projects/CSEN-346-Sp26/*     # project space breakdown
+du -sh /WAVE/scratch/CSEN-346-Sp26/*      # scratch space breakdown
+```
+
+### Cancel / history
+
+```bash
+scancel <JOBID>                           # cancel a running or pending job
+sacct -j <JOBID> --format=JobID,State,Elapsed,ExitCode   # post-run summary
+```
 
 ## Targeting a specific node type
 
