@@ -295,9 +295,20 @@ Each model is on its own GPU, so V100 32GB nodes are fine.
 
 Observed behavior from a real run on gpu03. Applies to any CC < 8.0 node.
 
+### Eager mode vs graph mode
+
+By default vLLM compiles the model's forward pass into a **CUDA graph** — a pre-recorded
+sequence of GPU operations that replays with zero Python overhead. This is "graph mode"
+and is significantly faster.
+
+`--enforce-eager` disables that and runs in **eager mode**: every operation executes
+one at a time through Python. On V100 (CC 7.0) CUDA graph capture is unreliable, so
+eager mode is required. The per-call Python overhead is one of the main reasons V100
+inference is slower than newer GPUs.
+
 ### What works differently vs newer GPUs
 
-| Behavior | V100 (CC 7.0) | L40S / A100 (CC ≥ 8.0) |
+| Behavior | V100 (CC 7.0) | L40S / A100 / RTX 5090 (CC ≥ 8.0) |
 |---|---|---|
 | dtype | `float16` (auto-selected) | `bfloat16` |
 | CUDA graphs | Disabled (`--enforce-eager`) | Enabled |
@@ -347,3 +358,14 @@ Each dialogue makes ~10 serial LLM calls (5 turns × consultant + teacher). On V
 
 Result: **~3 min/dialogue → ~34 hrs for 681 dialogues**. Within the 48h partition limit.
 The `gpu` partition default is 48h (`sinfo -p gpu -o "%.P %.l"` confirms `2-00:00:00`).
+
+### Observed eval times by setup
+
+| Hardware | Consultant | Eval time | Notes |
+|---|---|---|---|
+| V100 32GB × 2 (WAVE gpu[01-04]) | Qwen3.5-9B local (GPU 1) | ~34 hrs | float16, eager mode, serial calls |
+| RTX 5090 32GB × 1 | GPT-4o-mini API | ~5 hrs | bfloat16, CUDA graphs; 5090 couldn't fit both models in 32GB VRAM, so consultant runs via API |
+
+The 5090 is ~7× faster despite running the consultant over the network — CUDA graphs +
+bfloat16 + faster silicon matter more than the API round-trip latency for short consultant
+prompts. Both setups produce the same eval results since the teacher model is identical.
