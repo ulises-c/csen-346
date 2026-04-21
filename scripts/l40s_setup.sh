@@ -9,10 +9,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Initialize pyenv shims if pyenv is installed — needed in non-interactive shells
-# where ~/.bashrc hasn't run and the shims would otherwise exit 127.
-if command -v pyenv &>/dev/null; then
-    eval "$(pyenv init -)"
+# Strip pyenv shims from PATH entirely. pyenv shims exit 127 when pyenv doesn't
+# manage the Python version in use, and Poetry's own internals also call bare
+# `python` through PATH — so shims must be gone before any poetry invocation.
+if [[ -n "${PYENV_ROOT:-}" ]] || echo "$PATH" | grep -q '\.pyenv'; then
+    export PATH="$(echo "$PATH" | tr ':' '\n' | grep -v '\.pyenv' | tr '\n' ':' | sed 's/:$//')"
+    unset PYENV_VERSION PYENV_ROOT 2>/dev/null || true
 fi
 
 DOWNLOAD_MODELS=false
