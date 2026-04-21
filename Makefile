@@ -12,7 +12,10 @@ help:
 	@echo ""
 	@echo "  Scripts (scripts/):"
 	@echo "  post-eval-shutdown    Run scripts/post_eval_shutdown.sh"
-	@echo "  run-eval              Run scripts/run_eval.sh  (GPU=baseline|l40s|gemma4, default: baseline)"
+	@echo "  run-eval              Run scripts/run_eval.sh  (GPU=<config>, default: baseline)
+                          Dual-GPU configs: GPU=l40s  GPU=3090ti
+                          Other configs:    GPU=baseline  GPU=gemma4
+                          Tested hardware:  RTX 5090, RTX 3090 Ti, AMD R9700, NVIDIA L40S, V100 32GB"
 	@echo "  setup-l40s            Run scripts/l40s_setup.sh (one-time setup for dual L40S machine)"
 	@echo "  serve-both            Run scripts/serve_both.sh (single GPU, shared VRAM)"
 	@echo "  serve-dual-gpu        Run scripts/serve_dual_gpu.sh (2 GPUs, teacher→GPU0 consultant→GPU1)"
