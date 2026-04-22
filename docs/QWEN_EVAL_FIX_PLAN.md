@@ -1,10 +1,7 @@
 # Qwen3.5-9B Evaluation Fix Plan
 
 **Branch:** `worktree-qwen-eval-improvement`
-**Date:** 2026-04-21
-**Context:** Root-cause analysis of the L40S preliminary run (n=25, Qwen3.5-9B consultant)
-identified three actionable causes for the low state accuracy (18.92% overall). This plan
-addresses them in priority order.
+**Created:** 2026-04-21 · **Updated:** 2026-04-22 (revised after full WAVE HPC run)
 
 ---
 
@@ -14,36 +11,60 @@ addresses them in priority order.
 |--------|---------|---------|---------|--------|---------------------|
 | Paper Table 1 (SocratTeachLLM + GPT-4o, GT consultant) | 57.4 | 33.63 | 50.77 | 41.96 | — |
 | Our GPT-4o baseline (live consultant, n=681) | 44.61 | 26.04 | 38.02 | 19.60 | 25.94% |
-| Our L40S run (Qwen3.5-9B, n=25) | 43.49 | 24.18 | 36.20 | 17.76 | 18.92% |
+| L40S · Qwen3.5-9B (n=25 preliminary) | 43.49 | 24.18 | 36.20 | 17.76 | 18.92% |
+| **WAVE HPC · Qwen3.5-9B (n=681 full run)** | **43.72** | **24.87** | **36.76** | **18.63** | **18.93%** |
 
-The **~13 ROUGE-1 gap to the paper** is not Qwen-specific — even our GPT-4o baseline
-misses by ~13 points. The gap is methodological: the paper feeds SocratTeachLLM the
-ground-truth consultant evaluation + action at every turn, while our pipeline uses live
-consultant predictions. When the consultant predicts the wrong state, the wrong action
-flows to SocratTeachLLM, degrading teacher output quality.
+The **~13 ROUGE-1 gap to the paper** is methodological: the paper feeds SocratTeachLLM
+the ground-truth consultant evaluation + action at every turn; our pipeline uses live
+predictions. When the consultant predicts the wrong state, the wrong action flows to
+SocratTeachLLM, degrading teacher output quality.
 
-The **~6-point gap between Qwen and our own GPT-4o baseline** is real and comes from:
+The **~7-point state accuracy gap vs GPT-4o** is confirmed at full scale:
 
-| Stage | GPT-4o | Qwen | Root cause |
-|-------|--------|------|-----------|
-| a | 95.15% | 60.00% | Qwen misses the a0→a1 student-question trigger |
-| b | 36.93% | 25.00% | Weaker within-stage discrimination |
-| c | 4.70%  | 10.64% | Both fail; Qwen noise from defaulting to common states |
-| d | 5.04%  | 0.00%  | All upstream errors compound here |
-| e | 11.92% | 4.35%  | Downstream of d failure |
+| Stage | GPT-4o (n=681) | Qwen n=25 | Qwen n=681 | Root cause |
+|-------|---------------|-----------|------------|-----------|
+| a | 95.15% | 60.00% | **57.12%** | Misses `a0→a1` student-question trigger |
+| b | 36.93% | 25.00% | **26.45%** | Weaker within-stage discrimination |
+| c | 4.70%  | 10.64% | **6.99%**  | Both models fail; 22 states is hard |
+| d | 5.04%  | 0.00%  | **3.43%**  | In-range at full scale (was n=25 noise) |
+| e | 11.92% | 4.35%  | **14.11%** | Exceeds GPT-4o at full scale (n=25 noise) |
+
+---
+
+## What changed from n=25 → n=681
+
+The L40S preliminary (n=25) was accurate on headline numbers — overall state accuracy
+was 18.92% vs 18.93% at full scale — but was misleading on two specific stages:
+
+**Stage c (10.64% → 6.99%):** The preliminary was optimistic. With only 47 c-stage
+turns across 25 dialogues, a few lucky matches inflated the number. At 1,447 c-stage
+turns (n=681) the true rate is 6.99% — closer to GPT-4o's 4.70% and consistent with
+the inherent difficulty of 22-state classification.
+
+**Stages d and e (d: 0% → 3.43%, e: 4.35% → 14.11%):** Both were small-sample
+artifacts. With only 25 d-turns and 25 e-turns in the preliminary, a single bad cluster
+of dialogues could wipe them out. At n=681 both are within range of GPT-4o: d at 3.43%
+vs 5.04%, and e at 14.11% *exceeding* 11.92%. The d/e failure modes were noise, not
+a real problem.
+
+**Implication for the plan:** Action 3 (stage d/e alignment analysis and
+`max_teaching_rounds` tuning) was written to explain why d=0%. That question is
+answered — it was n=25 noise. Action 3 is dropped entirely.
+
+**Stage a is the only confirmed systematic failure.** At 57.12% across 681 dialogues
+it is consistent, large, and not a sampling artifact.
 
 ---
 
 ## Action 1 — Ground-truth consultant evaluation mode
 
-**Goal:** Reproduce the paper's Table 1 setup so we have a fair apples-to-apples
-comparison. This also cleanly separates *teacher quality* from *consultant quality*.
+**Goal:** Reproduce the paper's Table 1 setup to separate teacher quality from
+consultant quality and establish a meaningful ceiling.
 
-**What:** Add `run_single_dialogue_gt_consultant` to `src/project/kele.py`. This mode
-replays a dialogue using the ground-truth `state` and `evaluation` stored in
-`SocratDataset.json` (each turn already carries both) instead of calling the live
-consultant. The live SocratTeachLLM teacher is still called, so teacher quality is
-measured faithfully.
+**What:** Add `run_single_dialogue_gt_consultant` to `src/project/kele.py`. Replays
+each dialogue using the ground-truth `state` and `evaluation` stored in
+`SocratDataset.json` instead of calling the live consultant. The live SocratTeachLLM
+teacher is still called, so teacher quality is measured faithfully.
 
 **Files:**
 - `src/project/kele.py` — add the new function + `--gt-consultant` flag on the
@@ -90,20 +111,18 @@ def run_single_dialogue_gt_consultant(
     }
 ```
 
-**Success criterion:** GT-consultant ROUGE-1 ≥ 50 on a 25-dialogue sample
-(within ~15% of the paper's 57.4, accounting for tokenization differences).
+> Note: Check whether `SocratDataset.json` turn entries include an `"evaluation"` key.
+> If missing, pass an empty string; the teacher prompt degrades gracefully to action-only.
 
-> Note: The SocratDataset entries do not always include an `"evaluation"` key at the
-> turn level — check this before running. If missing, pass an empty string and fall
-> back to the action description.
+**Success criterion:** GT-consultant ROUGE-1 ≥ 50 on a 25-dialogue sample.
 
 ---
 
-## Action 2 — Diagnose stage-a failures and JSON reliability
+## Action 2 — Diagnose and fix stage-a failures
 
-Stage a accuracy fell from 95% (GPT-4o) to 60% (Qwen3.5-9B). All 681 a-stage ground-
-truth turns are `a1` (student always opens with a concrete question). Qwen3.5-9B misses
-this ~40% of the time.
+Stage a is the only confirmed systematic failure: **57.12%** at n=681, consistent with
+60.00% at n=25. All 681 a-stage ground-truth turns are `a1` (student always opens with
+a concrete question). Qwen3.5-9B misses this ~43% of the time.
 
 ### 2a — Diagnostic script
 
@@ -115,7 +134,7 @@ reports the JSON parse failure rate. Invoked via `python -m src.project.debug`.
 ```python
 """
 Debug: print raw consultant predictions vs ground truth, and JSON failure rate.
-Usage: python -m src.project.debug --n 5 --experiment l40s
+Usage: python -m src.project.debug --n 5 --experiment wave
 """
 import argparse
 from src.project.kele import create_system, load_dataset
@@ -159,9 +178,9 @@ if __name__ == "__main__":
     main()
 ```
 
-Run against both `baseline` (GPT-4o) and `l40s` (Qwen3.5-9B) to quantify:
-1. Where exactly Qwen outputs `a0` vs `a1`
-2. Whether JSON parse failures are a factor (>5% is significant)
+Run against `wave` (Qwen3.5-9B) to determine:
+1. Whether Qwen outputs `a0` on turns where the student clearly asked a question
+2. Whether JSON parse failures are a contributing factor (>5% is significant)
 
 ### 2b — JSON regex fallback
 
@@ -177,17 +196,13 @@ if not raw_content.strip().startswith("{"):
         raw_content = m.group(0)
 ```
 
-This handles cases where vLLM's `json_object` enforcement fails and Qwen wraps
-the JSON in prose or extra whitespace.
-
 ### 2c — Stage-a prompt hardening
 
-If the diagnostic shows Qwen emitting `a0` when the student's input clearly contains
-a question (e.g. fill-in-the-blank "...是( )" or multiple-choice text), tighten the
-a-stage trigger in the consultant system prompt
-(`socratic_teaching_system.py`, the `阶段a：学生提问` section):
+If the diagnostic confirms Qwen emitting `a0` when a question is clearly present,
+tighten the a-stage trigger in the consultant system prompt
+(`socratic_teaching_system.py`, `阶段a：学生提问` section):
 
-Current text (line ~205):
+Current text:
 ```
 a1：学生提出问题
 ```
@@ -198,7 +213,7 @@ a1：学生提出了具体的问题或题目（包括填空题 "...是( )"、选
     问答题，或任何包含具体题目描述的输入）
 ```
 
-Add a note after the table:
+Add after the table:
 ```
 **判断规则（重要）**
 - 如果学生的输入中包含任何具体题目描述，例如"帮我解答..."、"这道题..."、
@@ -206,57 +221,8 @@ Add a note after the table:
 - 只有当学生完全未提及任何题目内容时，才保持 a0。
 ```
 
-**Success criterion:** Stage-a accuracy ≥ 85% on the 25-item L40S sample after
+**Success criterion:** Stage-a accuracy ≥ 85% on a fresh 25-dialogue eval after the
 prompt change.
-
----
-
-## Action 3 — Stage d/e alignment analysis
-
-Stage d accuracy is 0% for Qwen. The ground truth has d33 at 87.7% of d-stage turns
-(644 / 734 total). The question is whether Qwen never emits d33, or emits it at the
-wrong turns due to upstream state drift.
-
-### 3a — Stage alignment metric
-
-Add `compute_stage_alignment` to `src/project/metrics.py` to count generated vs GT
-turns per stage per dialogue:
-
-```python
-def compute_stage_alignment(dialogues_dir: Path) -> list[dict]:
-    """Per-dialogue stage-count comparison: generated vs ground truth."""
-    results = []
-    for f in sorted(dialogues_dir.glob("*.json")):
-        data = json.loads(f.read_text())
-        if "error" in data:
-            continue
-        gt   = [t["ground_truth_state"][0] for t in data["dialogue"]]
-        pred = [t["state"][0]              for t in data["dialogue"]]
-        results.append({
-            "id": data["id"],
-            "gt_stage_counts":   {s: gt.count(s)   for s in "abcde"},
-            "pred_stage_counts": {s: pred.count(s) for s in "abcde"},
-        })
-    return results
-```
-
-Expose it via `python -m src.project.metrics --alignment <dialogues_dir>` or a small
-`scripts/alignment_report.py` wrapper. Compare the L40S run against the GPT-4o
-baseline run to see if Qwen collapses into c-stage and never advances to d.
-
-### 3b — max_teaching_rounds tuning (if 3a shows force-to-d33 misalignment)
-
-`process_student_input` (lines 465–486 of `socratic_teaching_system.py`) forces the
-state to d33 when `teaching_rounds >= max_teaching_rounds`. If Qwen3.5-9B's dialogues
-consistently reach the limit at different turns than the ground truth, the force-to-d33
-fires at the wrong position, making d-accuracy zero even when Qwen would eventually
-reach d33 on its own.
-
-Fix options (evaluate after seeing 3a data):
-- Increase `MAX_TEACHING_ROUNDS` from 8 to 10 in `configs/l40s.env` to give Qwen more
-  room before forcing.
-- Add a guard: only force-to-d33 after at least 2 c-stage turns have been recorded
-  (prevents premature forcing when Qwen skips c-stage).
 
 ---
 
@@ -264,12 +230,10 @@ Fix options (evaluate after seeing 3a data):
 
 | Step | Task | Expected effort | Blocker? |
 |------|------|-----------------|---------|
-| 1 | `run_single_dialogue_gt_consultant` + `--gt-consultant` flag | 2–3 h | No — needs SocratDataset eval key check first |
-| 2 | `src/project/debug.py` | 1 h | Needs L40S vLLM running |
+| 1 | GT-consultant eval mode + `--gt-consultant` flag | 2–3 h | No |
+| 2 | `src/project/debug.py` diagnostic | 1 h | Needs Qwen vLLM running |
 | 3 | JSON regex fallback (if failure rate >5%) | 30 min | After step 2 |
 | 4 | Stage-a prompt hardening | 1 h | After step 2 confirms root cause |
-| 5 | `compute_stage_alignment` metric + report | 1 h | No |
-| 6 | `max_teaching_rounds` tuning | 1 h | After step 5 |
 
 ---
 
@@ -277,20 +241,17 @@ Fix options (evaluate after seeing 3a data):
 
 | File | Action |
 |------|--------|
-| `src/project/kele.py` | Add `run_single_dialogue_gt_consultant`; add `--gt-consultant` flag to `evaluate` subcommand |
-| `src/project/socratic_teaching_system.py` | Harden stage-a prompt (2c); add JSON regex fallback (2b) |
-| `src/project/metrics.py` | Add `compute_stage_alignment` |
-| `src/project/debug.py` | New diagnostic module (`python -m src.project.debug`) |
-| `configs/l40s.env` | Possibly increase `MAX_TEACHING_ROUNDS` (after step 5 analysis) |
+| `src/project/kele.py` | Add `run_single_dialogue_gt_consultant`; add `--gt-consultant` flag |
+| `src/project/socratic_teaching_system.py` | Stage-a prompt hardening (2c); JSON regex fallback (2b) |
+| `src/project/debug.py` | New diagnostic module |
 
 ---
 
 ## Success criteria
 
-| Metric | Current (L40S n=25) | Target |
-|--------|---------------------|--------|
-| GT-consultant ROUGE-1 | — | ≥ 50 |
-| Stage-a accuracy (Qwen, L40S) | 60% | ≥ 85% |
-| JSON parse failure rate (Qwen, L40S) | unknown | < 1% |
-| Stage-d accuracy (Qwen, full run) | 0% | > 0% |
-| Overall state accuracy (Qwen, full run) | 18.92% | > 22% |
+| Metric | Baseline (n=681) | Target |
+|--------|-----------------|--------|
+| GT-consultant ROUGE-1 | — (not yet run) | ≥ 50 |
+| Stage-a accuracy (Qwen) | 57.12% | ≥ 85% |
+| JSON parse failure rate (Qwen) | unknown | < 1% |
+| Overall state accuracy (Qwen) | 18.93% | > 22% |
