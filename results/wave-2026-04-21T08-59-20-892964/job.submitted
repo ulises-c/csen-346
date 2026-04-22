@@ -1,0 +1,6 @@
+[2026-04-21 01:59:07] Job 892964 submitted
+  Status  : squeue -j 892964
+  All jobs: squeue -u $USER
+  Logs    : tail -f logs/*892964*/slurm.out
+  Run log : tail -f logs/*892964*/run.log
+  Cancel  : scancel 892964

@@ -1,0 +1,13 @@
+{
+  "experiment": "wave",
+  "teacher_model": "SocratTeachLLM",
+  "teacher_base_url": "http://127.0.0.1:8001/v1",
+  "consultant_model": "Qwen3.5-9B",
+  "consultant_base_url": "http://127.0.0.1:8002/v1",
+  "max_teaching_rounds": 8,
+  "total_dialogues": 681,
+  "completed": 681,
+  "total_elapsed_seconds": 89614.07,
+  "started_at": "2026-04-21 02:01:55",
+  "finished_at": "2026-04-22 02:55:29"
+}
