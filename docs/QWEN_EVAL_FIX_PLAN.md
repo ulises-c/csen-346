@@ -107,29 +107,28 @@ this ~40% of the time.
 
 ### 2a — Diagnostic script
 
-**File:** `scripts/debug_consultant.py` (new)
+**File:** `src/project/debug.py` (new)
 
 Runs the consultant on the first N dialogues, logs raw JSON responses per turn, and
-reports the JSON parse failure rate.
+reports the JSON parse failure rate. Invoked via `python -m src.project.debug`.
 
 ```python
-#!/usr/bin/env python3
 """
 Debug: print raw consultant predictions vs ground truth, and JSON failure rate.
-Usage: python scripts/debug_consultant.py --n 5 --experiment l40s
+Usage: python -m src.project.debug --n 5 --experiment l40s
 """
 import argparse
-from pathlib import Path
 from src.project.kele import create_system, load_dataset
 
-def main():
+
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--n", type=int, default=5)
     parser.add_argument("--experiment", default=None)
     args = parser.parse_args()
 
     system = create_system(debug=False, experiment=args.experiment)
-    dataset = load_dataset(split="test")[:args.n]
+    dataset = load_dataset(split="test")[: args.n]
     json_failures = 0
     total = 0
 
@@ -145,13 +144,16 @@ def main():
             failed_json = "无法评估" in result.get("evaluation", "")
             if failed_json:
                 json_failures += 1
-            print(f"  {ok}  gt={gt:4s}  pred={pred:4s}  json_ok={not failed_json}"
-                  f"  | {turn['student'][:60]}")
+            print(
+                f"  {ok}  gt={gt:4s}  pred={pred:4s}  json_ok={not failed_json}"
+                f"  | {turn['student'][:60]}"
+            )
             if system.current_state == "e34":
                 break
 
     rate = json_failures / total * 100 if total else 0
     print(f"\nJSON parse failures: {json_failures}/{total} ({rate:.1f}%)")
+
 
 if __name__ == "__main__":
     main()
@@ -263,7 +265,7 @@ Fix options (evaluate after seeing 3a data):
 | Step | Task | Expected effort | Blocker? |
 |------|------|-----------------|---------|
 | 1 | `run_single_dialogue_gt_consultant` + `--gt-consultant` flag | 2–3 h | No — needs SocratDataset eval key check first |
-| 2 | `scripts/debug_consultant.py` | 1 h | Needs L40S vLLM running |
+| 2 | `src/project/debug.py` | 1 h | Needs L40S vLLM running |
 | 3 | JSON regex fallback (if failure rate >5%) | 30 min | After step 2 |
 | 4 | Stage-a prompt hardening | 1 h | After step 2 confirms root cause |
 | 5 | `compute_stage_alignment` metric + report | 1 h | No |
@@ -278,7 +280,7 @@ Fix options (evaluate after seeing 3a data):
 | `src/project/kele.py` | Add `run_single_dialogue_gt_consultant`; add `--gt-consultant` flag to `evaluate` subcommand |
 | `src/project/socratic_teaching_system.py` | Harden stage-a prompt (2c); add JSON regex fallback (2b) |
 | `src/project/metrics.py` | Add `compute_stage_alignment` |
-| `scripts/debug_consultant.py` | New diagnostic script |
+| `src/project/debug.py` | New diagnostic module (`python -m src.project.debug`) |
 | `configs/l40s.env` | Possibly increase `MAX_TEACHING_ROUNDS` (after step 5 analysis) |
 
 ---
