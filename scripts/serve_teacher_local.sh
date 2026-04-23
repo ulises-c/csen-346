@@ -18,6 +18,8 @@ fi
 
 HOST="${TEACHER_HOST:-0.0.0.0}"
 PORT="${TEACHER_PORT:-8001}"
+MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-2048}"
+export MAX_NEW_TOKENS
 
 echo "=== Teacher (local) ==="
 echo "Host: $HOST  Port: $PORT"

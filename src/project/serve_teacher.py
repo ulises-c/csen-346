@@ -61,7 +61,7 @@ def get_runtime_config() -> dict[str, str | int]:
         ),
         "host": os.getenv("TEACHER_HOST", "0.0.0.0"),
         "port": int(os.getenv("TEACHER_PORT", "8001")),
-        "max_new_tokens": int(os.getenv("MAX_NEW_TOKENS", "512")),
+        "max_new_tokens": int(os.getenv("MAX_NEW_TOKENS", "512")),  # raise to 2048 for ≥24 GB VRAM
         "api_key": os.getenv("TEACHER_SERVER_API_KEY", ""),
     }
 
