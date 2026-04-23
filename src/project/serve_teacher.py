@@ -39,7 +39,6 @@ log = logging.getLogger(__name__)
 transformers.logging.set_verbosity_warning()
 transformers.logging.enable_progress_bar()
 warnings.filterwarnings("ignore", message=".*torch_dtype.*deprecated.*")
-warnings.filterwarnings("ignore", message=".*attention mask.*pad token.*")
 
 
 class Message(BaseModel):
@@ -302,11 +301,13 @@ def create_app() -> FastAPI:
         app.state.turn_count += 1
         app.state.last_prompt_len = input_len
 
+        attention_mask = torch.ones_like(input_ids)
         max_new_tokens = min(req.max_tokens, app.state.runtime_config["max_new_tokens"])
         t0 = time.perf_counter()
         with torch.inference_mode():
             output_ids = model.generate(
                 input_ids,
+                attention_mask=attention_mask,
                 max_new_tokens=max_new_tokens,
                 temperature=req.temperature,
                 do_sample=req.temperature > 0,
