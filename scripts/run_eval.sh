@@ -21,7 +21,12 @@ nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=cs
     || echo "(nvidia-smi/rocm-smi unavailable)"
 echo "---"
 
-poetry run python -m src.project.kele --experiment "$EXPERIMENT" evaluate \
+INHIBIT=""
+if command -v systemd-inhibit &>/dev/null; then
+    INHIBIT="systemd-inhibit --what=sleep:idle --who=run_eval.sh --why=KELE-eval"
+fi
+
+$INHIBIT poetry run python -m src.project.kele --experiment "$EXPERIMENT" evaluate \
     --output "results/$EXPERIMENT" \
     "$@"
 
