@@ -46,11 +46,24 @@ if curl -s "http://localhost:$PORT/api/version" > /dev/null 2>&1; then
         echo "Model '$MODEL' not found — pulling..."
         ollama pull "$MODEL"
     fi
+
+    # Attach caffeinate to the existing Ollama process so the Mac won't sleep.
+    OLLAMA_PID=$(lsof -iTCP:$PORT -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR>1 {print $2}' | head -1)
+    if [[ -n "$OLLAMA_PID" ]] && command -v caffeinate &>/dev/null; then
+        caffeinate -s -w "$OLLAMA_PID" &
+        echo "Sleep inhibited (caffeinate -s -w $OLLAMA_PID)."
+    fi
 else
     echo "Ollama not running — starting with OLLAMA_HOST=$HOST..."
     OLLAMA_HOST="$HOST" ollama serve > "$LOG_FILE" 2>&1 &
     OLLAMA_PID=$!
     echo "PID: $OLLAMA_PID  Log: $LOG_FILE"
+
+    # Prevent the Mac from sleeping while Ollama is serving.
+    if command -v caffeinate &>/dev/null; then
+        caffeinate -s -w "$OLLAMA_PID" &
+        echo "Sleep inhibited (caffeinate -s -w $OLLAMA_PID)."
+    fi
 
     echo -n "Waiting for Ollama to be ready..."
     for i in $(seq 1 30); do
