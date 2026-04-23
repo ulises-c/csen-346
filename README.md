@@ -94,6 +94,14 @@ poetry run python -V
 poetry run which pytest
 ```
 
+### Install git hooks
+
+```bash
+make install-hooks
+```
+
+This copies `hooks/pre-commit` into `.git/hooks/` so that ruff (format + lint) and pytest run automatically before every commit, mirroring the CI pipeline.
+
 ### Torch note
 
 `torch` is intentionally not declared in `pyproject.toml` because the CUDA wheel installation is environment-specific. After `poetry install`, install the appropriate PyTorch build manually for your machine.
