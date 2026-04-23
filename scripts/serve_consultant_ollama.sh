@@ -67,7 +67,8 @@ fi
 
 MAC_HOSTNAME=$(scutil --get LocalHostName 2>/dev/null || echo "")
 MAC_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "<mac-ip>")
-MAC_ADDR="${MAC_HOSTNAME:+${MAC_HOSTNAME}.local}${MAC_HOSTNAME:-$MAC_IP}"
+MAC_ADDR="${MAC_HOSTNAME:+${MAC_HOSTNAME}.local}"
+MAC_ADDR="${MAC_ADDR:-$MAC_IP}"
 
 echo ""
 echo "=== Consultant ready ==="
