@@ -213,6 +213,9 @@ def create_app() -> FastAPI:
     app = FastAPI(title="KELE Teacher Model Server")
     app.state.runtime = None
     app.state.runtime_config = config
+    app.state.dialog_count = 0
+    app.state.turn_count = 0
+    app.state.last_prompt_len = 0
 
     def get_runtime():
         if app.state.runtime is None:
@@ -288,6 +291,14 @@ def create_app() -> FastAPI:
 
         input_len = input_ids.shape[-1]
 
+        # Detect dialog boundaries: prompt shrinks when a new dialog starts.
+        if input_len < app.state.last_prompt_len or app.state.last_prompt_len == 0:
+            app.state.dialog_count += 1
+            app.state.turn_count = 0
+            log.info("─── dialog %d ───────────────────────────────", app.state.dialog_count)
+        app.state.turn_count += 1
+        app.state.last_prompt_len = input_len
+
         max_new_tokens = min(req.max_tokens, app.state.runtime_config["max_new_tokens"])
         t0 = time.perf_counter()
         with torch.inference_mode():
@@ -303,7 +314,8 @@ def create_app() -> FastAPI:
         new_tokens = output_ids[0][input_len:]
         response_text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
         log.info(
-            "completion: %d prompt + %d new tokens in %.1fs (%.1f tok/s)",
+            "turn %d: %d prompt + %d new tokens in %.1fs (%.1f tok/s)",
+            app.state.turn_count,
             input_len,
             len(new_tokens),
             elapsed,
@@ -344,7 +356,7 @@ def main() -> None:
         app,
         host=runtime_config["host"],
         port=runtime_config["port"],
-        log_level="warning",
+        log_level="info",
         access_log=False,
     )
 

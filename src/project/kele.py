@@ -151,33 +151,43 @@ def run_batch_evaluation(
             completed += 1
             continue
 
+        pos = completed + 1
+        print(f"\r▶ {pos:>4}/{len(dataset)}  id={item_id:04d}", end="", flush=True)
+
         try:
             result = run_single_dialogue(system, item)
             with open(out_file, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
             completed += 1
+            turns = result.get("num_turns_generated", "?")
+            secs = result.get("elapsed_seconds", 0)
+            print(f"\r  {pos:>4}/{len(dataset)}  id={item_id:04d}  {turns} turns  {secs:.0f}s  ✓")
         except Exception as e:
             error_result = {"id": item_id, "error": str(e)}
             with open(out_file, "w", encoding="utf-8") as f:
                 json.dump(error_result, f, ensure_ascii=False, indent=2)
             completed += 1
-            print(f"  [ERROR] Dialogue {item_id}: {e}")
+            print(f"\r  {pos:>4}/{len(dataset)}  id={item_id:04d}  ERROR: {e}")
 
-        # Progress reporting
+        # ETA line — overwrites itself each iteration
         elapsed = time.time() - start_time
         rate = completed / elapsed if elapsed > 0 else 0
         remaining = (len(dataset) - completed) / rate if rate > 0 else 0
-        progress_msg = (
-            f"[{completed}/{len(dataset)}] "
-            f"{completed / len(dataset) * 100:.1f}% complete | "
-            f"{rate:.2f} dialogues/s | "
-            f"ETA: {remaining / 60:.0f}m | "
-            f"Elapsed: {elapsed / 60:.0f}m"
+        print(
+            f"  [{completed}/{len(dataset)}]"
+            f"  {completed / len(dataset) * 100:.1f}%"
+            f"  {rate:.2f} dlg/s"
+            f"  ETA {remaining / 60:.0f}m"
+            f"  elapsed {elapsed / 60:.0f}m",
+            end="",
+            flush=True,
         )
-        print(f"\r{progress_msg}", end="", flush=True)
 
         with open(progress_log, "w") as f:
-            f.write(progress_msg + "\n")
+            f.write(
+                f"{completed}/{len(dataset)} {completed / len(dataset) * 100:.1f}%"
+                f" {rate:.2f} dlg/s ETA {remaining / 60:.0f}m elapsed {elapsed / 60:.0f}m\n"
+            )
 
     print(f"\nDone. {completed} dialogues saved to {dialogues_dir}")
 
