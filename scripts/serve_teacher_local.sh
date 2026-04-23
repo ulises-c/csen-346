@@ -2,6 +2,10 @@
 # Serve the teacher model locally for single-machine eval runs.
 # No API key required — auth is disabled when TEACHER_SERVER_API_KEY is unset.
 #
+# Uses HF Transformers (FastAPI) instead of vLLM — preferred on AMD gfx1201
+# (R9700 AI PRO) where vLLM lacks stable upstream support as of April 2026.
+# On NVIDIA machines, prefer serve_socratteachllm.sh (vLLM) for throughput.
+#
 # Usage: ./scripts/serve_teacher_local.sh
 # Then in a second terminal: ./scripts/run_eval.sh <experiment> --limit N
 

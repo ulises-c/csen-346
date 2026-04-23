@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Serve SocratTeachLLM (teacher) via vLLM.
 # Usage: ./scripts/serve_socratteachllm.sh
+#
+# NOTE — AMD gfx1201 (R9700 AI PRO): vLLM is NOT recommended on this GPU.
+# As of April 2026, gfx1201 support is incomplete upstream: FP8 WMMA silently
+# falls back to FP32 (halving throughput), and container startup requires
+# unmerged patches. Official AMD support targets MI300X/Instinct only.
+# Use serve_teacher_local.sh (HF Transformers) on the R9700 instead.
+# Re-evaluate when https://github.com/vllm-project/vllm/issues/28649 merges.
 
 set -euo pipefail
 
