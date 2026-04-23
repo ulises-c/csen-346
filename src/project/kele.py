@@ -141,6 +141,12 @@ def run_batch_evaluation(
     print(f"Teacher model: {system.teacher_model_name}")
     print(f"Consultant model: {system.consultant_model_name}")
     print("-" * 60)
+    print(
+        f"  {'#':>9}  {'id':<8}  {'turns':>5}  {'time':>5}  {'%':>5}  {'dlg/s':>6}  {'ETA':>5}  status"
+    )
+    print("-" * 60)
+
+    CLR = "\r\033[K"  # carriage return + erase to end of line
 
     for item in dataset:
         item_id = item["id"]
@@ -151,10 +157,11 @@ def run_batch_evaluation(
             completed += 1
             continue
 
-        CLR = "\r\033[K"  # carriage return + erase to end of line
-
         pos = completed + 1
         print(f"{CLR}▶ {pos:>4}/{len(dataset)}  id={item_id:04d}", end="", flush=True)
+
+        elapsed = time.time() - start_time
+        rate = completed / elapsed if elapsed > 0 else 0
 
         try:
             result = run_single_dialogue(system, item)
@@ -163,29 +170,29 @@ def run_batch_evaluation(
             completed += 1
             turns = result.get("num_turns_generated", "?")
             secs = result.get("elapsed_seconds", 0)
+            elapsed = time.time() - start_time
+            rate = completed / elapsed if elapsed > 0 else 0
+            remaining = (len(dataset) - completed) / rate if rate > 0 else 0
             print(
-                f"{CLR}  {pos:>4}/{len(dataset)}  id={item_id:04d}  {turns} turns  {secs:.0f}s  ✓"
+                f"{CLR}  {pos:>4}/{len(dataset)}  id={item_id:04d}"
+                f"  {turns:>5} turns  {secs:>4.0f}s"
+                f"  {completed / len(dataset) * 100:>4.1f}%"
+                f"  {rate:>5.2f}  {remaining / 60:>4.0f}m  ✓"
             )
         except Exception as e:
             error_result = {"id": item_id, "error": str(e)}
             with open(out_file, "w", encoding="utf-8") as f:
                 json.dump(error_result, f, ensure_ascii=False, indent=2)
             completed += 1
-            print(f"{CLR}  {pos:>4}/{len(dataset)}  id={item_id:04d}  ERROR: {e}")
-
-        # ETA line — overwrites itself each iteration
-        elapsed = time.time() - start_time
-        rate = completed / elapsed if elapsed > 0 else 0
-        remaining = (len(dataset) - completed) / rate if rate > 0 else 0
-        print(
-            f"{CLR}  [{completed}/{len(dataset)}]"
-            f"  {completed / len(dataset) * 100:.1f}%"
-            f"  {rate:.2f} dlg/s"
-            f"  ETA {remaining / 60:.0f}m"
-            f"  elapsed {elapsed / 60:.0f}m",
-            end="",
-            flush=True,
-        )
+            elapsed = time.time() - start_time
+            rate = completed / elapsed if elapsed > 0 else 0
+            remaining = (len(dataset) - completed) / rate if rate > 0 else 0
+            print(
+                f"{CLR}  {pos:>4}/{len(dataset)}  id={item_id:04d}"
+                f"  {'?':>5} turns  {'?':>4}s"
+                f"  {completed / len(dataset) * 100:>4.1f}%"
+                f"  {rate:>5.2f}  {remaining / 60:>4.0f}m  ERROR: {e}"
+            )
 
         with open(progress_log, "w") as f:
             f.write(
