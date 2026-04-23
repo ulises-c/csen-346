@@ -29,6 +29,9 @@ def create_system(
         teacher_model_name=cfg.teacher.model_name,
         debug_mode=debug if debug is not None else cfg.debug_mode,
         max_teaching_rounds=cfg.max_teaching_rounds,
+        consultant_max_tokens=cfg.consultant.max_tokens,
+        consultant_disable_thinking=cfg.consultant.disable_thinking,
+        consultant_num_ctx=cfg.consultant.num_ctx,
     )
 
 

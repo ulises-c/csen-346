@@ -12,17 +12,26 @@ set -euo pipefail
 
 HOST="${CONSULTANT_HOST:-0.0.0.0}"
 PORT="${CONSULTANT_PORT:-11434}"
-MODEL="${CONSULTANT_MODEL_NAME:-qwen3.5:9b}"
+MODEL="${CONSULTANT_MODEL_NAME:?Set CONSULTANT_MODEL_NAME (e.g. source configs/R9700_Mac-M4.env)}"
 LOG_FILE="${CONSULTANT_LOG_FILE:-logs/ollama_consultant.log}"
 
 mkdir -p logs
+
+CTX="${OLLAMA_NUM_CTX:-16384}"
 
 echo "=== Ollama Consultant (Mac Mini) ==="
 echo "Model:  $MODEL"
 echo "Host:   $HOST"
 echo "Port:   $PORT"
+echo "CTX:    $CTX  (OLLAMA_NUM_CTX)"
 echo "Log:    $LOG_FILE"
 echo ""
+if [[ "$CTX" -lt 16384 ]]; then
+    echo "WARNING: OLLAMA_NUM_CTX=$CTX is below 16384."
+    echo "  Run mac_mini_setup.sh to set it, or:"
+    echo "  launchctl setenv OLLAMA_NUM_CTX 16384 && (restart Ollama)"
+    echo ""
+fi
 
 # Check if Ollama is already running and listening on the expected port.
 if curl -s "http://localhost:$PORT/api/version" > /dev/null 2>&1; then
