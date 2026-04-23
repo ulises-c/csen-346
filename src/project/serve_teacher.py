@@ -18,6 +18,7 @@ Usage:
   TEACHER_LOCAL_PATH=~/hf_models/SocratTeachLLM poetry run python -m src.project.serve_teacher
 """
 
+import copy
 import logging
 import os
 import time
@@ -35,29 +36,38 @@ load_env_file()
 
 
 class _ColorFormatter(logging.Formatter):
-    _COLORS = {
+    _LEVEL_COLORS = {
         logging.DEBUG: "\033[36m",  # cyan
         logging.INFO: "\033[32m",  # green
         logging.WARNING: "\033[33m",  # yellow
         logging.ERROR: "\033[31m",  # red
         logging.CRITICAL: "\033[1;31m",  # bold red
     }
+    _DIM = "\033[2m"
     _RESET = "\033[0m"
 
     def format(self, record: logging.LogRecord) -> str:
-        color = self._COLORS.get(record.levelno, "")
-        record.levelname = f"{color}{record.levelname}{self._RESET}"
-        return super().format(record)
+        record = copy.copy(record)  # never mutate the original
+        color = self._LEVEL_COLORS.get(record.levelno, "")
+        record.asctime = f"{self._DIM}{self.formatTime(record, self.datefmt)}{self._RESET}"
+        record.levelname = f"{color}{record.levelname:<8}{self._RESET}"
+        record.msg = f"\033[97m{record.getMessage()}{self._RESET}"
+        record.args = None  # already interpolated above
+        return f"{record.asctime} {record.levelname} {record.msg}"
+
+
+log = logging.getLogger(__name__)
 
 
 def _setup_logging() -> None:
     handler = logging.StreamHandler()
-    handler.setFormatter(_ColorFormatter("%(asctime)s %(levelname)s %(message)s"))
-    logging.basicConfig(level=logging.INFO, handlers=[handler])
+    handler.setFormatter(_ColorFormatter())
+    log.setLevel(logging.INFO)
+    log.addHandler(handler)
+    log.propagate = False  # immune to Uvicorn reconfiguring the root logger
 
 
 _setup_logging()
-log = logging.getLogger(__name__)
 
 transformers.logging.set_verbosity_warning()
 transformers.logging.enable_progress_bar()
