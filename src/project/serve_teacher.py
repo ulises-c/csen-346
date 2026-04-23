@@ -24,6 +24,7 @@ import time
 import uuid
 from pathlib import Path
 
+import transformers
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
@@ -34,7 +35,6 @@ load_env_file()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-import transformers
 transformers.logging.set_verbosity_info()
 transformers.logging.enable_progress_bar()
 
@@ -73,6 +73,7 @@ def _patch_transformers_tied_weights() -> None:
     Site 1: get_total_byte_count (caching_allocator_warmup, fires with device_map)
     Site 2: _move_missing_keys_from_meta_to_device (_finalize_model_loading, always fires)
     """
+
     def _ensure(model) -> None:
         if not hasattr(model, "all_tied_weights_keys"):
             tied = getattr(model, "_tied_weights_keys", None) or []
@@ -83,17 +84,22 @@ def _patch_transformers_tied_weights() -> None:
 
         if hasattr(mu, "get_total_byte_count"):
             orig_gtbc = mu.get_total_byte_count
+
             def _patched_gtbc(model, device_map):
                 _ensure(model)
                 return orig_gtbc(model, device_map)
+
             mu.get_total_byte_count = _patched_gtbc
 
         from transformers import PreTrainedModel
+
         if hasattr(PreTrainedModel, "_move_missing_keys_from_meta_to_device"):
             orig_mmk = PreTrainedModel._move_missing_keys_from_meta_to_device
+
             def _patched_mmk(self, missing_keys, *args, **kwargs):
                 _ensure(self)
                 return orig_mmk(self, missing_keys, *args, **kwargs)
+
             PreTrainedModel._move_missing_keys_from_meta_to_device = _patched_mmk
 
         log.info("Patched transformers for ChatGLM trust_remote_code compatibility")
@@ -119,6 +125,7 @@ def load_runtime(model_path: str):
 
     if use_bnb:
         from transformers import BitsAndBytesConfig
+
         log.info("Loading with bitsandbytes 4-bit (NF4) on %s", device)
         kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -129,7 +136,11 @@ def load_runtime(model_path: str):
         kwargs["dtype"] = torch.float16
         kwargs["device_map"] = {"": 0}
     else:
-        dtype = torch.bfloat16 if (device == "cuda" and torch.cuda.is_bf16_supported()) else torch.float16
+        dtype = (
+            torch.bfloat16
+            if (device == "cuda" and torch.cuda.is_bf16_supported())
+            else torch.float16
+        )
         log.info("Loading without bitsandbytes, dtype=%s, device=%s", dtype, device)
         kwargs["dtype"] = dtype
         # No device_map — avoids caching_allocator_warmup which calls
