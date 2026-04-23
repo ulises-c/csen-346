@@ -35,7 +35,7 @@ load_env_file()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-transformers.logging.set_verbosity_info()
+transformers.logging.set_verbosity_warning()
 transformers.logging.enable_progress_bar()
 
 
@@ -289,6 +289,7 @@ def create_app() -> FastAPI:
         input_len = input_ids.shape[-1]
 
         max_new_tokens = min(req.max_tokens, app.state.runtime_config["max_new_tokens"])
+        t0 = time.perf_counter()
         with torch.inference_mode():
             output_ids = model.generate(
                 input_ids,
@@ -297,9 +298,17 @@ def create_app() -> FastAPI:
                 do_sample=req.temperature > 0,
                 pad_token_id=tokenizer.eos_token_id,
             )
+        elapsed = time.perf_counter() - t0
 
         new_tokens = output_ids[0][input_len:]
         response_text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+        log.info(
+            "completion: %d prompt + %d new tokens in %.1fs (%.1f tok/s)",
+            input_len,
+            len(new_tokens),
+            elapsed,
+            len(new_tokens) / elapsed if elapsed > 0 else 0,
+        )
 
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
@@ -335,7 +344,8 @@ def main() -> None:
         app,
         host=runtime_config["host"],
         port=runtime_config["port"],
-        log_level="info",
+        log_level="warning",
+        access_log=False,
     )
 
 
