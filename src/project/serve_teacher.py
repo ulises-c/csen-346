@@ -22,6 +22,7 @@ import logging
 import os
 import time
 import uuid
+import warnings
 from pathlib import Path
 
 import transformers
@@ -37,6 +38,8 @@ log = logging.getLogger(__name__)
 
 transformers.logging.set_verbosity_warning()
 transformers.logging.enable_progress_bar()
+warnings.filterwarnings("ignore", message=".*torch_dtype.*deprecated.*")
+warnings.filterwarnings("ignore", message=".*attention mask.*pad token.*")
 
 
 class Message(BaseModel):
