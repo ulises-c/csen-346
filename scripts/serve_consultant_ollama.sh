@@ -12,17 +12,26 @@ set -euo pipefail
 
 HOST="${CONSULTANT_HOST:-0.0.0.0}"
 PORT="${CONSULTANT_PORT:-11434}"
-MODEL="${CONSULTANT_MODEL_NAME:-qwen3.5:9b}"
+MODEL="${CONSULTANT_MODEL_NAME:?Set CONSULTANT_MODEL_NAME (e.g. source configs/R9700_Mac-M4.env)}"
 LOG_FILE="${CONSULTANT_LOG_FILE:-logs/ollama_consultant.log}"
 
 mkdir -p logs
+
+CTX="${OLLAMA_NUM_CTX:-16384}"
 
 echo "=== Ollama Consultant (Mac Mini) ==="
 echo "Model:  $MODEL"
 echo "Host:   $HOST"
 echo "Port:   $PORT"
+echo "CTX:    $CTX  (OLLAMA_NUM_CTX)"
 echo "Log:    $LOG_FILE"
 echo ""
+if [[ "$CTX" -lt 16384 ]]; then
+    echo "WARNING: OLLAMA_NUM_CTX=$CTX is below 16384."
+    echo "  Run mac_mini_setup.sh to set it, or:"
+    echo "  launchctl setenv OLLAMA_NUM_CTX 16384 && (restart Ollama)"
+    echo ""
+fi
 
 # Check if Ollama is already running and listening on the expected port.
 if curl -s "http://localhost:$PORT/api/version" > /dev/null 2>&1; then
@@ -37,11 +46,24 @@ if curl -s "http://localhost:$PORT/api/version" > /dev/null 2>&1; then
         echo "Model '$MODEL' not found — pulling..."
         ollama pull "$MODEL"
     fi
+
+    # Attach caffeinate to the existing Ollama process so the Mac won't sleep.
+    OLLAMA_PID=$(lsof -iTCP:$PORT -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR>1 {print $2}' | head -1)
+    if [[ -n "$OLLAMA_PID" ]] && command -v caffeinate &>/dev/null; then
+        caffeinate -s -w "$OLLAMA_PID" &
+        echo "Sleep inhibited (caffeinate -s -w $OLLAMA_PID)."
+    fi
 else
     echo "Ollama not running — starting with OLLAMA_HOST=$HOST..."
     OLLAMA_HOST="$HOST" ollama serve > "$LOG_FILE" 2>&1 &
     OLLAMA_PID=$!
     echo "PID: $OLLAMA_PID  Log: $LOG_FILE"
+
+    # Prevent the Mac from sleeping while Ollama is serving.
+    if command -v caffeinate &>/dev/null; then
+        caffeinate -s -w "$OLLAMA_PID" &
+        echo "Sleep inhibited (caffeinate -s -w $OLLAMA_PID)."
+    fi
 
     echo -n "Waiting for Ollama to be ready..."
     for i in $(seq 1 30); do
@@ -67,7 +89,8 @@ fi
 
 MAC_HOSTNAME=$(scutil --get LocalHostName 2>/dev/null || echo "")
 MAC_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "<mac-ip>")
-MAC_ADDR="${MAC_HOSTNAME:+${MAC_HOSTNAME}.local}${MAC_HOSTNAME:-$MAC_IP}"
+MAC_ADDR="${MAC_HOSTNAME:+${MAC_HOSTNAME}.local}"
+MAC_ADDR="${MAC_ADDR:-$MAC_IP}"
 
 echo ""
 echo "=== Consultant ready ==="

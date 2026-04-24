@@ -16,14 +16,23 @@ echo "=== KELE Evaluation: $EXPERIMENT ==="
 echo "Start time: $(date)"
 echo "Config: configs/$EXPERIMENT.env"
 echo "GPU status:"
-nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null || echo "(nvidia-smi unavailable)"
+nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null \
+    || rocm-smi --showproductname --showmeminfo vram --showtemp 2>/dev/null \
+    || echo "(nvidia-smi/rocm-smi unavailable)"
 echo "---"
 
-poetry run python -m src.project.kele --experiment "$EXPERIMENT" evaluate \
+INHIBIT=""
+if command -v systemd-inhibit &>/dev/null; then
+    INHIBIT="systemd-inhibit --what=sleep:idle --who=run_eval.sh --why=KELE-eval"
+fi
+
+$INHIBIT poetry run python -m src.project.kele --experiment "$EXPERIMENT" evaluate \
     --output "results/$EXPERIMENT" \
     "$@"
 
 echo "---"
 echo "End time: $(date)"
 echo "Results: results/$EXPERIMENT/"
-nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null || echo "(nvidia-smi unavailable)"
+nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null \
+    || rocm-smi --showproductname --showmeminfo vram --showtemp 2>/dev/null \
+    || echo "(nvidia-smi/rocm-smi unavailable)"

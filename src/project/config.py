@@ -10,6 +10,9 @@ class AgentConfig:
     api_key: str
     base_url: str
     model_name: str
+    max_tokens: int = 4096
+    disable_thinking: bool = False
+    num_ctx: int = 0
 
 
 @dataclass
@@ -74,6 +77,10 @@ def load_config(experiment: str | None = None, root_dir: Path | None = None) -> 
             api_key=require("CONSULTANT_API_KEY"),
             base_url=require("CONSULTANT_BASE_URL"),
             model_name=require("CONSULTANT_MODEL_NAME"),
+            max_tokens=int(os.environ.get("CONSULTANT_MAX_TOKENS", "4096")),
+            disable_thinking=os.environ.get("CONSULTANT_DISABLE_THINKING", "false").lower()
+            == "true",
+            num_ctx=int(os.environ.get("CONSULTANT_NUM_CTX", "0")),
         ),
         teacher=AgentConfig(
             api_key=os.environ.get("TEACHER_API_KEY", "not-needed"),

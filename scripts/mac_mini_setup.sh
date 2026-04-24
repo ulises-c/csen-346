@@ -24,23 +24,31 @@ if ! command -v ollama &>/dev/null; then
 fi
 info "Ollama found: $(ollama --version)"
 
-# ── 2. Verify qwen3.5:9b is pulled ────────────────────────────────────────────
-if ! ollama list 2>/dev/null | grep -q "qwen3.5:9b"; then
-    warn "qwen3.5:9b not found — pulling now (6.6 GB)..."
-    ollama pull qwen3.5:9b
+# ── 2. Verify the consultant model is pulled ───────────────────────────────────
+MODEL="${CONSULTANT_MODEL_NAME:-}"
+if [[ -z "$MODEL" ]]; then
+    die "CONSULTANT_MODEL_NAME is not set. Source your experiment .env first, e.g.:\n  set -a && source configs/R9700_Mac-M4.env && set +a"
+fi
+if ! ollama list 2>/dev/null | grep -q "$MODEL"; then
+    warn "$MODEL not found — pulling now..."
+    ollama pull "$MODEL"
 else
-    info "qwen3.5:9b already present."
+    info "$MODEL already present."
 fi
 
-# ── 3. Set OLLAMA_HOST so Ollama listens on all interfaces ────────────────────
+# ── 3. Set OLLAMA_HOST and OLLAMA_NUM_CTX ─────────────────────────────────────
 # Ollama defaults to 127.0.0.1:11434, which rejects remote connections.
 # Setting OLLAMA_HOST=0.0.0.0 makes it bind to all interfaces.
+# OLLAMA_NUM_CTX sets the default context window (default is ~2048; we need
+# 16384 so multi-turn Socratic dialogues fit in a single call).
 #
-# For the Ollama.app (Electron), the env var must be set before the helper
-# process launches. The most reliable method is launchctl setenv, which injects
-# the variable into the macOS GUI session environment for all future launches.
+# For the Ollama.app (Electron), env vars must be set before the helper process
+# launches. launchctl setenv injects them into the macOS GUI session environment
+# for all future launches.
 info "Setting OLLAMA_HOST=0.0.0.0 in launchctl environment..."
 launchctl setenv OLLAMA_HOST 0.0.0.0
+info "Setting OLLAMA_NUM_CTX=16384 in launchctl environment..."
+launchctl setenv OLLAMA_NUM_CTX 16384
 
 # ── 4. Restart Ollama to pick up the new env var ──────────────────────────────
 # The running instance still has the old binding (127.0.0.1). Kill it so the
@@ -90,7 +98,7 @@ echo ""
 echo "From the host PC, set these before running the eval:"
 echo ""
 echo "  export CONSULTANT_BASE_URL=http://${MAC_ADDR}:11434/v1"
-echo "  export CONSULTANT_MODEL_NAME=qwen3.5:9b"
+echo "  export CONSULTANT_MODEL_NAME=${MODEL}"
 echo "  export CONSULTANT_API_KEY=ollama"
 echo ""
 echo "Then run the evaluation against the local consultant:"

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Serve SocratTeachLLM (teacher) via vLLM.
 # Usage: ./scripts/serve_socratteachllm.sh
+#
+# NOTE — AMD gfx1201 (R9700 AI PRO): vLLM is NOT recommended on this GPU.
+# As of April 2026, gfx1201 support is incomplete upstream: FP8 WMMA silently
+# falls back to FP32 (halving throughput), and container startup requires
+# unmerged patches. Official AMD support targets MI300X/Instinct only.
+# Use serve_teacher_local.sh (HF Transformers) on the R9700 instead.
+# Re-evaluate when https://github.com/vllm-project/vllm/issues/28649 merges.
 
 set -euo pipefail
 
@@ -10,7 +17,7 @@ MODEL_NAME="${TEACHER_MODEL_NAME:-SocratTeachLLM}"
 MODEL_PATH="${TEACHER_MODEL_PATH:-${HF_HOME:-$HOME/hf_models}/SocratTeachLLM}"
 HOST="${TEACHER_HOST:-0.0.0.0}"
 PORT="${TEACHER_PORT:-8001}"
-MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-4096}"
+MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-8192}"
 GPU_MEMORY_UTILIZATION="${TEACHER_GPU_MEMORY_UTILIZATION:-0.60}"
 LOG_FILE="${TEACHER_LOG_FILE:-logs/vllm_socrat.log}"
 
@@ -24,27 +31,43 @@ if [ ! -d "$MODEL_PATH" ]; then
 fi
 
 # ── GPU architecture detection ────────────────────────────────────────────────
-# Detect compute capability of the first visible GPU (e.g. "7.0" → 70, "8.9" → 89).
-# CC < 80  → V100/T4-class: no BF16, CUDA graphs unreliable → float16 + --enforce-eager
-# CC ≥ 80  → A100/L40S/RTX 5090-class: full BF16 + CUDA graphs
-GPU_CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
-         | head -1 | tr -d '.' | tr -d ' ')
-GPU_CC=${GPU_CC:-0}
-echo "GPU compute capability: ${GPU_CC:0:1}.${GPU_CC:1}"
+# NVIDIA: use compute capability (CC) to select dtype and CUDA graph support.
+#   CC < 80  → V100/T4/RTX 20xx: no BF16, CUDA graphs unreliable → float16 + --enforce-eager
+#   CC ≥ 80  → A100/L40S/RTX 30xx+: full BF16 + CUDA graphs
+# AMD/ROCm: bfloat16 is supported on all modern RDNA2+ / CDNA cards.
+#   --enforce-eager is NOT needed (ROCm doesn't use CUDA graphs).
+GPU_VENDOR="unknown"
+GPU_CC=0
 
-# dtype: env var override wins; otherwise auto-select by CC
+if command -v nvidia-smi &>/dev/null; then
+    _CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+          | head -1 | tr -d '.' | tr -d ' ') || true
+    if [[ -n "$_CC" ]]; then
+        GPU_VENDOR="nvidia"
+        GPU_CC="$_CC"
+    fi
+fi
+
+if [[ "$GPU_VENDOR" == "unknown" ]] && command -v rocm-smi &>/dev/null; then
+    GPU_VENDOR="amd"
+fi
+
+echo "GPU vendor: $GPU_VENDOR  (CC: ${GPU_CC:0:1}.${GPU_CC:1:-0})"
+
+# dtype: env var override wins; otherwise auto-select by vendor/CC
 if [[ -n "${TEACHER_DTYPE:-}" ]]; then
     DTYPE="$TEACHER_DTYPE"
+elif [[ "$GPU_VENDOR" == "amd" ]]; then
+    DTYPE="bfloat16"
 elif [[ "$GPU_CC" -ge 80 ]]; then
     DTYPE="bfloat16"
 else
     DTYPE="float16"
 fi
 
-# --enforce-eager: auto-enable on CC < 8.0 (skips CUDA graph compilation,
-# avoids V100 graph errors and speeds up cold start on low-CC hardware)
+# --enforce-eager: NVIDIA CC < 8.0 only (AMD/ROCm doesn't benefit from this flag)
 EXTRA_ARGS=()
-if [[ "$GPU_CC" -lt 80 ]]; then
+if [[ "$GPU_VENDOR" == "nvidia" && "$GPU_CC" -lt 80 ]]; then
     EXTRA_ARGS+=(--enforce-eager)
 fi
 

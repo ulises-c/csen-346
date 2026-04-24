@@ -23,4 +23,11 @@ echo "Auth required via Authorization: Bearer <key> or x-api-key"
 echo "Health check: http://${TEACHER_HOST}:${TEACHER_PORT}/healthz"
 echo "Model list:   http://${TEACHER_HOST}:${TEACHER_PORT}/v1/models"
 
+VENV_BIN=$(poetry env info --path 2>/dev/null)/bin
+if [[ ! -x "$VENV_BIN/serve-teacher" ]]; then
+    echo "ERROR: 'serve-teacher' entry point not found."
+    echo "Run: poetry run pip install -e . --no-deps"
+    exit 1
+fi
+
 exec poetry run serve-teacher

@@ -57,6 +57,10 @@ class FakeTorch:
     def inference_mode():
         yield
 
+    @staticmethod
+    def ones_like(t):
+        return t
+
 
 def make_client(tokenizer):
     app = serve_teacher.create_app()
