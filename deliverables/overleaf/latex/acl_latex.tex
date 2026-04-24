@@ -1,6 +1,6 @@
 \documentclass[11pt]{article}
 
-\usepackage[review]{acl}
+\usepackage[final]{acl}
 
 \usepackage{times}
 \usepackage{latexsym}
@@ -13,12 +13,12 @@
 
 \title{Reproducing and Extending KELE: A Multi-Agent Framework for Structured Socratic Teaching with LLMs}
 
-\author{Maximilian Khan \\
+\author{Ulises Chavarria \\
   Santa Clara University \\
-  \texttt{mjkhan@scu.edu} \\\And
-  Ulises Chavarria \\
+  \texttt{uchavarria@scu.edu} \\\And
+  Maximilian Khan \\
   Santa Clara University \\
-  \texttt{uchavarria@scu.edu} \\}
+  \texttt{mjkhan@scu.edu} \\}
 
 \begin{document}
 \maketitle
@@ -168,7 +168,7 @@ We evaluate along two complementary axes:
 
 \subsection{Consultant Sensitivity Analysis}
 
-The \$17.49 cost per evaluation run limits iteration speed. To quantify whether a weaker, locally hosted consultant could substitute, we ran two additional full evaluations: Qwen3.5-9B served via vLLM on WAVE HPC (NVIDIA V100, 32\,GB), and qwen2.5:7b served via Ollama on an Apple M4 Mac Mini (CPU inference), with teacher inference on an AMD Radeon R9700 (32\,GB, ROCm). Table~\ref{tab:consultant} summarizes all three runs.
+The \$17.49 cost per evaluation run limits iteration speed. To quantify whether a weaker, locally hosted consultant could substitute, we ran two additional full evaluations: Qwen3.5-9B served via vLLM on WAVE HPC (NVIDIA V100, 32\,GB), and Qwen2.5:7B served via Ollama on an Apple M4 Mac Mini (CPU inference), with teacher inference on an AMD Radeon R9700 (32\,GB, ROCm). Table~\ref{tab:consultant} summarizes all three runs.
 
 \begin{table}[t]
   \centering
@@ -179,16 +179,16 @@ The \$17.49 cost per evaluation run limits iteration speed. To quantify whether 
     \textbf{Consultant} & \textbf{R-1} & \textbf{R-2} & \textbf{R-L} & \textbf{B-4} & \textbf{St.\ acc} & \textbf{Cost} \\
     \midrule
     GPT-4o (ours)         & \textbf{44.61} & \textbf{26.04} & \textbf{38.02} & \textbf{19.60} & \textbf{25.94\%} & \$17.49 \\
-    Qwen3.5-9B (V100)     & 43.72 & 24.87 & 36.76 & 18.63 & 18.93\% & \$0 \\
-    qwen2.5:7b (M4 CPU)   & 43.57 & 24.90 & 36.91 & 18.56 & 15.16\% & \$0 \\
+    Qwen3.5:9B (V100)     & 43.72 & 24.87 & 36.76 & 18.63 & 18.93\% & \$0 \\
+    Qwen2.5:7B (M4 CPU)   & 43.57 & 24.90 & 36.91 & 18.56 & 15.16\% & \$0 \\
     \bottomrule
   \end{tabular}%
   }
-  \caption{Consultant sensitivity across the 681-dialogue test split. ROUGE/BLEU varies by at most 1.0 R-1 across all runs, while state accuracy drops 11 points as consultant capability decreases from GPT-4o to qwen2.5:7b. Text-overlap is driven by the fixed SocratTeachLLM teacher; state accuracy is the consultant-sensitive signal.}
+  \caption{Consultant sensitivity across the 681-dialogue test split. ROUGE/BLEU varies by at most 1.0 R-1 across all runs, while state accuracy drops 11 points as consultant capability decreases from GPT-4o to Qwen2.5:7B. Text-overlap is driven by the fixed SocratTeachLLM teacher; state accuracy is the consultant-sensitive signal.}
   \label{tab:consultant}
 \end{table}
 
-The central finding is that ROUGE and BLEU are \emph{insensitive} to consultant quality: a free local 7B model costs only $-$1.0 ROUGE-1 and $-$1.0 BLEU-4 relative to GPT-4o. State accuracy, by contrast, degrades sharply with consultant capability, particularly on stage~c (22 fine-grained inductive-reasoning states), which drops from 4.70\% (GPT-4o) to 0.63\% (qwen2.5:7b). This confirms that the consultant bottleneck is a structured classification problem poorly suited to zero-shot prompting of general-purpose LLMs.
+The central finding is that ROUGE and BLEU are \emph{insensitive} to consultant quality: a free local 7B model costs only $-$1.0 ROUGE-1 and $-$1.0 BLEU-4 relative to GPT-4o. State accuracy, by contrast, degrades sharply with consultant capability, particularly on stage~c (22 fine-grained inductive-reasoning states), which drops from 4.70\% (GPT-4o) to 0.63\% (Qwen2.5:7B). This confirms that the consultant bottleneck is a structured classification problem poorly suited to zero-shot prompting of general-purpose LLMs.
 
 \subsection{Proposed Improvements}
 
