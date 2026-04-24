@@ -1,0 +1,13 @@
+{
+  "experiment": "R9700_Mac-M4",
+  "teacher_model": "SocratTeachLLM",
+  "teacher_base_url": "http://localhost:8001/v1",
+  "consultant_model": "qwen2.5:7b",
+  "consultant_base_url": "http://Ulisess-Mac-mini.local:11434/v1",
+  "max_teaching_rounds": 8,
+  "total_dialogues": 681,
+  "completed": 681,
+  "total_elapsed_seconds": 16059.72,
+  "started_at": "2026-04-23 12:43:15",
+  "finished_at": "2026-04-23 17:10:55"
+}
