@@ -1,7 +1,7 @@
 .PHONY: help run install-hooks slurm \
         post-eval-shutdown run-eval \
         serve-both serve-dual-gpu serve-consultant serve-gemma4 serve-socratteachllm serve-teacher-online \
-        setup-l40s
+        setup-l40s pre-commit
 
 # Default target
 help:
@@ -38,6 +38,15 @@ run:
 	@echo ""
 	@echo "  poetry run test            # run tests (or: make test)"
 	@echo "  poetry run lint            # lint source  (or: make lint)"
+	@echo ""
+	@echo "  make pre-commit            # run format + lint + tests (mirrors git pre-commit hook)"
+
+# ── Code quality ─────────────────────────────────────────────────────────────
+
+pre-commit:
+	poetry run ruff format .
+	poetry run ruff check --fix .
+	poetry run pytest -rs
 
 # ── Developer setup ──────────────────────────────────────────────────────────
 
