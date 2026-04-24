@@ -24,7 +24,7 @@
 \maketitle
 
 \begin{abstract}
-We reproduce and extend KELE \citep{peng2025kele}, a multi-agent framework for structured Socratic teaching with large language models. KELE decomposes Socratic dialogue into five progressive teaching stages governed by a rule system called SocRule, coordinated through a ``consultant--teacher'' mechanism in which one LLM plans instruction while another executes it. We reimplement the full pipeline, serve SocratTeachLLM locally via vLLM, and evaluate on the 681-dialogue test split of SocratDataset using ROUGE, BLEU, and stage-level state accuracy. Our baseline reproduction achieves ROUGE-2 of 26.04 and BLEU-4 of 19.60, confirming the core findings while revealing a gap in mid-stage state transitions (stages c/d accuracy below 6\%) that motivates our planned improvement: replacing the LLM-based consultant with a lightweight learned classifier trained on the 42,000-turn dataset labels. Code and data are available at \url{https://github.com/ulises-c/csen-346} and \url{https://huggingface.co/yuanpan/SocratTeachLLM}.
+We reproduce and extend KELE \citep{peng2025kele}, a multi-agent framework for structured Socratic teaching with large language models. KELE decomposes Socratic dialogue into five teaching stages governed by SocRule, using a consultant--teacher architecture where one LLM selects teaching strategies and another generates responses. We reimplement the full pipeline, serve SocratTeachLLM locally via vLLM, and evaluate on the 681-dialogue test split of SocratDataset. Our primary reproduction with GPT-4o as live consultant achieves ROUGE-2 of 26.04 and BLEU-4 of 19.60; additional fully-local runs with open-weight consultants on diverse hardware (NVIDIA V100, AMD R9700) reveal that ROUGE/BLEU scores are stable across consultant quality while state accuracy degrades sharply, identifying structured state classification as the key bottleneck. We propose three improvements: a hierarchical supervised classifier to replace the LLM consultant, a stronger teacher base model, and retrieval-augmented generation to close the surface-form gap. Code and data are available at \url{https://github.com/ulises-c/csen-346} and \url{https://huggingface.co/ulises-c/SocratTeachLLM}.
 \end{abstract}
 
 %% ============================================================
@@ -94,11 +94,62 @@ However, as \citet{peng2025kele} observe, these approaches primarily focus on ge
 Multi-agent architectures have emerged as an effective paradigm for complex LLM tasks that benefit from separation of concerns \citep{ge2023openagi}. In the educational domain, the key insight of KELE's consultant--teacher design is that teaching \emph{planning} (what stage and strategy to use) and teaching \emph{execution} (generating the actual dialogue) are fundamentally different capabilities that benefit from distinct agents \citep{peng2025kele}. This mirrors real-world educational practice where teaching consultants advise on instructional strategy while classroom teachers handle direct student interaction \citep{nevin2009collaborative}. Single-agent approaches struggle with both responsibilities simultaneously, often producing responses that are individually reasonable but lack coherent pedagogical progression \citep{an2024llmcontext}. Our work investigates whether the consultant role---essentially a state classification task---can be more effectively handled by a specialized classifier rather than a general-purpose LLM.
 
 %% ============================================================
-%% SECTION 3 — DATASET & METHODOLOGY (placeholder)
+%% SECTION 3 — DATASET & METHODOLOGY
 %% ============================================================
 \section{Dataset and Methodology}
 
-% To be completed for the Apr 23 submission.
+\subsection{Dataset: SocratDataset}
+
+We evaluate on SocratDataset \citep{peng2025kele}, a Mandarin Chinese mathematics tutoring corpus of 6,803 multi-turn Socratic dialogues covering middle-school topics including algebra, geometry, and probability. The corpus contains over 42,000 annotated turns; each turn is labeled with one of 30 fine-grained cognitive states organized into five teaching stages: \emph{student questioning} (stage a, 2 states), \emph{concept probing} (stage b, 8 states), \emph{inductive reasoning} (stage c, 22 states), \emph{rule construction} (stage d, 4 states), and \emph{teacher summary} (stage e, 2 states). The SocRule system encodes 34 teaching strategies governing valid state transitions. We follow the original 90/10 train/test split, using the held-out 681-dialogue partition (4,294 turns) for all evaluations in this paper.
+
+\subsection{KELE System Architecture}
+
+The KELE pipeline separates teaching into two roles. A \emph{consultant} agent reads the full dialogue history and predicts a cognitive-state label (e.g., \texttt{c16}), which selects the appropriate SocRule teaching strategy. A \emph{teacher} agent then receives the dialogue history \emph{and} the selected strategy and generates the next instructional utterance in Chinese. This split mirrors real-world practice where an instructional designer advises on strategy while a classroom teacher executes it \citep{nevin2009collaborative}.
+
+The teacher agent is SocratTeachLLM, a 9B-parameter model obtained by fine-tuning GLM4-9B \citep{glm2024chatglm} with LoRA \citep{hu2022lora} on the SocratDataset training split. Importantly, the original paper evaluated with \emph{ground-truth} state labels fed directly to the teacher rather than live consultant predictions, making their reported scores an idealized upper bound rather than a realistic deployment measurement.
+
+\subsection{Reproduction Setup}
+
+We serve SocratTeachLLM locally via vLLM \citep{kwon2023vllm} on an NVIDIA RTX 5090 (32\,GB VRAM) and call the OpenAI API for the consultant. We conducted a single full evaluation on the 681-dialogue test split using \texttt{gpt-4o-2024-11-20} as the live consultant, incurring \$17.49 in API costs (\$0.026 per dialogue); prompt caching on the $\approx$2,800-token system prompt recovered roughly 28\% of spend. Because the original work fed ground-truth labels rather than live predictions, a gap in our results is expected. The additional BLEU-4 gap (19.60 vs.\ 41.96) likely reflects undocumented generation parameters in the original work.
+
+We report ROUGE-1/2/L \citep{lin2004rouge} and BLEU-4 \citep{papineni2002bleu} as primary text-overlap metrics, computed with character-level tokenization appropriate for Chinese. Per-stage state accuracy measures consultant quality directly.
+
+\subsection{Consultant Sensitivity Analysis}
+
+The \$17.49 cost per evaluation run limits iteration speed. To quantify whether a weaker, locally hosted consultant could substitute, we ran two additional full evaluations: Qwen3.5-9B served via vLLM on WAVE HPC (NVIDIA V100, 32\,GB), and qwen2.5:7b served via Ollama on an Apple M4 Mac Mini (CPU inference), with teacher inference on an AMD Radeon R9700 (32\,GB, ROCm). Table~\ref{tab:consultant} summarizes all three runs.
+
+\begin{table}[t]
+  \centering
+  \small
+  \resizebox{\columnwidth}{!}{%
+  \begin{tabular}{@{}lcccccc@{}}
+    \toprule
+    \textbf{Consultant} & \textbf{R-1} & \textbf{R-2} & \textbf{R-L} & \textbf{B-4} & \textbf{St.\ acc} & \textbf{Cost} \\
+    \midrule
+    GPT-4o (ours)         & \textbf{44.61} & \textbf{26.04} & \textbf{38.02} & \textbf{19.60} & \textbf{25.94\%} & \$17.49 \\
+    Qwen3.5-9B (V100)     & 43.72 & 24.87 & 36.76 & 18.63 & 18.93\% & \$0 \\
+    qwen2.5:7b (M4 CPU)   & 43.57 & 24.90 & 36.91 & 18.56 & 15.16\% & \$0 \\
+    \bottomrule
+  \end{tabular}%
+  }
+  \caption{Consultant sensitivity across the 681-dialogue test split. ROUGE/BLEU varies by at most 1.0 R-1 across all runs, while state accuracy drops 11 points as consultant capability decreases from GPT-4o to qwen2.5:7b. Text-overlap is driven by the fixed SocratTeachLLM teacher; state accuracy is the consultant-sensitive signal.}
+  \label{tab:consultant}
+\end{table}
+
+The central finding is that ROUGE and BLEU are \emph{insensitive} to consultant quality: a free local 7B model costs only $-$1.0 ROUGE-1 and $-$1.0 BLEU-4 relative to GPT-4o. State accuracy, by contrast, degrades sharply with consultant capability, particularly on stage~c (22 fine-grained inductive-reasoning states), which drops from 4.70\% (GPT-4o) to 0.63\% (qwen2.5:7b). This confirms that the consultant bottleneck is a structured classification problem poorly suited to zero-shot prompting of general-purpose LLMs.
+
+\subsection{Proposed Improvements}
+
+We target three complementary weaknesses identified in the baseline evaluation.
+
+\paragraph{Hierarchical state classifier.}
+We propose replacing the LLM consultant with a supervised two-stage classifier built on a pretrained Chinese BERT encoder \citep{devlin2019bert}. A first classification head predicts the teaching stage (5-way softmax); a second head predicts the within-stage state conditioned on the predicted stage (up to 22-way for stage~c). Both heads are trained jointly on the 42,000 labeled turns of the SocratDataset training split. A 125M-parameter classifier trained directly on in-domain labels should substantially outperform zero-shot LLM prompting on this structured prediction task while eliminating per-run API cost entirely.
+
+\paragraph{Teacher base model upgrade.}
+SocratTeachLLM is fine-tuned from GLM4-9B (C-Eval $\approx$81.5), which lags behind more recent Chinese-capable open-weight models. We propose re-running the SocratDataset LoRA fine-tune starting from \texttt{deepseek-ai/DeepSeek-R1-Distill-Qwen-14B} (C-Eval 91.8, MIT license), which inherits chain-of-thought reasoning behavior well-suited to multi-step Socratic dialogue. We will ablate against \texttt{Qwen/Qwen3-14B} (dense architecture, Apache 2.0) and the direct architectural successor of the current base, \texttt{zai-org/GLM-4-9B-0414}, to isolate the contribution of base-model capability from fine-tuning data quality.
+
+\paragraph{Retrieval-augmented teacher.}
+To address the surface-form gap that drives the BLEU-4 shortfall, we propose indexing the SocratDataset training split by topic and mathematical concept using a Chinese sentence encoder (\texttt{BAAI/bge-large-zh-v1.5}) and prepending the top-3 most similar past dialogues as few-shot exemplars at inference time. Retrieval injects corpus-specific phrasing style without additional fine-tuning and is composable with both the classifier and the model-upgrade improvements.
 
 %% ============================================================
 %% SECTION 4 — EVALUATION & RESULTS (placeholder)
