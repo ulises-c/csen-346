@@ -127,12 +127,12 @@ def run_batch_evaluation(
     if limit is not None:
         dataset = dataset[:limit]
 
+    system = create_system(debug=False, experiment=experiment)
+
     output_dir.mkdir(parents=True, exist_ok=True)
     dialogues_dir = output_dir / "dialogues"
     dialogues_dir.mkdir(exist_ok=True)
     progress_log = output_dir / "progress.log"
-
-    system = create_system(debug=False, experiment=experiment)
     completed = 0
     start_time = time.time()
 

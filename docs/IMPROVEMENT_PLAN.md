@@ -182,16 +182,212 @@ This stack attacks every measured weakness and is achievable pre-June-4.
 
 ## Orthogonal lift: teacher base model swap
 
-Max asked about "better teacher model." None of the 10 approaches requires SocratTeachLLM specifically — all work with any Chinese-capable base. Candidates to consider:
+None of the 10 approaches requires SocratTeachLLM specifically — all work with any Chinese-capable base. The current base is `THUDM/glm-4-9b-chat` (9B, C-Eval ~81.5%). Models below are ranked by expected lift over that baseline when used as the fine-tuning base for the teacher role. All fit within a single 32 GB GPU for LoRA/QLoRA fine-tuning.
 
-| Model | Params | Fit for 5090 | Expected baseline lift vs SocratTeachLLM |
-|---|---|---|---|
-| Qwen 3 32B | 32B | bf16 OOM; NF4 quant fits | +4-8 ROUGE-1 (stronger base), native Chinese |
-| Gemma 3 27B | 27B | fits at Q5 | +3-6 ROUGE-1, weaker Chinese |
-| GLM-4 9B Chat (non-fine-tuned) | 9B | fits easily | ~= baseline; isolates the fine-tune contribution |
-| Qwen 2.5 14B Chat | 14B | fits at Q4 | +5-10 ROUGE-1; strong Chinese, faster than 32B |
+---
 
-**My recommendation for the primary "stronger teacher" experiment: Qwen 2.5 14B Chat.** Native Chinese, fits at Q4 alongside anything else we run, newer architecture than GLM4. A clean swap would be the lowest-effort baseline-beater.
+### Candidate models — ranked by expected lift over GLM-4-9B base
+
+#### 1. `deepseek-ai/DeepSeek-R1-Distill-Qwen-14B` — **Top pick for Socratic teaching**
+| Field | Value |
+|---|---|
+| Params | 14B (base: Qwen2.5-14B) |
+| LoRA VRAM | ~20 GB bf16 |
+| C-Eval | **91.8** (highest of any candidate) |
+| License | MIT |
+
+**Pros:**
+- Highest Chinese benchmark score of any fine-tuneable candidate (C-Eval 91.8, CLUEWSC 92.8)
+- Distilled from DeepSeek-R1: inherits step-by-step chain-of-thought reasoning as a base behavior — directly aligned with Socratic method
+- 14B vs GLM-4-9B's 9B is a meaningful capability step-up
+- MIT license — most permissive of all candidates
+- 76+ public fine-tunes already on HuggingFace; strong community
+
+**Cons:**
+- Always emits `<think>` blocks before responses — must handle in fine-tuning data format or explicitly suppress
+- No system prompt by default; instructions go in user turn, changing data formatting vs GLM-4-9B-Chat
+- Reasoning-first; may over-think simple Socratic hints
+
+**Expected lift vs SocratTeachLLM base:** +6–12 ROUGE-1, +8–15 BLEU-4, +5–10 state accuracy
+
+---
+
+#### 2. `Qwen/Qwen3-14B` — **Safest high-impact choice**
+| Field | Value |
+|---|---|
+| Params | 14.8B dense |
+| LoRA VRAM | ~16 GB QLoRA / ~26 GB bf16 |
+| C-Eval | Strong (matches Qwen2.5-32B-Base) |
+| License | Apache 2.0 |
+
+**Pros:**
+- Dense architecture — standard GQA transformer, compatible with all LoRA tooling (Unsloth, LlamaFactory, TRL)
+- Native Chinese across 119 languages; 36T token training corpus
+- Think/no-think mode toggle: use thinking mode to reason through student response, no-think for final output — elegant fit for Socratic pipeline
+- Massive fine-tuning ecosystem; most community recipes of any 2025–2026 model
+- Fits 32 GB comfortably with room for batch size
+
+**Cons:**
+- Think mode output format adds post-processing complexity
+- Slightly lower raw Chinese benchmark scores than DeepSeek-R1-Distill at this size
+- Apache 2.0 has slightly more restrictions than MIT
+
+**Expected lift vs SocratTeachLLM base:** +5–10 ROUGE-1, +6–12 BLEU-4, +4–8 state accuracy
+
+---
+
+#### 3. `Qwen/Qwen3.5-9B` — **Highest ceiling at same parameter count**
+| Field | Value |
+|---|---|
+| Params | 9B |
+| LoRA VRAM | ~22 GB bf16 (**QLoRA not recommended**) |
+| C-Eval | **88.2** (highest ever for any sub-10B model) |
+| License | Apache 2.0 |
+
+**Pros:**
+- Best benchmark scores of any ~9B model (MMLU-Pro 82.5, GPQA 81.7, C-Eval 88.2)
+- Same parameter budget as GLM-4-9B — direct comparison; any lift is purely from better pre-training
+- IFEval 91.5 — excellent instruction following for structured Socratic output
+
+**Cons:**
+- Novel hybrid architecture (Gated DeltaNet + sparse MoE + multimodal): QLoRA/4-bit quantization explicitly unsupported — must use bf16 LoRA (~22 GB)
+- Multimodal model; text-only LoRA recipes need adjustment for vision towers
+- Released March 2026 — fewer community fine-tuning examples; higher risk of undocumented gotchas
+- No QLoRA means cannot fine-tune on the R9700 with headroom; tight on the 3090
+
+**Expected lift vs SocratTeachLLM base:** +4–9 ROUGE-1, +5–10 BLEU-4 (same size but much stronger pre-training)
+
+---
+
+#### 4. `Qwen/Qwen2.5-14B-Instruct` — **Battle-tested fallback**
+| Field | Value |
+|---|---|
+| Params | 14.7B dense |
+| LoRA VRAM | ~18 GB bf16 |
+| C-Eval | ~85–90 |
+| License | Apache 2.0 |
+
+**Pros:**
+- Most tutorials and fine-tuning recipes of any model here — lowest risk of hitting unsolved tooling problems
+- 128K native context (vs 32K for GLM-4-9B) — handles long Socratic dialogues without truncation
+- Strictly superseded by Qwen3-14B on benchmarks, but the stability and documentation are unmatched
+
+**Cons:**
+- Older architecture than Qwen3; lower benchmark ceiling
+- No built-in think/no-think mode
+- Superseded — if going Qwen2.5, upgrade to Qwen3-14B instead unless you specifically need 128K context or maximum recipe availability
+
+**Expected lift vs SocratTeachLLM base:** +4–8 ROUGE-1, +5–10 BLEU-4
+
+---
+
+#### 5. `internlm/internlm3-8b-instruct` — **Best pure Chinese NLP at 8B**
+| Field | Value |
+|---|---|
+| Params | 8B dense |
+| LoRA VRAM | ~12 GB bf16 |
+| CMMLU | **83.1** (highest of any 8B model) |
+| License | Apache 2.0 |
+
+**Pros:**
+- Highest CMMLU at 8B (83.1 vs Qwen2.5-7B's 75.8, Llama3.1-8B's 53.9) — strongest 8B for Chinese NLP specifically
+- Dual thinking/non-thinking mode (same pattern as Qwen3)
+- Well-supported in LlamaFactory; Shanghai AI Lab maintains active tooling
+- Very comfortable VRAM footprint — all three GPUs have headroom for large batch sizes
+
+**Cons:**
+- 8B vs GLM-4-9B's 9B — marginal parameter difference, but CMMLU 83.1 vs ~81.5 is also marginal
+- Less Western community adoption than Qwen; fewer English-language tutorials
+- Smaller than 14B options; ceiling lower than ranks 1–4
+
+**Expected lift vs SocratTeachLLM base:** +2–5 ROUGE-1, +3–6 BLEU-4 (strong Chinese but similar size)
+
+---
+
+#### 6. `Qwen/Qwen3-8B` — **Fast iteration, same family as rank 2**
+| Field | Value |
+|---|---|
+| Params | 8B dense |
+| LoRA VRAM | ~12 GB bf16 |
+| C-Eval | ~80.8 |
+| License | Apache 2.0 |
+
+**Pros:**
+- Same architecture and training corpus as Qwen3-14B — identical tooling, same think/no-think mode
+- Matches Qwen2.5-14B on many benchmarks at half the size
+- Fine-tunes on any of our three GPUs with ample batch headroom; fastest training time of any candidate
+- Best for rapid ablation experiments before committing to a 14B fine-tune
+
+**Cons:**
+- Lower ceiling than Qwen3-14B; choose 14B for the final model
+- C-Eval ~80.8 is roughly on par with GLM-4-9B baseline
+
+**Expected lift vs SocratTeachLLM base:** +2–5 ROUGE-1, +2–6 BLEU-4
+
+---
+
+#### 7. `zai-org/GLM-4-9B-0414` — **Lowest-risk swap; isolates fine-tune contribution**
+| Field | Value |
+|---|---|
+| Params | 9B dense |
+| LoRA VRAM | ~14 GB bf16 |
+| C-Eval | ~81.5 |
+| License | Apache 2.0 |
+
+**Pros:**
+- Direct successor to the current base (`THUDM/glm-4-9b-chat`) from the same lab; same architecture family
+- Official LoRA fine-tuning scripts in repo — lowest integration friction
+- 128K context, function calling support
+- Running this as an ablation cleanly isolates the contribution of SocratTeachLLM's fine-tuning data vs architecture
+
+**Cons:**
+- Smallest expected lift — same parameter count and similar pre-training quality to the existing base
+- Using it as the primary model swap is low-ambition; best used as an ablation control
+
+**Expected lift vs SocratTeachLLM base:** +1–3 ROUGE-1 (mostly measures fine-tune recipe improvement, not base model strength)
+
+---
+
+#### 8. `openbmb/MiniCPM4-8B` — **Efficient; long-context specialist**
+| Field | Value |
+|---|---|
+| Params | 8B dense |
+| LoRA VRAM | ~12 GB bf16 |
+| C-Eval | Beats Phi4-14B and Gemma3-12B on CMMLU |
+| License | Apache 2.0 |
+
+**Pros:**
+- 128K native context with sparse attention optimized for long documents — useful for full-dialogue-in-context Socratic sessions
+- Efficient training (8T tokens vs Qwen3's 36T, comparable output)
+- OpenBMB/Tsinghua lineage; strong Chinese NLP heritage
+
+**Cons:**
+- Smaller community fine-tuning support than Qwen family
+- Benchmark scores competitive with but not exceeding Qwen3-8B
+- Long-context strength is less relevant if we implement #3 (persistent memory) which reduces context length anyway
+
+**Expected lift vs SocratTeachLLM base:** +2–4 ROUGE-1
+
+---
+
+### Summary comparison
+
+| Rank | Model | Params | LoRA VRAM | C-Eval / CMMLU | Key strength | Key risk |
+|---|---|---|---|---|---|---|
+| 1 | DS-R1-Distill-Qwen-14B | 14B | ~20 GB | C-Eval 91.8 | Best Chinese + CoT reasoning | `<think>` format handling |
+| 2 | Qwen3-14B | 14.8B | ~16 GB QLoRA | Strong | Dense, best ecosystem | Think mode post-processing |
+| 3 | Qwen3.5-9B | 9B | 22 GB bf16 only | C-Eval 88.2 | Best at ~9B by far | Novel arch, no QLoRA |
+| 4 | Qwen2.5-14B | 14.7B | ~18 GB | ~85–90 | Most battle-tested | Superseded by Qwen3 |
+| 5 | InternLM3-8B | 8B | ~12 GB | CMMLU 83.1 | Best 8B Chinese NLP | Less Western community |
+| 6 | Qwen3-8B | 8B | ~12 GB | ~80.8 | Fast iteration | Lower ceiling than 14B |
+| 7 | GLM-4-9B-0414 | 9B | ~14 GB | ~81.5 | Best ablation control | Minimal expected lift |
+| 8 | MiniCPM4-8B | 8B | ~12 GB | Beats Phi4-14B | Long context | Less community support |
+
+**Primary recommendation:** `deepseek-ai/DeepSeek-R1-Distill-Qwen-14B` — highest Chinese benchmark scores, chain-of-thought reasoning is a natural fit for Socratic pedagogy, MIT license. Fine-tune on the 5090 or R9700 (both 32 GB).
+
+**Safe alternative:** `Qwen/Qwen3-14B` — dense architecture, identical tooling to any Qwen2.5 recipe, think/no-think toggle maps cleanly onto the teacher's reasoning vs. response phases.
+
+**Control experiment:** `zai-org/GLM-4-9B-0414` — same family as the current base; running this isolates whether gains come from the fine-tuning data or the base model swap.
 
 ---
 
