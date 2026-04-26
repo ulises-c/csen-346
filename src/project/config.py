@@ -30,15 +30,27 @@ def repo_root() -> Path:
 
 
 def load_env_file(path: Path | None = None) -> None:
-    """Load a .env file into os.environ. Minimal implementation — no dependency needed."""
+    """Load a .env file into os.environ. Minimal implementation — no dependency needed.
+
+    Supports `source configs/...` lines (repo-root-relative) for composing component
+    configs. Paths must be relative to the repository root, matching bash behaviour
+    when scripts cd to the project root before sourcing.
+    """
+    root = repo_root()
     if path is None:
-        path = repo_root() / ".env"
+        path = root / ".env"
     if not path.exists():
         return
     with open(path) as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("source "):
+                included = root / line[7:].strip()
+                load_env_file(included)
+                continue
+            if "=" not in line:
                 continue
             key, _, value = line.partition("=")
             key = key.strip()

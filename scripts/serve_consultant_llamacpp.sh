@@ -12,7 +12,7 @@ set -euo pipefail
 
 HOST="${CONSULTANT_HOST:-0.0.0.0}"
 PORT="${CONSULTANT_PORT:-8080}"
-MODEL_PATH="${CONSULTANT_MODEL_PATH:?Set CONSULTANT_MODEL_PATH to your .gguf file (e.g. source configs/R9700_Mac-M4.env)}"
+MODEL_PATH="${CONSULTANT_MODEL_PATH:?Set CONSULTANT_MODEL_PATH to your .gguf file (e.g. source configs/local-mac-m4.env)}"
 LOG_FILE="${CONSULTANT_LOG_FILE:-logs/llamacpp_consultant.log}"
 CTX="${CONSULTANT_NUM_CTX:-16384}"
 GPU_LAYERS="${CONSULTANT_GPU_LAYERS:-99}"  # M4 Mac Mini: all layers to Metal GPU

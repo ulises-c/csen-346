@@ -2,7 +2,7 @@
 # One-time setup: verify llama.cpp is installed and the model is ready on the Mac Mini.
 #
 # Run this once on the Mac Mini. After running, start the server with:
-#   source configs/R9700_Mac-M4.env && ./scripts/serve_consultant_llamacpp.sh
+#   source configs/local-mac-m4.env && ./scripts/serve_consultant_llamacpp.sh
 #
 # Usage: bash scripts/mac_mini_setup.sh
 
@@ -27,7 +27,7 @@ info "llama-server found: $(llama-server --version 2>&1 | head -1)"
 # ── 2. Verify the GGUF model file exists ──────────────────────────────────────
 MODEL_PATH="${CONSULTANT_MODEL_PATH:-}"
 if [[ -z "$MODEL_PATH" ]]; then
-    die "CONSULTANT_MODEL_PATH is not set. Source your experiment .env first, e.g.:\n  set -a && source configs/R9700_Mac-M4.env && set +a"
+    die "CONSULTANT_MODEL_PATH is not set. Source your experiment .env first, e.g.:\n  set -a && source configs/local-mac-m4.env && set +a"
 fi
 if [[ ! -f "$MODEL_PATH" ]]; then
     die "Model file not found: $MODEL_PATH\n  Download a .gguf from https://huggingface.co/bartowski/Qwen_Qwen3.5-9B-GGUF"
@@ -53,7 +53,7 @@ echo "(IP fallback: $MAC_IP)"
 echo ""
 echo "Start the consultant server on this Mac Mini:"
 echo ""
-echo "  set -a && source configs/R9700_Mac-M4.env && set +a"
+echo "  set -a && source configs/local-mac-m4.env && set +a"
 echo "  ./scripts/serve_consultant_llamacpp.sh"
 echo ""
 echo "From the host PC, set these before running the eval:"

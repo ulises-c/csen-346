@@ -17,8 +17,8 @@ fi
 
 # ── Load teacher server config ────────────────────────────────────────────────
 set -a
-# shellcheck source=../configs/local-teacher.env
-source configs/local-teacher.env
+# shellcheck source=../configs/teachers/socrat-r9700.env
+source configs/teachers/socrat-r9700.env
 set +a
 
 TEACHER_PORT="${TEACHER_PORT:-8001}"
@@ -55,4 +55,4 @@ fi
 
 # ── Run eval ──────────────────────────────────────────────────────────────────
 echo ""
-./scripts/run_eval.sh R9700_Mac-M4 "${LIMIT_ARGS[@]}"
+./scripts/run_eval.sh local-mac-m4 "${LIMIT_ARGS[@]}"

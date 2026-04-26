@@ -3,13 +3,13 @@
 # Loads the experiment config and sends a minimal chat request.
 #
 # Usage:
-#   ./scripts/test_lan.sh                    # uses R9700_Mac-M4
-#   ./scripts/test_lan.sh baseline           # uses a different config
+#   ./scripts/test_lan.sh                    # uses local-mac-m4
+#   ./scripts/test_lan.sh dual-local         # uses a different config
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-EXPERIMENT="${1:-R9700_Mac-M4}"
+EXPERIMENT="${1:-local-mac-m4}"
 ENV_FILE="configs/$EXPERIMENT.env"
 
 if [[ ! -f "$ENV_FILE" ]]; then
