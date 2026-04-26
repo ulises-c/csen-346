@@ -12,6 +12,7 @@ class AgentConfig:
     model_name: str
     max_tokens: int = 4096
     disable_thinking: bool = False
+    thinking_budget: int = 0
     num_ctx: int = 0
 
 
@@ -92,6 +93,7 @@ def load_config(experiment: str | None = None, root_dir: Path | None = None) -> 
             max_tokens=int(os.environ.get("CONSULTANT_MAX_TOKENS", "4096")),
             disable_thinking=os.environ.get("CONSULTANT_DISABLE_THINKING", "false").lower()
             == "true",
+            thinking_budget=int(os.environ.get("CONSULTANT_THINKING_BUDGET", "0")),
             num_ctx=int(os.environ.get("CONSULTANT_NUM_CTX", "0")),
         ),
         teacher=AgentConfig(

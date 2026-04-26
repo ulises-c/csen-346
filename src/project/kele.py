@@ -31,6 +31,7 @@ def create_system(
         max_teaching_rounds=cfg.max_teaching_rounds,
         consultant_max_tokens=cfg.consultant.max_tokens,
         consultant_disable_thinking=cfg.consultant.disable_thinking,
+        consultant_thinking_budget=cfg.consultant.thinking_budget,
         consultant_num_ctx=cfg.consultant.num_ctx,
     )
 
