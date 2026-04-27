@@ -116,6 +116,8 @@ def run_batch_evaluation(
     experiment: str | None = None,
     split: str = "test",
     fresh: bool = False,
+    worker_id: int = 0,
+    num_workers: int = 1,
 ) -> None:
     """Run the full evaluation pipeline on the dataset.
 
@@ -125,10 +127,12 @@ def run_batch_evaluation(
     dataset = load_dataset(dataset_path, split=split)
     total = len(dataset)
 
-    # Filter to start_id and apply limit
+    # Filter to start_id, apply limit, then stride for parallel workers
     dataset = [d for d in dataset if d["id"] >= start_id]
     if limit is not None:
         dataset = dataset[:limit]
+    if num_workers > 1:
+        dataset = [d for i, d in enumerate(dataset) if i % num_workers == worker_id]
 
     system = create_system(debug=False, experiment=experiment)
 
@@ -160,20 +164,24 @@ def run_batch_evaluation(
                 if src.exists():
                     src.rename(archive_dir / src.name)
 
-        # Clear dialogues and progress
+        # Clear dialogues and all progress logs
         for f in dialogues_dir.glob("*.json"):
             f.unlink()
-        progress_log_path = output_dir / "progress.log"
-        if progress_log_path.exists():
-            progress_log_path.unlink()
+        for p in output_dir.glob("progress*.log"):
+            p.unlink()
 
-    progress_log = output_dir / "progress.log"
+    progress_log_name = f"progress_worker{worker_id + 1}.log" if num_workers > 1 else "progress.log"
+    progress_log = output_dir / progress_log_name
     completed = 0
     start_time = time.time()
     started_at = datetime.now().astimezone()
 
     fresh_tag = "  [NEW — previous results cleared]" if fresh else ""
-    print(f"Starting evaluation: {len(dataset)} dialogues (of {total} in {split} split){fresh_tag}")
+    worker_tag = f"  [worker {worker_id + 1}/{num_workers}]" if num_workers > 1 else ""
+    print(
+        f"Starting evaluation: {len(dataset)} dialogues (of {total} in {split} split)"
+        f"{worker_tag}{fresh_tag}"
+    )
     print(f"Started: {started_at.isoformat(timespec='seconds')}")
     print(f"Output: {output_dir}")
     print(f"Teacher model: {system.teacher_model_name}")
@@ -240,7 +248,6 @@ def run_batch_evaluation(
 
     print(f"\nDone. {completed} dialogues saved to {dialogues_dir}")
 
-    # Save run config
     cfg = load_config()
     run_config = {
         "experiment": output_dir.name,
@@ -255,17 +262,24 @@ def run_batch_evaluation(
         "started_at": started_at.isoformat(timespec="seconds"),
         "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
-    with open(output_dir / "run_config.json", "w") as f:
-        json.dump(run_config, f, indent=2)
 
-    # Auto-compute metrics after run completes
-    print("\nComputing metrics...")
-    from src.project.metrics import compute_all_metrics, format_metrics_table
+    if num_workers > 1:
+        # Multi-worker: write a per-worker config; orchestrator merges and computes metrics
+        config_name = f"run_config_worker{worker_id + 1}.json"
+        with open(output_dir / config_name, "w") as f:
+            json.dump(run_config, f, indent=2)
+        print(f"Worker {worker_id + 1} done. Config saved to {config_name}")
+    else:
+        with open(output_dir / "run_config.json", "w") as f:
+            json.dump(run_config, f, indent=2)
 
-    metrics = compute_all_metrics(dialogues_dir)
-    with open(output_dir / "metrics_summary.json", "w") as f:
-        json.dump(metrics, f, indent=2)
-    print(format_metrics_table(metrics))
+        print("\nComputing metrics...")
+        from src.project.metrics import compute_all_metrics, format_metrics_table
+
+        metrics = compute_all_metrics(dialogues_dir)
+        with open(output_dir / "metrics_summary.json", "w") as f:
+            json.dump(metrics, f, indent=2)
+        print(format_metrics_table(metrics))
 
 
 def interactive() -> None:
@@ -306,6 +320,12 @@ def main() -> None:
     eval_parser.add_argument(
         "--new", action="store_true", help="Start fresh — clear any existing results before running"
     )
+    eval_parser.add_argument(
+        "--worker-id", type=int, default=0, help="0-indexed worker number (for parallel runs)"
+    )
+    eval_parser.add_argument(
+        "--num-workers", type=int, default=1, help="Total number of parallel workers"
+    )
 
     # Quick test mode — run on a handful of dialogues
     test_parser = sub.add_parser("test", help="Quick test with a few dialogues")
@@ -325,6 +345,8 @@ def main() -> None:
             experiment=args.experiment,
             split=args.split,
             fresh=args.new,
+            worker_id=args.worker_id,
+            num_workers=args.num_workers,
         )
     elif args.command == "test":
         run_batch_evaluation(args.output, limit=args.n, experiment=args.experiment)
