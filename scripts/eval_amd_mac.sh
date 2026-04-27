@@ -29,8 +29,11 @@ echo "Consultant OK."
 echo ""
 
 # ── Start teacher in background ───────────────────────────────────────────────
+mkdir -p logs
+TEACHER_LOG="logs/teacher.log"
 echo "Starting teacher server on port $TEACHER_PORT..."
-./scripts/serve_teacher_local.sh &
+echo "Teacher log: $TEACHER_LOG"
+./scripts/serve_teacher_local.sh > "$TEACHER_LOG" 2>&1 &
 TEACHER_PID=$!
 trap 'echo "Stopping teacher (PID $TEACHER_PID)..."; kill "$TEACHER_PID" 2>/dev/null; wait "$TEACHER_PID" 2>/dev/null || true' EXIT
 
