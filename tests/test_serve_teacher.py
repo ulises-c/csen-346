@@ -12,16 +12,24 @@ from src.project import serve_teacher
 
 class FakeTensor:
     def __init__(self, values):
-        self.values = values
-        self.shape = (1, len(values))
+        self.values = list(values)
+        self.shape = (1, len(self.values))
 
     def to(self, device):
         return self
 
+    def cpu(self):
+        return self
+
+    def __len__(self):
+        return len(self.values)
+
     def __getitem__(self, item):
         if isinstance(item, int):
-            return self.values
-        return self.values[item]
+            return FakeTensor(self.values)
+        if isinstance(item, slice):
+            return FakeTensor(self.values[item])
+        return FakeTensor(self.values)
 
 
 class FakeTokenizer:
@@ -48,10 +56,18 @@ class FakeModel:
     device = "cpu"
 
     def generate(self, input_ids, **kwargs):
-        return [[*input_ids.values, 31, 32]]
+        return FakeTensor([*input_ids.values, 31, 32])
+
+
+class _FakeCuda:
+    @staticmethod
+    def empty_cache():
+        pass
 
 
 class FakeTorch:
+    cuda = _FakeCuda
+
     @staticmethod
     @contextlib.contextmanager
     def inference_mode():

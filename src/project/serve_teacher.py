@@ -339,26 +339,33 @@ def create_app() -> FastAPI:
         attention_mask = torch.ones_like(input_ids)
         max_new_tokens = min(req.max_tokens, app.state.runtime_config["max_new_tokens"])
         t0 = time.perf_counter()
-        with app.state.inference_lock, torch.inference_mode():
-            output_ids = model.generate(
-                input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                temperature=req.temperature,
-                do_sample=req.temperature > 0,
-                pad_token_id=tokenizer.eos_token_id,
-            )
+        with app.state.inference_lock:
+            with torch.inference_mode():
+                output_ids = model.generate(
+                    input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=max_new_tokens,
+                    temperature=req.temperature,
+                    do_sample=req.temperature > 0,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
+            # Move results off GPU before releasing the lock so the next
+            # worker doesn't start allocating its KV cache while our output
+            # tensor still occupies VRAM.
+            new_tokens_cpu = output_ids[0][input_len:].cpu()
+            del output_ids, input_ids, attention_mask
+            torch.cuda.empty_cache()
         elapsed = time.perf_counter() - t0
 
-        new_tokens = output_ids[0][input_len:]
-        response_text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+        response_text = tokenizer.decode(new_tokens_cpu, skip_special_tokens=True).strip()
+        n_new = len(new_tokens_cpu)
         log.info(
             "turn %d: %d prompt + %d new tokens in %.1fs (%.1f tok/s)",
             app.state.turn_count,
             input_len,
-            len(new_tokens),
+            n_new,
             elapsed,
-            len(new_tokens) / elapsed if elapsed > 0 else 0,
+            n_new / elapsed if elapsed > 0 else 0,
         )
 
         return {
@@ -375,8 +382,8 @@ def create_app() -> FastAPI:
             ],
             "usage": {
                 "prompt_tokens": input_len,
-                "completion_tokens": len(new_tokens),
-                "total_tokens": input_len + len(new_tokens),
+                "completion_tokens": n_new,
+                "total_tokens": input_len + n_new,
             },
         }
 
