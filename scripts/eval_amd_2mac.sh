@@ -19,7 +19,7 @@ cd "$(dirname "$0")/.."
 # ── Config ────────────────────────────────────────────────────────────────────
 EXPERIMENT="local-mac-m4"
 MAC1_URL="${MAC1_CONSULTANT_URL:-http://Ulisess-Mac-mini.local:8080/v1}"
-MAC2_URL="${MAC2_CONSULTANT_URL:-http://Ulisess-Mac-mini-2.local:8080/v1}"
+MAC2_URL="${MAC2_CONSULTANT_URL:-http://Julios-Mac-mini.local:8080/v1}"
 
 set -a
 source configs/teachers/socrat-r9700.env
