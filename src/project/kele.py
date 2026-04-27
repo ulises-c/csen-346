@@ -7,6 +7,7 @@ and adds batch evaluation for running against the SocratDataset.
 
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 
 from src.project.config import load_config
@@ -114,6 +115,7 @@ def run_batch_evaluation(
     limit: int | None = None,
     experiment: str | None = None,
     split: str = "test",
+    fresh: bool = False,
 ) -> None:
     """Run the full evaluation pipeline on the dataset.
 
@@ -133,11 +135,19 @@ def run_batch_evaluation(
     output_dir.mkdir(parents=True, exist_ok=True)
     dialogues_dir = output_dir / "dialogues"
     dialogues_dir.mkdir(exist_ok=True)
+
+    if fresh and dialogues_dir.exists():
+        for f in dialogues_dir.glob("*.json"):
+            f.unlink()
+
     progress_log = output_dir / "progress.log"
     completed = 0
     start_time = time.time()
+    started_at = datetime.now().astimezone()
 
-    print(f"Starting evaluation: {len(dataset)} dialogues (of {total} in {split} split)")
+    fresh_tag = "  [NEW — previous results cleared]" if fresh else ""
+    print(f"Starting evaluation: {len(dataset)} dialogues (of {total} in {split} split){fresh_tag}")
+    print(f"Started: {started_at.isoformat(timespec='seconds')}")
     print(f"Output: {output_dir}")
     print(f"Teacher model: {system.teacher_model_name}")
     print(f"Consultant model: {system.consultant_model_name}")
@@ -215,8 +225,8 @@ def run_batch_evaluation(
         "total_dialogues": len(dataset),
         "completed": completed,
         "total_elapsed_seconds": round(time.time() - start_time, 2),
-        "started_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time)),
-        "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "started_at": started_at.isoformat(timespec="seconds"),
+        "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
     with open(output_dir / "run_config.json", "w") as f:
         json.dump(run_config, f, indent=2)
@@ -266,6 +276,9 @@ def main() -> None:
     )
     eval_parser.add_argument("--start-id", type=int, default=1, help="Resume from this dialogue ID")
     eval_parser.add_argument("--limit", type=int, default=None, help="Max dialogues to process")
+    eval_parser.add_argument(
+        "--new", action="store_true", help="Start fresh — clear any existing results before running"
+    )
 
     # Quick test mode — run on a handful of dialogues
     test_parser = sub.add_parser("test", help="Quick test with a few dialogues")
@@ -284,6 +297,7 @@ def main() -> None:
             limit=args.limit,
             experiment=args.experiment,
             split=args.split,
+            fresh=args.new,
         )
     elif args.command == "test":
         run_batch_evaluation(args.output, limit=args.n, experiment=args.experiment)

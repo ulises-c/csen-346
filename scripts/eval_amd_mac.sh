@@ -8,12 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-LIMIT_ARGS=()
-if [[ "${1:-}" == "--limit" && -n "${2:-}" ]]; then
-    LIMIT_ARGS=(--limit "$2")
-elif [[ "${1:-}" =~ ^--limit=([0-9]+)$ ]]; then
-    LIMIT_ARGS=(--limit "${BASH_REMATCH[1]}")
-fi
+EXTRA_ARGS=("$@")
 
 # ── Load teacher server config ────────────────────────────────────────────────
 set -a
@@ -55,4 +50,4 @@ fi
 
 # ── Run eval ──────────────────────────────────────────────────────────────────
 echo ""
-./scripts/run_eval.sh local-mac-m4 "${LIMIT_ARGS[@]}"
+./scripts/run_eval.sh local-mac-m4 "${EXTRA_ARGS[@]}"
