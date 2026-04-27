@@ -19,6 +19,7 @@ Usage:
 """
 
 import copy
+import gc
 import logging
 import os
 import threading
@@ -354,6 +355,8 @@ def create_app() -> FastAPI:
             # tensor still occupies VRAM.
             new_tokens_cpu = output_ids[0][input_len:].cpu()
             del output_ids, input_ids, attention_mask
+            gc.collect()
+            torch.cuda.synchronize()
             torch.cuda.empty_cache()
         elapsed = time.perf_counter() - t0
 

@@ -64,6 +64,10 @@ class _FakeCuda:
     def empty_cache():
         pass
 
+    @staticmethod
+    def synchronize():
+        pass
+
 
 class FakeTorch:
     cuda = _FakeCuda
