@@ -30,7 +30,7 @@ if [[ -z "$MODEL_PATH" ]]; then
     die "CONSULTANT_MODEL_PATH is not set. Source your experiment .env first, e.g.:\n  set -a && source configs/local-mac-m4.env && set +a"
 fi
 if [[ ! -f "$MODEL_PATH" ]]; then
-    die "Model file not found: $MODEL_PATH\n  Download a .gguf from https://huggingface.co/bartowski/Qwen_Qwen3.5-9B-GGUF"
+    die "Model file not found: $MODEL_PATH\n  Download with: hf download unsloth/Qwen3.5-9B-GGUF Qwen3.5-9B-UD-Q5_K_XL.gguf --local-dir ~/models"
 fi
 info "Model file found: $MODEL_PATH ($(du -sh "$MODEL_PATH" | cut -f1))"
 
