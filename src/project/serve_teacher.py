@@ -21,6 +21,7 @@ Usage:
 import copy
 import logging
 import os
+import threading
 import time
 import uuid
 import warnings
@@ -248,6 +249,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="KELE Teacher Model Server")
     app.state.runtime = None
     app.state.runtime_config = config
+    app.state.inference_lock = threading.Lock()
     app.state.dialog_count = 0
     app.state.turn_count = 0
     app.state.last_prompt_len = 0
@@ -337,7 +339,7 @@ def create_app() -> FastAPI:
         attention_mask = torch.ones_like(input_ids)
         max_new_tokens = min(req.max_tokens, app.state.runtime_config["max_new_tokens"])
         t0 = time.perf_counter()
-        with torch.inference_mode():
+        with app.state.inference_lock, torch.inference_mode():
             output_ids = model.generate(
                 input_ids,
                 attention_mask=attention_mask,
