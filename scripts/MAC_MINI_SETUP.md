@@ -33,14 +33,14 @@ llama-server --version
 
 ### 2. Download the model
 
-Get a Q4_K_M GGUF from Hugging Face (fits in 16 GB unified memory):
-
+```bash
+hf download unsloth/Qwen3.5-9B-GGUF \
+    Qwen3.5-9B-UD-Q6_K_XL.gguf \
+    --local-dir ~/models/
 ```
-https://huggingface.co/bartowski/Qwen_Qwen3.5-9B-GGUF
-```
 
-Set `CONSULTANT_MODEL_PATH` in `configs/local-mac-m4.env` to the absolute path of the
-downloaded `.gguf` file.
+This downloads ~7.4 GB to `~/models/Qwen3.5-9B-UD-Q6_K_XL.gguf`. The path matches
+`CONSULTANT_MODEL_PATH` in `configs/consultants/m4-llamacpp.env` — no further config needed.
 
 ### 3. Run the setup check
 
@@ -157,6 +157,6 @@ curl http://Ulisess-Mac-mini.local:8080/v1/chat/completions \
 | Setup | Consultant | Est. eval time |
 |---|---|---|
 | WAVE V100 × 2 | Qwen3.5-9B via vLLM | ~34 hrs |
-| Mac Mini M4 16 GB | Qwen3.5-9B via llama.cpp (Q4_K_M) | TBD |
+| Mac Mini M4 16 GB | Qwen3.5-9B-UD-Q6_K_XL via llama.cpp | TBD |
 
 > Run a full eval to fill in the actual time estimate and update the table above.
