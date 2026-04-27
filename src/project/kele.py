@@ -136,9 +136,36 @@ def run_batch_evaluation(
     dialogues_dir = output_dir / "dialogues"
     dialogues_dir.mkdir(exist_ok=True)
 
-    if fresh and dialogues_dir.exists():
+    if fresh:
+        # Archive previous run_config + metrics into run{N}_{timestamp}/
+        prev_config = output_dir / "run_config.json"
+        prev_metrics = output_dir / "metrics_summary.json"
+        if prev_config.exists() or prev_metrics.exists():
+            existing = sorted(output_dir.glob("run[0-9]*_*/"))
+            next_n = len(existing) + 1
+            try:
+                ts_raw = (
+                    json.loads(prev_config.read_text())["started_at"]
+                    if prev_config.exists()
+                    else None
+                )
+            except Exception:
+                ts_raw = None
+            ts = (ts_raw or datetime.now().astimezone().isoformat(timespec="seconds")).replace(
+                ":", "-"
+            )
+            archive_dir = output_dir / f"run{next_n}_{ts}"
+            archive_dir.mkdir()
+            for src in (prev_config, prev_metrics):
+                if src.exists():
+                    src.rename(archive_dir / src.name)
+
+        # Clear dialogues and progress
         for f in dialogues_dir.glob("*.json"):
             f.unlink()
+        progress_log_path = output_dir / "progress.log"
+        if progress_log_path.exists():
+            progress_log_path.unlink()
 
     progress_log = output_dir / "progress.log"
     completed = 0
