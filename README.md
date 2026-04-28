@@ -7,13 +7,22 @@ This project reproduces and extends **KELE**, a multi-agent framework for struct
 - **Original repository:** https://github.com/yuanpan1020/KELE
 - **SocratTeachLLM model (our fork):** https://huggingface.co/ulises-c/SocratTeachLLM
 - **SocratTeachLLM model (original):** https://huggingface.co/yuanpan/SocratTeachLLM
+- **SocratDataset (Chinese):** https://huggingface.co/datasets/ulises-c/SocratDataset
+- **SocratDataset-en (English, planned):** https://huggingface.co/datasets/ulises-c/SocratDataset-en
 
 ## Hugging Face
 
-The teacher agent model ([SocratTeachLLM](https://huggingface.co/ulises-c/SocratTeachLLM)) is hosted on Hugging Face. Our fork lives at `ulises-c/SocratTeachLLM` and is the model used by default in this project.
+We host both the teacher model and the dataset on Hugging Face under `ulises-c/`.
+
+| Artifact | HF URL | Status |
+|---|---|---|
+| SocratTeachLLM (model) | [ulises-c/SocratTeachLLM](https://huggingface.co/ulises-c/SocratTeachLLM) | Live |
+| SocratDataset (Chinese) | [ulises-c/SocratDataset](https://huggingface.co/datasets/ulises-c/SocratDataset) | Live |
+| SocratDataset-en (English) | [ulises-c/SocratDataset-en](https://huggingface.co/datasets/ulises-c/SocratDataset-en) | Planned — see [`docs/TRANSLATION_PLAN.md`](docs/TRANSLATION_PLAN.md) |
 
 **What we use HF for:**
 - Downloading SocratTeachLLM for local serving (`hf download ulises-c/SocratTeachLLM`)
+- Hosting SocratDataset — 6,803 Chinese Socratic math tutoring dialogues with 30-state cognitive labels
 - Free inference via the [Inference Providers API](https://huggingface.co/docs/inference-providers/en/index) (rate-limited, no local GPU needed for quick tests)
 - Model versioning — experiment checkpoints and variants can be pushed as separate revisions
 
@@ -21,6 +30,9 @@ The teacher agent model ([SocratTeachLLM](https://huggingface.co/ulises-c/Socrat
 ```bash
 # Download the model for local serving
 hf download ulises-c/SocratTeachLLM --local-dir ~/hf_models/SocratTeachLLM
+
+# Download the dataset
+hf download ulises-c/SocratDataset --repo-type dataset --local-dir ~/hf_datasets/SocratDataset
 
 # Check your HF auth
 hf auth whoami
