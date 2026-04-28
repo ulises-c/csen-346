@@ -12,6 +12,7 @@ class AgentConfig:
     model_name: str
     max_tokens: int = 4096
     disable_thinking: bool = False
+    thinking_budget: int = 0
     num_ctx: int = 0
 
 
@@ -30,15 +31,27 @@ def repo_root() -> Path:
 
 
 def load_env_file(path: Path | None = None) -> None:
-    """Load a .env file into os.environ. Minimal implementation — no dependency needed."""
+    """Load a .env file into os.environ. Minimal implementation — no dependency needed.
+
+    Supports `source configs/...` lines (repo-root-relative) for composing component
+    configs. Paths must be relative to the repository root, matching bash behaviour
+    when scripts cd to the project root before sourcing.
+    """
+    root = repo_root()
     if path is None:
-        path = repo_root() / ".env"
+        path = root / ".env"
     if not path.exists():
         return
     with open(path) as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("source "):
+                included = root / line[7:].strip()
+                load_env_file(included)
+                continue
+            if "=" not in line:
                 continue
             key, _, value = line.partition("=")
             key = key.strip()
@@ -80,6 +93,7 @@ def load_config(experiment: str | None = None, root_dir: Path | None = None) -> 
             max_tokens=int(os.environ.get("CONSULTANT_MAX_TOKENS", "4096")),
             disable_thinking=os.environ.get("CONSULTANT_DISABLE_THINKING", "false").lower()
             == "true",
+            thinking_budget=int(os.environ.get("CONSULTANT_THINKING_BUDGET", "0")),
             num_ctx=int(os.environ.get("CONSULTANT_NUM_CTX", "0")),
         ),
         teacher=AgentConfig(

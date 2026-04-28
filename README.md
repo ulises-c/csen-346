@@ -168,6 +168,40 @@ Run a full evaluation:
 poetry run kele --experiment baseline evaluate --output results/baseline
 ```
 
+Run a partial evaluation (useful for smoke-testing the pipeline):
+
+```bash
+poetry run kele --experiment baseline evaluate --limit 5
+```
+
+Start a **fresh run** — archives any previous `run_config.json` and `metrics_summary.json`
+into a timestamped `run{N}_{timestamp}/` subfolder, then clears `dialogues/` and `progress.log`:
+
+```bash
+poetry run kele --experiment baseline evaluate --limit 5 --new
+```
+
+After several `--new` runs the output directory looks like:
+
+```
+results/baseline/
+├── run1_2026-04-14T10-14-09-07-00/   ← first run, archived
+│   ├── run_config.json
+│   └── metrics_summary.json
+├── run2_2026-04-26T09-03-22-07-00/   ← second run, archived
+│   └── ...
+├── dialogues/                         ← current run (per-dialogue JSONs)
+├── progress.log                       ← live progress (updated each dialogue)
+├── run_config.json                    ← current run metadata
+└── metrics_summary.json               ← current run metrics
+```
+
+Resume an interrupted run (skips already-saved dialogues automatically):
+
+```bash
+poetry run kele --experiment baseline evaluate
+```
+
 ### Evaluate saved results
 
 Recompute metrics for one run:
@@ -216,11 +250,29 @@ The repo also includes shell scripts under `scripts/` for multi-process workflow
 Examples:
 
 ```bash
-./scripts/run_eval.sh baseline
+./scripts/run_eval.sh baseline           # full eval run
+./scripts/run_eval.sh baseline --limit 5 # smoke test
 ./scripts/serve_socratteachllm.sh
 ./scripts/serve_consultant.sh
 ./scripts/serve_both.sh
 ```
+
+#### AMD Linux + Mac Mini setup
+
+To run with a local AMD GPU teacher and a Mac Mini llama.cpp consultant:
+
+```bash
+# On the Mac Mini (once per session):
+set -a && source configs/local-mac-m4.env && set +a
+./scripts/serve_consultant_llamacpp.sh
+
+# On the host PC:
+./scripts/eval_amd_mac.sh              # full run (resumes if interrupted)
+./scripts/eval_amd_mac.sh --limit 5   # smoke test (resumes previous)
+./scripts/eval_amd_mac.sh --limit 5 --new  # fresh smoke test, archives old results
+```
+
+See [`scripts/MAC_MINI_SETUP.md`](scripts/MAC_MINI_SETUP.md) for first-time Mac Mini setup.
 
 ### Run on SCU WAVE nodes
 

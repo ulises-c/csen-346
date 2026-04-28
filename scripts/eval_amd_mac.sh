@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run KELE eval: AMD Linux teacher + Mac Mini Ollama consultant.
+# Run KELE eval: AMD Linux teacher + Mac Mini llama.cpp consultant.
 #
 # Usage:
 #   ./scripts/eval_amd_mac.sh           # full run
@@ -8,34 +8,32 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-LIMIT_ARGS=()
-if [[ "${1:-}" == "--limit" && -n "${2:-}" ]]; then
-    LIMIT_ARGS=(--limit "$2")
-elif [[ "${1:-}" =~ ^--limit=([0-9]+)$ ]]; then
-    LIMIT_ARGS=(--limit "${BASH_REMATCH[1]}")
-fi
+EXTRA_ARGS=("$@")
 
 # ── Load teacher server config ────────────────────────────────────────────────
 set -a
-# shellcheck source=../configs/local-teacher.env
-source configs/local-teacher.env
+# shellcheck source=../configs/teachers/socrat-r9700.env
+source configs/teachers/socrat-r9700.env
 set +a
 
 TEACHER_PORT="${TEACHER_PORT:-8001}"
-CONSULTANT_URL="${CONSULTANT_BASE_URL:-http://Ulisess-Mac-mini.local:11434/v1}"
+CONSULTANT_URL="${CONSULTANT_BASE_URL:-http://Ulisess-Mac-mini.local:8080/v1}"
 
 # ── Verify Mac Mini consultant is reachable ───────────────────────────────────
 echo "Checking Mac Mini consultant at $CONSULTANT_URL ..."
 if ! curl -sf "${CONSULTANT_URL}/models" > /dev/null; then
-    echo "ERROR: Mac Mini consultant unreachable. Run serve_consultant_ollama.sh on the Mac Mini first."
+    echo "ERROR: Mac Mini consultant unreachable. Run serve_consultant_llamacpp.sh on the Mac Mini first."
     exit 1
 fi
 echo "Consultant OK."
 echo ""
 
 # ── Start teacher in background ───────────────────────────────────────────────
+mkdir -p logs
+TEACHER_LOG="logs/teacher.log"
 echo "Starting teacher server on port $TEACHER_PORT..."
-./scripts/serve_teacher_local.sh &
+echo "Teacher log: $TEACHER_LOG"
+./scripts/serve_teacher_local.sh > "$TEACHER_LOG" 2>&1 &
 TEACHER_PID=$!
 trap 'echo "Stopping teacher (PID $TEACHER_PID)..."; kill "$TEACHER_PID" 2>/dev/null; wait "$TEACHER_PID" 2>/dev/null || true' EXIT
 
@@ -55,4 +53,4 @@ fi
 
 # ── Run eval ──────────────────────────────────────────────────────────────────
 echo ""
-./scripts/run_eval.sh R9700_Mac-M4 "${LIMIT_ARGS[@]}"
+./scripts/run_eval.sh local-mac-m4 "${EXTRA_ARGS[@]}"

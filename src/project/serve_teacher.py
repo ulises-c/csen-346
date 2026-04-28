@@ -19,8 +19,10 @@ Usage:
 """
 
 import copy
+import gc
 import logging
 import os
+import threading
 import time
 import uuid
 import warnings
@@ -97,6 +99,7 @@ def get_runtime_config() -> dict[str, str | int]:
         "host": os.getenv("TEACHER_HOST", "0.0.0.0"),
         "port": int(os.getenv("TEACHER_PORT", "8001")),
         "max_new_tokens": int(os.getenv("MAX_NEW_TOKENS", "512")),  # raise to 2048 for ≥24 GB VRAM
+        "num_ctx": int(os.getenv("TEACHER_NUM_CTX", "0")),  # 0 = unlimited
         "api_key": os.getenv("TEACHER_SERVER_API_KEY", ""),
     }
 
@@ -248,6 +251,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="KELE Teacher Model Server")
     app.state.runtime = None
     app.state.runtime_config = config
+    app.state.inference_lock = threading.Lock()
     app.state.dialog_count = 0
     app.state.turn_count = 0
     app.state.last_prompt_len = 0
@@ -324,6 +328,9 @@ def create_app() -> FastAPI:
             prompt += "\nAssistant:"
             input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(model.device)
 
+        num_ctx = app.state.runtime_config["num_ctx"]
+        if num_ctx and input_ids.shape[-1] > num_ctx:
+            input_ids = input_ids[:, -num_ctx:]
         input_len = input_ids.shape[-1]
 
         # Detect dialog boundaries: prompt shrinks when a new dialog starts.
@@ -337,26 +344,35 @@ def create_app() -> FastAPI:
         attention_mask = torch.ones_like(input_ids)
         max_new_tokens = min(req.max_tokens, app.state.runtime_config["max_new_tokens"])
         t0 = time.perf_counter()
-        with torch.inference_mode():
-            output_ids = model.generate(
-                input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                temperature=req.temperature,
-                do_sample=req.temperature > 0,
-                pad_token_id=tokenizer.eos_token_id,
-            )
+        with app.state.inference_lock:
+            with torch.inference_mode():
+                output_ids = model.generate(
+                    input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=max_new_tokens,
+                    temperature=req.temperature,
+                    do_sample=req.temperature > 0,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
+            # Move results off GPU before releasing the lock so the next
+            # worker doesn't start allocating its KV cache while our output
+            # tensor still occupies VRAM.
+            new_tokens_cpu = output_ids[0][input_len:].cpu()
+            del output_ids, input_ids, attention_mask
+            gc.collect()
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
         elapsed = time.perf_counter() - t0
 
-        new_tokens = output_ids[0][input_len:]
-        response_text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+        response_text = tokenizer.decode(new_tokens_cpu, skip_special_tokens=True).strip()
+        n_new = len(new_tokens_cpu)
         log.info(
             "turn %d: %d prompt + %d new tokens in %.1fs (%.1f tok/s)",
             app.state.turn_count,
             input_len,
-            len(new_tokens),
+            n_new,
             elapsed,
-            len(new_tokens) / elapsed if elapsed > 0 else 0,
+            n_new / elapsed if elapsed > 0 else 0,
         )
 
         return {
@@ -373,8 +389,8 @@ def create_app() -> FastAPI:
             ],
             "usage": {
                 "prompt_tokens": input_len,
-                "completion_tokens": len(new_tokens),
-                "total_tokens": input_len + len(new_tokens),
+                "completion_tokens": n_new,
+                "total_tokens": input_len + n_new,
             },
         }
 

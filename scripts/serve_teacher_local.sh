@@ -12,10 +12,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-ENV_FILE="$(dirname "$0")/../configs/local-teacher.env"
+ENV_FILE="$(dirname "$0")/../configs/teachers/socrat-r9700.env"
 if [[ -f "$ENV_FILE" ]]; then
     set -a
-    # shellcheck source=../configs/local-teacher.env
+    # shellcheck source=../configs/teachers/socrat-r9700.env
     source "$ENV_FILE"
     set +a
 fi

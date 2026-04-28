@@ -26,7 +26,7 @@ echo "Log: $LOG_FILE"
 echo "Test: curl http://localhost:$PORT/v1/models"
 echo "---"
 
-exec vllm serve "$MODEL_PATH" \
+exec poetry run vllm serve "$MODEL_PATH" \
     --host 0.0.0.0 \
     --port "$PORT" \
     --quantization modelopt \
