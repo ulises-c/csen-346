@@ -19,5 +19,6 @@ Shell scripts for environment setup and process management. Not for Python tooli
 | `mac_mini_setup.sh` | One-time environment setup for Mac Mini (llama.cpp) |
 | `wave_setup.sh` | One-time environment setup for Wave cluster |
 
-Setup docs (`.md`) for each hardware target live alongside their setup scripts.
+Setup docs (`.md`) for each hardware target live alongside their setup scripts:
+[`MAC_MINI_SETUP.md`](MAC_MINI_SETUP.md) (llama.cpp), [`MLX_SETUP.md`](MLX_SETUP.md) (MLX alternative).
 Python utilities belong in `src/project/` instead.
