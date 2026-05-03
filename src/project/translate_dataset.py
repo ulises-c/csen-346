@@ -181,7 +181,7 @@ _INLINE_ARRAY_RE = re.compile(r'\s*\[(?:"[^"]*"|\'[^\']*\')(?:,\s*(?:"[^"]*"|\'[
 def _safe_quotes(obj: object) -> object:
     """Strip inline option arrays and remaining ASCII double-quotes from string values."""
     if isinstance(obj, str):
-        return _INLINE_ARRAY_RE.sub("", obj).replace('"', "'")
+        return _INLINE_ARRAY_RE.sub("", obj).replace('"', "'").replace("“", "'").replace("”", "'")
     if isinstance(obj, list):
         return [_safe_quotes(x) for x in obj]
     if isinstance(obj, dict):
@@ -216,6 +216,46 @@ _ESCAPE_REMINDER = (
 )
 
 
+def _merge_split_turns(turns: list[dict], expected: int) -> list[dict]:
+    """Merge split turns when the model separates student/teacher into individual turns.
+
+    The model sometimes outputs 2*N turns where student turns and teacher turns alternate
+    instead of N combined turns. Detect and merge back into N proper turns.
+    """
+    if len(turns) != 2 * expected:
+        return turns
+    # Pattern A: even=student-only, odd=teacher-only
+    is_a = all(
+        "student" in turns[2 * i]
+        and "teacher" not in turns[2 * i]
+        and "teacher" in turns[2 * i + 1]
+        and "student" not in turns[2 * i + 1]
+        for i in range(expected)
+    )
+    # Pattern B: even=teacher-only, odd=student-only
+    is_b = all(
+        "teacher" in turns[2 * i]
+        and "student" not in turns[2 * i]
+        and "student" in turns[2 * i + 1]
+        and "teacher" not in turns[2 * i + 1]
+        for i in range(expected)
+    )
+    if not (is_a or is_b):
+        return turns
+    merged = []
+    for i in range(expected):
+        s_turn = turns[2 * i] if is_a else turns[2 * i + 1]
+        t_turn = turns[2 * i + 1] if is_a else turns[2 * i]
+        merged.append(
+            {
+                "student": s_turn.get("student", ""),
+                "evaluation": s_turn.get("evaluation", t_turn.get("evaluation", "")),
+                "teacher": t_turn.get("teacher", ""),
+            }
+        )
+    return merged
+
+
 def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3) -> dict:
     prompt = _build_payload(record)
     extra: dict = {}
@@ -238,6 +278,7 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
             )
             result = _parse_json(resp.choices[0].message.content)
             expected = len(record["dialogue"])
+            result["dialogue"] = _merge_split_turns(result.get("dialogue", []), expected)
             got = len(result.get("dialogue", []))
             if got < expected:
                 raise ValueError(f"dialogue truncated: got {got} turns, expected {expected}")
