@@ -52,15 +52,19 @@ LOCAL_CHECKPOINT_EVERY: int = 50
 MODEL: str = "Qwen/Qwen3.5-27B"
 BASE_URL: str = "http://localhost:8000/v1"
 
-# Max tokens the model may generate per call. Raise this if the server has
-# free VRAM headroom (each 1K tokens of context ≈ ~200 MB KV cache on this model).
-# 8192 is safe with ~15 GB free VRAM; match this to the server's -c value.
+# Total tokens the model may generate per call (thinking + output combined).
+# Raise this if the server has free VRAM headroom.
 MAX_TOKENS: int = 8192
 
-# Set False to append /no_think to every prompt, disabling Qwen3 chain-of-thought.
-# Thinking was causing ~3-4× slowdown and action-cache JSON truncation.
-# Set True only if you want the model to reason through translations.
-ENABLE_THINKING: bool = False
+# Tokens carved out of MAX_TOKENS for Qwen3 chain-of-thought reasoning.
+# The model thinks for up to this many tokens, then writes the translation.
+# Set 0 to disable thinking entirely (/no_think is appended to every prompt).
+# Rough guide (translation is not complex reasoning, so keep this modest):
+#   0    — fastest, no reasoning, ~500-800 output tokens per record
+#   512  — light check, adds ~20s/record at 26 tok/s
+#   1024 — balanced: some reasoning, most of MAX_TOKENS left for output
+#   2048 — heavier reasoning; only useful if translations are coming out wrong
+THINKING_BUDGET: int = 1024
 
 # Append all log lines to this file in addition to stdout. Set "" to disable.
 LOG_PATH: str = "references/KELE/translate.log"
@@ -171,7 +175,7 @@ def _build_payload(record: dict) -> str:
 
 def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3) -> dict:
     prompt = _build_payload(record)
-    if not ENABLE_THINKING:
+    if THINKING_BUDGET == 0:
         prompt += "\n/no_think"
     last_err: Exception | None = None
     for attempt in range(retries):
@@ -198,7 +202,7 @@ def _translate_action_chunk(
 ) -> list[str]:
     """Translate one chunk of action strings; returns originals on failure."""
     user_content = json.dumps(chunk, ensure_ascii=False)
-    if not ENABLE_THINKING:
+    if THINKING_BUDGET == 0:
         user_content += "\n/no_think"
     for attempt in range(retries):
         resp = client.chat.completions.create(
