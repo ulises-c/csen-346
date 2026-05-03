@@ -59,7 +59,7 @@ MAX_TOKENS: int = 32768
 
 # Tokens carved out of MAX_TOKENS for Qwen3 chain-of-thought reasoning.
 # The model thinks for up to this many tokens, then writes the translation.
-# Set 0 to disable thinking entirely (/no_think is appended to every prompt).
+# Set 0 to disable thinking entirely (chat_template_kwargs enable_thinking=false).
 # Rough guide (translation is not complex reasoning, so keep this modest):
 #   0    — fastest, no reasoning, ~500-800 output tokens per record
 #   1024 — light check
@@ -179,8 +179,9 @@ def _build_payload(record: dict) -> str:
 
 def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3) -> dict:
     prompt = _build_payload(record)
+    extra: dict = {}
     if THINKING_BUDGET == 0:
-        prompt += "\n/no_think"
+        extra["chat_template_kwargs"] = {"enable_thinking": False}
     last_err: Exception | None = None
     for attempt in range(retries):
         try:
@@ -192,6 +193,7 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
                 ],
                 temperature=0.1,
                 max_tokens=MAX_TOKENS,
+                extra_body=extra,
             )
             return json.loads(_strip_fences(resp.choices[0].message.content))
         except Exception as e:
@@ -206,8 +208,9 @@ def _translate_action_chunk(
 ) -> list[str]:
     """Translate one chunk of action strings; returns originals on failure."""
     user_content = json.dumps(chunk, ensure_ascii=False)
+    extra: dict = {}
     if THINKING_BUDGET == 0:
-        user_content += "\n/no_think"
+        extra["chat_template_kwargs"] = {"enable_thinking": False}
     for attempt in range(retries):
         resp = client.chat.completions.create(
             model=model,
@@ -223,6 +226,7 @@ def _translate_action_chunk(
             ],
             temperature=0.1,
             max_tokens=MAX_TOKENS,
+            extra_body=extra,
         )
         raw = resp.choices[0].message.content or ""
         if not raw.strip():
