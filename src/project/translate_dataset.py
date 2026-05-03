@@ -158,22 +158,41 @@ def _strip_fences(text: str) -> str:
     return re.sub(r"\s*```$", "", text)
 
 
+def _safe_quotes(obj: object) -> object:
+    """Replace ASCII double-quotes inside string values with single quotes.
+
+    Some source records embed inline option arrays like ["A", "B"] inside
+    student text fields. The model reproduces those as unescaped " in its
+    JSON output, breaking json.loads. Converting to single quotes eliminates
+    the hazard; the translated output keeps single quotes, which is fine.
+    """
+    if isinstance(obj, str):
+        return obj.replace('"', "'")
+    if isinstance(obj, list):
+        return [_safe_quotes(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _safe_quotes(v) for k, v in obj.items()}
+    return obj
+
+
 def _build_payload(record: dict) -> str:
-    payload = {
-        "question": record["question"],
-        "options": record["options"],
-        "newHint": record["newHint"],
-        "newKnowledgePoint": record["newKnowledgePoint"],
-        "newAnalyze": record["newAnalyze"],
-        "dialogue": [
-            {
-                "student": t["student"],
-                "evaluation": t["evaluation"],
-                "teacher": t["teacher"],
-            }
-            for t in record["dialogue"]
-        ],
-    }
+    payload = _safe_quotes(
+        {
+            "question": record["question"],
+            "options": record["options"],
+            "newHint": record["newHint"],
+            "newKnowledgePoint": record["newKnowledgePoint"],
+            "newAnalyze": record["newAnalyze"],
+            "dialogue": [
+                {
+                    "student": t["student"],
+                    "evaluation": t["evaluation"],
+                    "teacher": t["teacher"],
+                }
+                for t in record["dialogue"]
+            ],
+        }
+    )
     return _ONE_SHOT + "\n\nNow translate:\n" + json.dumps(payload, ensure_ascii=False)
 
 
@@ -203,7 +222,12 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
                 max_tokens=MAX_TOKENS,
                 extra_body=extra,
             )
-            return json.loads(_strip_fences(resp.choices[0].message.content))
+            result = json.loads(_strip_fences(resp.choices[0].message.content))
+            expected = len(record["dialogue"])
+            got = len(result.get("dialogue", []))
+            if got != expected:
+                raise ValueError(f"dialogue truncated: got {got} turns, expected {expected}")
+            return result
         except Exception as e:
             last_err = e
             if attempt < retries - 1:
