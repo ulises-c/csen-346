@@ -53,25 +53,29 @@ MODEL: str = "Qwen/Qwen3.5-27B"
 BASE_URL: str = "http://localhost:8000/v1"
 
 # Total tokens the model may generate per call (thinking + output combined).
-# Raise this if the server has free VRAM headroom.
-MAX_TOKENS: int = 8192
+# Match this to the server's -c (context) value. At 32768 context the model
+# will never actually generate that many for a translation — it's a ceiling.
+MAX_TOKENS: int = 32768
 
 # Tokens carved out of MAX_TOKENS for Qwen3 chain-of-thought reasoning.
 # The model thinks for up to this many tokens, then writes the translation.
 # Set 0 to disable thinking entirely (/no_think is appended to every prompt).
 # Rough guide (translation is not complex reasoning, so keep this modest):
 #   0    — fastest, no reasoning, ~500-800 output tokens per record
-#   512  — light check, adds ~20s/record at 26 tok/s
-#   1024 — balanced: some reasoning, most of MAX_TOKENS left for output
-#   2048 — heavier reasoning; only useful if translations are coming out wrong
-THINKING_BUDGET: int = 1024
+#   1024 — light check
+#   4096 — generous budget; model reasons deeply before translating
+THINKING_BUDGET: int = 4096
+
+# HuggingFace source dataset (loaded via the datasets library at runtime).
+# references/ is read-only; never write output files there.
+HF_INPUT_REPO: str = "ulises-c/SocratDataset"
 
 # Append all log lines to this file in addition to stdout. Set "" to disable.
-LOG_PATH: str = "references/KELE/translate.log"
+LOG_PATH: str = "data/translate.log"
 
-INPUT_PATH: str = "references/KELE/SocratDataset.json"
-OUTPUT_PATH: str = "references/KELE/SocratDataset-EN.json"
-CHECKPOINT_PATH: str = "references/KELE/translate_checkpoint.json"
+# All write paths land in data/ (gitignored; final dataset is uploaded to HF).
+OUTPUT_PATH: str = "data/SocratDataset-EN.json"
+CHECKPOINT_PATH: str = "data/translate_checkpoint.json"
 
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -362,7 +366,11 @@ def push_dataset_to_hf(results: list[dict], hf_repo: str, model: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Translate SocratDataset.json (Chinese → English)")
-    parser.add_argument("--input", default=INPUT_PATH)
+    parser.add_argument(
+        "--input-repo",
+        default=HF_INPUT_REPO,
+        help="HuggingFace source dataset repo (default: %(default)s)",
+    )
     parser.add_argument("--output", default=OUTPUT_PATH)
     parser.add_argument("--checkpoint", default=CHECKPOINT_PATH)
     parser.add_argument("--model", default=MODEL, help="Model name as served by the local API")
@@ -402,8 +410,11 @@ def main() -> None:
 
     client = OpenAI(base_url=args.base_url, api_key=args.api_key)
 
-    with open(args.input) as f:
-        dataset: list[dict] = json.load(f)
+    _log(f"Loading source dataset from HuggingFace: {args.input_repo} …")
+    from datasets import load_dataset as _load_dataset  # type: ignore
+
+    dataset: list[dict] = _load_dataset(args.input_repo, split="train").to_list()
+    _log(f"Loaded {len(dataset)} records.")
 
     if args.smoke_test:
         dataset = dataset[: args.smoke_test]
