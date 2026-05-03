@@ -519,6 +519,7 @@ def main() -> None:
     total = len(dataset)
     start = time.time()
     done_at_start = len(translated_ids)  # checkpoint records; excluded from rate
+    last_hf_push = done_at_start
     errors = 0
 
     for record in dataset:
@@ -553,6 +554,7 @@ def main() -> None:
             _save_checkpoint(cp, translated_ids, results, action_cache)
             upload_checkpoint_to_hf(cp, args.hf_repo, done)
             push_dataset_to_hf(results, args.hf_repo, args.model)
+            last_hf_push = done
 
     # Final local save
     _save_checkpoint(cp, translated_ids, results, action_cache)
@@ -563,10 +565,10 @@ def main() -> None:
         json.dump(results, f, ensure_ascii=False, indent=2)
     _log(f"\nWrote {len(results)} records to {out}  ({errors} errors)")
 
-    if push:
-        push_dataset_to_hf(results, args.hf_repo, args.model)
-    else:
+    if not push:
         _log(f"Skipped HuggingFace upload (PUSH_TO_HUB={PUSH_TO_HUB}, --no-push={args.no_push})")
+    elif len(results) != last_hf_push:
+        push_dataset_to_hf(results, args.hf_repo, args.model)
 
     if _log_fh is not None:
         _log_fh.close()
