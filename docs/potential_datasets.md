@@ -6,6 +6,46 @@ Candidate datasets for expanding training data, evaluation, or cross-domain tran
 
 ---
 
+## Tier 0 — 2024-2025 releases (discovered after initial write-up)
+
+### SocraticLM *(closest new parallel — highest priority to investigate)*
+- **Source:** Jiang et al. NeurIPS 2024 — `CogBase-USTC/SocraticLM` on HF / [GitHub](https://github.com/Ljyustc/SocraticLM)
+- **Size:** 35,000 multi-round tutoring dialogues (~208K turns when flattened)
+- **Language:** Chinese
+- **Why:** The single most directly comparable new dataset. Contains Socratic math teaching dialogues with **6 cognitive student states** and **4 teaching abilities**, generated via a Dean-Teacher-Student pipeline. Published at NeurIPS 2024 — after the KELE paper. Overlapping domain and annotation philosophy; could be merged with SocratDataset to ~5× the training data.
+- **Limitation:** Synthetic (pipeline-generated). Cognitive state schema (6 states) differs from SocratDataset's 30-state schema — label alignment needed before merging.
+- **Action:** Download and inspect label schema first; determine if states can be mapped to KELE's 30-state ontology.
+
+### SocraticMATH
+- **Source:** ECNU-ICALK, CIKM 2024 — [GitHub](https://github.com/ECNU-ICALK/SocraticMath) (not on HF Hub directly)
+- **Size:** ~513 knowledge points with human-annotated Socratic dialogues
+- **Language:** Chinese
+- **Why:** Human-annotated (not synthetic). Explicit pedagogical stages: review → heuristic → rectification → summarization. Small but high-precision; useful as a quality-reference eval set or for few-shot prompting the teacher.
+- **Limitation:** Very small (~513 items). Primary school scope only.
+
+### CMM-Math
+- **Source:** ACM MM 2024 — `ecnu-icalk/cmm-math` on HF
+- **Size:** ~28,000 samples (22k+ train, 5k+ eval) across 12 grade levels
+- **Language:** Chinese
+- **Why:** Grade-level difficulty annotations align with SocratDataset's scope. The 12-level granularity could serve as a proxy for cognitive state difficulty when generating counterfactual augmentation data.
+- **Limitation:** Not dialogue; single-turn Q&A. Multimodal (some visual) — text-only subset needed.
+
+### GSM8K_zh
+- **Source:** MetaMath, 2023 — `meta-math/GSM8K_zh` on HF
+- **Size:** 8,792 samples (7,473 train / 1,319 test)
+- **Language:** Chinese
+- **Why:** Chinese translation of GSM8K with step-by-step solutions. Strictly more useful than the English GSM8K already listed (Tier 2) for this project. Standard benchmark for verifying that LoRA fine-tuning doesn't degrade math reasoning.
+- **Limitation:** Still not dialogue; single-turn. Overlaps thematically with GSM8K.
+
+### OpenMathReasoning
+- **Source:** NVIDIA, 2025 — `nvidia/OpenMathReasoning` on HF
+- **Size:** 306,000 unique problems (AoPS forums) with multi-step reasoning chains
+- **Language:** English
+- **Why:** Reasoning chains show how a solver works through problems step-by-step — useful for training a **student simulator** that generates realistic intermediate reasoning (including errors) for teacher intervention training (IMPROVEMENT_PLAN.md #9).
+- **Limitation:** English; competition-level math, harder than SocratDataset scope.
+
+---
+
 ## Tier 1 — Direct fit (Chinese math Socratic/tutoring dialogue)
 
 ### SocratDataset *(already using)*
@@ -119,5 +159,16 @@ Candidate datasets for expanding training data, evaluation, or cross-domain tran
 - Stick with SocratDataset for all fine-tuning and evaluation — it has the cognitive-state labels no other dataset provides.
 - Use CMATH or Ape210K if GPT-4o counterfactual augmentation (Improvement #7) is pursued.
 - Use C-Eval/CMMLU to validate that the new base model (DeepSeek-R1-Distill-Qwen-14B or Qwen3-14B) hasn't been degraded by LoRA fine-tuning.
+- **Investigate SocraticLM first** — if its 6-state schema maps cleanly to SocratDataset's stage labels (a/b/c/d/e), merging the two corpora is the lowest-effort path to 5× the training data for the BERT classifier (Improvement #2).
 
 **Cross-lingual stretch goal:** MathDial offers the closest structural parallel in English; could be used for zero-shot transfer experiments if the classifier architecture needs English validation.
+
+**Updated priority table (April 2026):**
+
+| Dataset | Use case | Effort | Priority |
+|---|---|---|---|
+| **SocraticLM** (NeurIPS 2024) | Augment classifier + teacher fine-tune | Medium (label alignment) | **High** |
+| **GSM8K_zh** | Eval benchmark (Chinese) | Low (drop-in) | **High** |
+| **SocraticMATH** | Eval / few-shot teacher prompts | Low | Medium |
+| **CMM-Math** | Counterfactual augmentation seed | Low-Medium | Medium |
+| **OpenMathReasoning** | Student simulator training data | High | Low (stretch) |

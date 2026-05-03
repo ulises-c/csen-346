@@ -36,5 +36,8 @@ hf_models/
 *.safetensors
 *.gguf
 
+# Translation job outputs (large, uploaded to HuggingFace — not committed)
+data/
+
 # Misc
 *.tmp
