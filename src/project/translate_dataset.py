@@ -443,6 +443,7 @@ def main() -> None:
 
     total = len(dataset)
     start = time.time()
+    done_at_start = len(translated_ids)  # checkpoint records; excluded from rate
     errors = 0
 
     for record in dataset:
@@ -459,7 +460,8 @@ def main() -> None:
 
         done = len(translated_ids)
         elapsed = time.time() - start
-        rate = done / elapsed if elapsed > 0 else 0
+        new_this_run = done - done_at_start
+        rate = new_this_run / elapsed if elapsed > 0 else 0
         eta_min = (total - done) / rate / 60 if rate > 0 else float("inf")
         if eta_min == float("inf"):
             eta_str = "∞"
