@@ -42,10 +42,10 @@ HF_REPO: str = "ulises-c/SocratDataset-EN"
 # Upload a checkpoint to HF every N completed records (0 to disable).
 # The checkpoint is uploaded as a file to the same HF repo so the run
 # can be recovered from HF if the local machine loses power or crashes.
-HF_CHECKPOINT_EVERY: int = 500
+HF_CHECKPOINT_EVERY: int = 50
 
 # Local checkpoint is always saved every N records regardless of HF setting.
-LOCAL_CHECKPOINT_EVERY: int = 50
+LOCAL_CHECKPOINT_EVERY: int = 5
 
 # Local LLM server — swap freely, the script is API-agnostic.
 # Recommended: Qwen/Qwen3.5-27B at Q4_K_M (~16.5 GB VRAM on R9700)
