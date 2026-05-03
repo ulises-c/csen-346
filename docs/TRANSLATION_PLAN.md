@@ -74,12 +74,12 @@ Pre-translated as hardcoded lookup tables in `translate_dataset.py`:
 | Setting | Value |
 |---|---|
 | GPU | AMD Radeon AI PRO R9700 · 32 GB VRAM · RDNA 4 · ROCm |
-| **Model** | **Qwen3.5-27B-Instruct** |
+| **Model** | **Qwen3.5-27B** |
 | **Quantization** | **Q4_K_M (~16.5 GB VRAM)** |
 | Context window | 262,144 tokens natively |
 | Inference stack | vLLM + ROCm |
 
-**Why Qwen3.5-27B-Instruct Q4_K_M:**
+**Why Qwen3.5-27B Q4_K_M:**
 - Uses ~16.5 GB of 32 GB, leaving headroom for KV cache on long batches
 - Qwen series leads Chinese↔English translation benchmarks among open models
 - Q4_K_M is within ~0.5–1% perplexity of BF16 — effectively lossless for translation
@@ -108,7 +108,7 @@ PUSH_TO_HUB: bool = True                # auto-upload dataset + checkpoints to H
 HF_REPO: str = "ulises-c/SocratDataset-EN"
 HF_CHECKPOINT_EVERY: int = 500          # upload checkpoint to HF every N records (0 to disable)
 LOCAL_CHECKPOINT_EVERY: int = 50        # save local checkpoint every N records
-MODEL: str = "Qwen/Qwen3.5-27B-Instruct"
+MODEL: str = "Qwen/Qwen3.5-27B"
 BASE_URL: str = "http://localhost:8000/v1"
 INPUT_PATH: str = "references/KELE/SocratDataset.json"
 OUTPUT_PATH: str = "references/KELE/SocratDataset-EN.json"
@@ -172,7 +172,7 @@ Published to HF as `ulises-c/SocratDataset-EN` in Parquet. A `translation_meta` 
 ```json
 {
   "translation_meta": {
-    "model": "Qwen/Qwen3.5-27B-Instruct",
+    "model": "Qwen/Qwen3.5-27B",
     "translated_at": "2026-xx-xxTxx:xx:xxZ"
   }
 }
@@ -188,7 +188,7 @@ Each row is translated as a single structured prompt containing all LLM-translat
 
 **Batch size:** 1 record per request initially (conservative). The 262K context window easily fits 5–10 records; experiment after confirming baseline quality on the smoke test.
 
-**Estimated throughput:** Qwen3.5-27B-Instruct Q4_K_M on the R9700 at ~400–700 tok/s. Each record produces ~400–800 translated tokens. At 550 tok/s: ~6,800 × 600 tokens / 550 tok/s ≈ **~2–4 hours** for the full dataset.
+**Estimated throughput:** Qwen3.5-27B Q4_K_M on the R9700 at ~400–700 tok/s. Each record produces ~400–800 translated tokens. At 550 tok/s: ~6,800 × 600 tokens / 550 tok/s ≈ **~2–4 hours** for the full dataset.
 
 ---
 
@@ -209,8 +209,8 @@ Before treating the dataset as final, run a validation pass on a random 5% sampl
 
 ## 9. Prerequisites before running
 
-1. Confirm vLLM + ROCm loads Qwen3.5-27B-Instruct on the R9700 (smoke test first)
-2. Download `Qwen/Qwen3.5-27B-Instruct` weights (GGUF Q4_K_M or GPTQ depending on vLLM backend)
+1. Confirm vLLM + ROCm loads Qwen3.5-27B on the R9700 (smoke test first)
+2. Download `Qwen/Qwen3.5-27B` weights (GGUF Q4_K_M or GPTQ depending on vLLM backend)
 3. Run `hf login` so checkpoint uploads and final push work
 4. Run 10-record smoke test; verify JSON parse rate and translation quality before committing to the full overnight run
 

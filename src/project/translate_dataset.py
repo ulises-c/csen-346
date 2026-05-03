@@ -48,8 +48,8 @@ HF_CHECKPOINT_EVERY: int = 500
 LOCAL_CHECKPOINT_EVERY: int = 50
 
 # Local LLM server — swap freely, the script is API-agnostic.
-# Recommended: Qwen/Qwen3.5-27B-Instruct at Q4_K_M (~16.5 GB VRAM on R9700)
-MODEL: str = "Qwen/Qwen3.5-27B-Instruct"
+# Recommended: Qwen/Qwen3.5-27B at Q4_K_M (~16.5 GB VRAM on R9700)
+MODEL: str = "Qwen/Qwen3.5-27B"
 BASE_URL: str = "http://localhost:8000/v1"
 
 INPUT_PATH: str = "references/KELE/SocratDataset.json"
