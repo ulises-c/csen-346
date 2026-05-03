@@ -467,7 +467,7 @@ def main() -> None:
             eta_str = f"{eta_min / 60:.1f}h"
         else:
             eta_str = f"{eta_min:.0f}m"
-        _log(f"[{done:>5}/{total}] id={record['id']:>5}  {rate:.3f} rec/s  ETA {eta_str}")
+        _log(f"[{done:>5}/{total}] id={record['id']:>5}  {rate * 3600:.1f} rec/hr  ETA {eta_str}")
 
         if done % LOCAL_CHECKPOINT_EVERY == 0:
             _save_checkpoint(cp, translated_ids, results, action_cache)
