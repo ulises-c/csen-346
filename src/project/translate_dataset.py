@@ -49,7 +49,7 @@ LOCAL_CHECKPOINT_EVERY: int = 5
 
 # Local LLM server — swap freely, the script is API-agnostic.
 # Recommended: Qwen/Qwen3.5-27B at Q4_K_M (~16.5 GB VRAM on R9700)
-MODEL: str = "Qwen/Qwen3.5-27B"
+MODEL: str = "Qwen3.5-9B-UD-Q4_K_XL.gguf"
 BASE_URL: str = "http://localhost:8000/v1"
 
 # Total tokens the model may generate per call (thinking + output combined).
@@ -434,12 +434,13 @@ def main() -> None:
         results = []
         action_cache = {}
 
-    # Build action lookup table once
-    if not action_cache:
-        _log("Building action lookup table …")
-        all_actions = sorted({t["action"] for row in dataset for t in row["dialogue"]})
-        action_cache = build_action_cache(client, args.model, all_actions)
-        _log(f"  {len(action_cache)} unique actions translated")
+    # Build action lookup table; on resume, catch any strings missing from the checkpoint cache.
+    all_actions = sorted({t["action"] for row in dataset for t in row["dialogue"]})
+    missing = [a for a in all_actions if not _ACTION_PASSTHROUGH.match(a) and a not in action_cache]
+    if missing:
+        _log(f"Building action lookup table ({len(missing)} new strings) …")
+        action_cache.update(build_action_cache(client, args.model, missing))
+        _log(f"  {len(action_cache)} unique actions in cache")
 
     total = len(dataset)
     start = time.time()
