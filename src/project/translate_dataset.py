@@ -168,31 +168,42 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
     raise RuntimeError(f"id={record['id']} failed after {retries} attempts: {last_err}")
 
 
-def _translate_action_chunk(client: OpenAI, model: str, chunk: list[str]) -> list[str]:
+def _translate_action_chunk(
+    client: OpenAI, model: str, chunk: list[str], retries: int = 3
+) -> list[str]:
     """Translate one chunk of action strings; returns originals on failure."""
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Translate each Chinese string in the JSON array to English. "
-                    "Return ONLY a JSON array of translated strings in the same order."
-                ),
-            },
-            {"role": "user", "content": json.dumps(chunk, ensure_ascii=False)},
-        ],
-        temperature=0.1,
-        max_tokens=2048,
-    )
-    raw = resp.choices[0].message.content
-    try:
-        result = json.loads(_strip_fences(raw))
-        if isinstance(result, list) and len(result) == len(chunk):
-            return result
-        print(f"  [action cache] unexpected response shape, keeping originals. raw={raw!r}")
-    except json.JSONDecodeError:
-        print(f"  [action cache] JSON parse failed, keeping originals. raw={raw!r}")
+    for attempt in range(retries):
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Translate each Chinese string in the JSON array to English. "
+                        "Return ONLY a JSON array of translated strings in the same order."
+                    ),
+                },
+                {"role": "user", "content": json.dumps(chunk, ensure_ascii=False)},
+            ],
+            temperature=0.1,
+            max_tokens=4096,
+        )
+        raw = resp.choices[0].message.content or ""
+        if not raw.strip():
+            print(f"  [action cache] empty response (attempt {attempt + 1}/{retries}), retrying…")
+            time.sleep(2**attempt)
+            continue
+        try:
+            result = json.loads(_strip_fences(raw))
+            if isinstance(result, list) and len(result) == len(chunk):
+                return result
+            print(f"  [action cache] wrong shape (attempt {attempt + 1}/{retries}). raw={raw!r}")
+        except json.JSONDecodeError:
+            print(
+                f"  [action cache] JSON parse failed (attempt {attempt + 1}/{retries}). raw={raw!r}"
+            )
+        time.sleep(2**attempt)
+    print(f"  [action cache] giving up on chunk of {len(chunk)}, keeping originals")
     return chunk
 
 
