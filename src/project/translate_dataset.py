@@ -126,6 +126,7 @@ Rules:
 - Translate values only, never keys.
 - Keep the Socratic / pedagogical tone in dialogue fields.
 - Student and teacher voices should sound natural for elementary school age.
+- Never use double-quote characters (\") inside translated text values. Use single quotes (') if quoting is needed.
 - Return ONLY valid JSON — no markdown fences, no commentary.\
 """
 
@@ -156,6 +157,18 @@ Example output:
 def _strip_fences(text: str) -> str:
     text = re.sub(r"^```(?:json)?\s*", "", text.strip())
     return re.sub(r"\s*```$", "", text)
+
+
+def _parse_json(text: str) -> dict:
+    """Parse JSON with recovery for truncated responses (missing closing braces)."""
+    text = _strip_fences(text)
+    for suffix in ("", "}", "}]}", "]}", "}]}"):
+        try:
+            return json.loads(text + suffix)
+        except json.JSONDecodeError:
+            continue
+    json.loads(text)  # re-raise original error
+    return {}  # unreachable
 
 
 # Matches inline option arrays embedded in student text, e.g.:
@@ -223,7 +236,7 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
                 max_tokens=MAX_TOKENS,
                 extra_body=extra,
             )
-            result = json.loads(_strip_fences(resp.choices[0].message.content))
+            result = _parse_json(resp.choices[0].message.content)
             expected = len(record["dialogue"])
             got = len(result.get("dialogue", []))
             if got != expected:
@@ -434,6 +447,13 @@ def main() -> None:
         help="Translate only N records then exit (sanity check)",
     )
     parser.add_argument(
+        "--ids",
+        type=lambda s: [int(x) for x in s.split(",")],
+        default=[],
+        metavar="ID[,ID...]",
+        help="Translate only these record IDs (comma-separated), ignoring checkpoint",
+    )
+    parser.add_argument(
         "--no-push",
         action="store_true",
         help="Skip all HuggingFace uploads for this run (overrides PUSH_TO_HUB=True)",
@@ -466,7 +486,11 @@ def main() -> None:
     dataset: list[dict] = _load_dataset(args.input_repo, split="train").to_list()
     _log(f"Loaded {len(dataset)} records.")
 
-    if args.smoke_test:
+    if args.ids:
+        id_set = set(args.ids)
+        dataset = [r for r in dataset if r["id"] in id_set]
+        _log(f"ID filter: {sorted(id_set)}")
+    elif args.smoke_test:
         dataset = dataset[: args.smoke_test]
         _log(f"Smoke-test mode: {args.smoke_test} records")
 
@@ -498,7 +522,7 @@ def main() -> None:
     errors = 0
 
     for record in dataset:
-        if record["id"] in translated_ids:
+        if not args.ids and record["id"] in translated_ids:
             continue
         try:
             translated = translate_record(client, args.model, record)
