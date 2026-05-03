@@ -8,4 +8,5 @@ set -euo pipefail
     --host 0.0.0.0 --port 8000 \
     -ngl 99 \
     -c 32768 \
-    -t 10 -tb 20
+    -t 10 -tb 20 \
+    --no-think
