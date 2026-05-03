@@ -57,11 +57,29 @@ BASE_URL: str = "http://localhost:8000/v1"
 # 8192 is safe with ~15 GB free VRAM; match this to the server's -c value.
 MAX_TOKENS: int = 8192
 
+# Set False to append /no_think to every prompt, disabling Qwen3 chain-of-thought.
+# Thinking was causing ~3-4× slowdown and action-cache JSON truncation.
+# Set True only if you want the model to reason through translations.
+ENABLE_THINKING: bool = False
+
+# Append all log lines to this file in addition to stdout. Set "" to disable.
+LOG_PATH: str = "references/KELE/translate.log"
+
 INPUT_PATH: str = "references/KELE/SocratDataset.json"
 OUTPUT_PATH: str = "references/KELE/SocratDataset-EN.json"
 CHECKPOINT_PATH: str = "references/KELE/translate_checkpoint.json"
 
 # ──────────────────────────────────────────────────────────────────────────────
+
+_log_fh = None  # file handle opened in main() when LOG_PATH is set
+
+
+def _log(msg: str) -> None:
+    print(msg, flush=True)
+    if _log_fh is not None:
+        _log_fh.write(msg + "\n")
+        _log_fh.flush()
+
 
 # ── Categorical lookup tables (no LLM needed) ─────────────────────────────────
 
@@ -153,6 +171,8 @@ def _build_payload(record: dict) -> str:
 
 def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3) -> dict:
     prompt = _build_payload(record)
+    if not ENABLE_THINKING:
+        prompt += "\n/no_think"
     last_err: Exception | None = None
     for attempt in range(retries):
         try:
@@ -177,6 +197,9 @@ def _translate_action_chunk(
     client: OpenAI, model: str, chunk: list[str], retries: int = 3
 ) -> list[str]:
     """Translate one chunk of action strings; returns originals on failure."""
+    user_content = json.dumps(chunk, ensure_ascii=False)
+    if not ENABLE_THINKING:
+        user_content += "\n/no_think"
     for attempt in range(retries):
         resp = client.chat.completions.create(
             model=model,
@@ -188,27 +211,27 @@ def _translate_action_chunk(
                         "Return ONLY a JSON array of translated strings in the same order."
                     ),
                 },
-                {"role": "user", "content": json.dumps(chunk, ensure_ascii=False)},
+                {"role": "user", "content": user_content},
             ],
             temperature=0.1,
-            max_tokens=4096,
+            max_tokens=MAX_TOKENS,
         )
         raw = resp.choices[0].message.content or ""
         if not raw.strip():
-            print(f"  [action cache] empty response (attempt {attempt + 1}/{retries}), retrying…")
+            _log(f"  [action cache] empty response (attempt {attempt + 1}/{retries}), retrying…")
             time.sleep(2**attempt)
             continue
         try:
             result = json.loads(_strip_fences(raw))
             if isinstance(result, list) and len(result) == len(chunk):
                 return result
-            print(f"  [action cache] wrong shape (attempt {attempt + 1}/{retries}). raw={raw!r}")
+            _log(f"  [action cache] wrong shape (attempt {attempt + 1}/{retries}). raw={raw!r}")
         except json.JSONDecodeError:
-            print(
+            _log(
                 f"  [action cache] JSON parse failed (attempt {attempt + 1}/{retries}). raw={raw!r}"
             )
         time.sleep(2**attempt)
-    print(f"  [action cache] giving up on chunk of {len(chunk)}, keeping originals")
+    _log(f"  [action cache] giving up on chunk of {len(chunk)}, keeping originals")
     return chunk
 
 
@@ -292,7 +315,7 @@ def upload_checkpoint_to_hf(checkpoint_path: Path, hf_repo: str, done: int) -> N
         repo_type="dataset",
         commit_message=f"checkpoint: {done} records translated",
     )
-    print(f"  [HF checkpoint] {done} records → {hf_repo}/translate_checkpoint.json")
+    _log(f"  [HF checkpoint] {done} records → {hf_repo}/translate_checkpoint.json")
 
 
 def restore_checkpoint_from_hf(checkpoint_path: Path, hf_repo: str) -> bool:
@@ -307,10 +330,10 @@ def restore_checkpoint_from_hf(checkpoint_path: Path, hf_repo: str) -> bool:
             repo_type="dataset",
             local_dir=str(checkpoint_path.parent),
         )
-        print(f"Restored checkpoint from HuggingFace: {hf_repo}")
+        _log(f"Restored checkpoint from HuggingFace: {hf_repo}")
         return True
     except (EntryNotFoundError, RepositoryNotFoundError):
-        print(f"No checkpoint found on HuggingFace ({hf_repo}) — starting fresh")
+        _log(f"No checkpoint found on HuggingFace ({hf_repo}) — starting fresh")
         return False
 
 
@@ -327,7 +350,7 @@ def push_dataset_to_hf(results: list[dict], hf_repo: str, model: str) -> None:
         hf_repo,
         commit_message=f"Add {len(results)} translated records ({model})",
     )
-    print(f"Pushed {len(results)} records to https://huggingface.co/datasets/{hf_repo}")
+    _log(f"Pushed {len(results)} records to https://huggingface.co/datasets/{hf_repo}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -363,6 +386,13 @@ def main() -> None:
 
     push = PUSH_TO_HUB and not args.no_push
 
+    global _log_fh
+    if LOG_PATH:
+        log_path = Path(LOG_PATH)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        _log_fh = open(log_path, "a")  # noqa: SIM115
+        _log(f"=== translate_dataset started {datetime.now(UTC).isoformat()} ===")
+
     if args.restore_from_hub:
         restore_checkpoint_from_hf(Path(args.checkpoint), args.hf_repo)
 
@@ -373,7 +403,7 @@ def main() -> None:
 
     if args.smoke_test:
         dataset = dataset[: args.smoke_test]
-        print(f"Smoke-test mode: {args.smoke_test} records")
+        _log(f"Smoke-test mode: {args.smoke_test} records")
 
     # Resume from local checkpoint
     cp = Path(args.checkpoint)
@@ -383,7 +413,7 @@ def main() -> None:
         translated_ids: set[int] = set(state["translated_ids"])
         results: list[dict] = state["results"]
         action_cache: dict[str, str] = state.get("action_cache", {})
-        print(f"Resuming from checkpoint: {len(translated_ids)} records already done")
+        _log(f"Resuming from checkpoint: {len(translated_ids)} records already done")
     else:
         translated_ids = set()
         results = []
@@ -391,10 +421,10 @@ def main() -> None:
 
     # Build action lookup table once
     if not action_cache:
-        print("Building action lookup table …")
+        _log("Building action lookup table …")
         all_actions = sorted({t["action"] for row in dataset for t in row["dialogue"]})
         action_cache = build_action_cache(client, args.model, all_actions)
-        print(f"  {len(action_cache)} unique actions translated")
+        _log(f"  {len(action_cache)} unique actions translated")
 
     total = len(dataset)
     start = time.time()
@@ -416,7 +446,13 @@ def main() -> None:
         elapsed = time.time() - start
         rate = done / elapsed if elapsed > 0 else 0
         eta_min = (total - done) / rate / 60 if rate > 0 else float("inf")
-        print(f"[{done:>5}/{total}] id={record['id']:>5}  {rate:.2f} rec/s  ETA {eta_min:.0f}m")
+        if eta_min == float("inf"):
+            eta_str = "∞"
+        elif eta_min >= 60:
+            eta_str = f"{eta_min / 60:.1f}h"
+        else:
+            eta_str = f"{eta_min:.0f}m"
+        _log(f"[{done:>5}/{total}] id={record['id']:>5}  {rate:.3f} rec/s  ETA {eta_str}")
 
         if done % LOCAL_CHECKPOINT_EVERY == 0:
             _save_checkpoint(cp, translated_ids, results, action_cache)
@@ -432,12 +468,15 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
-    print(f"\nWrote {len(results)} records to {out}  ({errors} errors)")
+    _log(f"\nWrote {len(results)} records to {out}  ({errors} errors)")
 
     if push:
         push_dataset_to_hf(results, args.hf_repo, args.model)
     else:
-        print(f"Skipped HuggingFace upload (PUSH_TO_HUB={PUSH_TO_HUB}, --no-push={args.no_push})")
+        _log(f"Skipped HuggingFace upload (PUSH_TO_HUB={PUSH_TO_HUB}, --no-push={args.no_push})")
+
+    if _log_fh is not None:
+        _log_fh.close()
 
 
 if __name__ == "__main__":
