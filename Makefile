@@ -22,8 +22,8 @@ help:
 	@echo "  serve-consultant      Run scripts/serve_consultant.sh"
 	@echo "  serve-gemma4          Run scripts/serve_gemma4.sh"
 	@echo "  serve-socratteachllm  Run scripts/serve_socratteachllm.sh"
-	@echo "  serve-teacher-online  Run scripts/serve_teacher_online.sh
-  start-local-tl-server  Start local llama.cpp server for dataset translation (Qwen3.5-9B)"
+	@echo "  serve-teacher-online  Run scripts/serve_teacher_online.sh"
+	@echo "  start-local-tl-server  Start local llama.cpp server for dataset translation (Qwen3.5-9B)"
 	@echo ""
 	@echo "  WAVE HPC (SLURM):"
 	@echo "  slurm                 git pull + sbatch wave_eval.slurm + print status"
