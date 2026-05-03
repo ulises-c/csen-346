@@ -64,7 +64,7 @@ MAX_TOKENS: int = 32768
 #   0    — fastest, no reasoning, ~500-800 output tokens per record
 #   1024 — light check
 #   4096 — generous budget; model reasons deeply before translating
-THINKING_BUDGET: int = 4096
+THINKING_BUDGET: int = 1024
 
 # HuggingFace source dataset (loaded via the datasets library at runtime).
 # references/ is read-only; never write output files there.
