@@ -177,6 +177,12 @@ def _build_payload(record: dict) -> str:
     return _ONE_SHOT + "\n\nNow translate:\n" + json.dumps(payload, ensure_ascii=False)
 
 
+_ESCAPE_REMINDER = (
+    "\n\nIMPORTANT: your previous response contained invalid JSON. "
+    'If any translated text contains double-quote characters, escape them as \\" in the JSON output.'
+)
+
+
 def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3) -> dict:
     prompt = _build_payload(record)
     extra: dict = {}
@@ -184,12 +190,14 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
         extra["chat_template_kwargs"] = {"enable_thinking": False}
     last_err: Exception | None = None
     for attempt in range(retries):
+        # After the first JSON failure, remind the model to escape quotes.
+        user_prompt = prompt if attempt == 0 else prompt + _ESCAPE_REMINDER
         try:
             resp = client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": _SYSTEM},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.1,
                 max_tokens=MAX_TOKENS,
