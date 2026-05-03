@@ -168,11 +168,8 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
     raise RuntimeError(f"id={record['id']} failed after {retries} attempts: {last_err}")
 
 
-def build_action_cache(client: OpenAI, model: str, all_actions: list[str]) -> dict[str, str]:
-    """Translate every unique Chinese action string in one upfront batch call."""
-    to_translate = [a for a in all_actions if not _ACTION_PASSTHROUGH.match(a)]
-    if not to_translate:
-        return {}
+def _translate_action_chunk(client: OpenAI, model: str, chunk: list[str]) -> list[str]:
+    """Translate one chunk of action strings; returns originals on failure."""
     resp = client.chat.completions.create(
         model=model,
         messages=[
@@ -183,13 +180,35 @@ def build_action_cache(client: OpenAI, model: str, all_actions: list[str]) -> di
                     "Return ONLY a JSON array of translated strings in the same order."
                 ),
             },
-            {"role": "user", "content": json.dumps(to_translate, ensure_ascii=False)},
+            {"role": "user", "content": json.dumps(chunk, ensure_ascii=False)},
         ],
         temperature=0.1,
         max_tokens=2048,
     )
-    translated = json.loads(_strip_fences(resp.choices[0].message.content))
-    return dict(zip(to_translate, translated))
+    raw = resp.choices[0].message.content
+    try:
+        result = json.loads(_strip_fences(raw))
+        if isinstance(result, list) and len(result) == len(chunk):
+            return result
+        print(f"  [action cache] unexpected response shape, keeping originals. raw={raw!r}")
+    except json.JSONDecodeError:
+        print(f"  [action cache] JSON parse failed, keeping originals. raw={raw!r}")
+    return chunk
+
+
+def build_action_cache(
+    client: OpenAI, model: str, all_actions: list[str], chunk_size: int = 20
+) -> dict[str, str]:
+    """Translate unique Chinese action strings in chunks; falls back gracefully on error."""
+    to_translate = [a for a in all_actions if not _ACTION_PASSTHROUGH.match(a)]
+    if not to_translate:
+        return {}
+    cache: dict[str, str] = {}
+    for i in range(0, len(to_translate), chunk_size):
+        chunk = to_translate[i : i + chunk_size]
+        translated = _translate_action_chunk(client, model, chunk)
+        cache.update(zip(chunk, translated))
+    return cache
 
 
 def apply_translation(original: dict, translated: dict, action_cache: dict, model: str) -> dict:
