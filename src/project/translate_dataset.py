@@ -10,16 +10,16 @@ Auth: run `hf login` once (or set HF_TOKEN env var) before starting.
 
 Usage:
     # Smoke test (10 records):
-    python -m project.translate_dataset --smoke-test 10
+    poetry run python -m src.project.translate_dataset --smoke-test 10 --no-push
 
     # Full overnight run (checkpoints + final push all go to HF automatically):
-    python -m project.translate_dataset
+    poetry run python -m src.project.translate_dataset
 
     # Resume from a previously uploaded HF checkpoint:
-    python -m project.translate_dataset --restore-from-hub
+    poetry run python -m src.project.translate_dataset --restore-from-hub
 
     # Skip upload for this run without editing the file:
-    python -m project.translate_dataset --no-push
+    poetry run python -m src.project.translate_dataset --no-push
 """
 
 import argparse
