@@ -211,26 +211,31 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
     raise RuntimeError(f"id={record['id']} failed after {retries} attempts: {last_err}")
 
 
+_ACTION_ESCAPE_REMINDER = (
+    " IMPORTANT: your previous response contained invalid JSON. "
+    'Escape any double-quote characters inside string values as \\".'
+)
+_ACTION_SYSTEM = (
+    "Translate each Chinese string in the JSON array to English. "
+    "Return ONLY a JSON array of translated strings in the same order."
+)
+
+
 def _translate_action_chunk(
     client: OpenAI, model: str, chunk: list[str], retries: int = 3
 ) -> list[str]:
-    """Translate one chunk of action strings; returns originals on failure."""
+    """Translate one chunk of action strings; falls back to per-string on persistent failure."""
     user_content = json.dumps(chunk, ensure_ascii=False)
     extra: dict = {}
     if THINKING_BUDGET == 0:
         extra["chat_template_kwargs"] = {"enable_thinking": False}
     for attempt in range(retries):
+        content = user_content if attempt == 0 else user_content + _ACTION_ESCAPE_REMINDER
         resp = client.chat.completions.create(
             model=model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Translate each Chinese string in the JSON array to English. "
-                        "Return ONLY a JSON array of translated strings in the same order."
-                    ),
-                },
-                {"role": "user", "content": user_content},
+                {"role": "system", "content": _ACTION_SYSTEM},
+                {"role": "user", "content": content},
             ],
             temperature=0.1,
             max_tokens=MAX_TOKENS,
@@ -251,8 +256,16 @@ def _translate_action_chunk(
                 f"  [action cache] JSON parse failed (attempt {attempt + 1}/{retries}). raw={raw!r}"
             )
         time.sleep(2**attempt)
-    _log(f"  [action cache] giving up on chunk of {len(chunk)}, keeping originals")
-    return chunk
+
+    # Chunk failed — retry each string individually so one bad string doesn't poison the rest.
+    _log(
+        f"  [action cache] chunk failed; falling back to per-string translation ({len(chunk)} strings)"
+    )
+    results = []
+    for s in chunk:
+        single = _translate_action_chunk(client, model, [s], retries=retries)
+        results.append(single[0])
+    return results
 
 
 def build_action_cache(
