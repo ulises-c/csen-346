@@ -503,6 +503,7 @@ def main() -> None:
         if push and HF_CHECKPOINT_EVERY > 0 and done % HF_CHECKPOINT_EVERY == 0:
             _save_checkpoint(cp, translated_ids, results, action_cache)
             upload_checkpoint_to_hf(cp, args.hf_repo, done)
+            push_dataset_to_hf(results, args.hf_repo, args.model)
 
     # Final local save
     _save_checkpoint(cp, translated_ids, results, action_cache)
