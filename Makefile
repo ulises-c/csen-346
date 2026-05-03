@@ -1,7 +1,7 @@
 .PHONY: help run install-hooks slurm \
         post-eval-shutdown run-eval \
         serve-both serve-dual-gpu serve-consultant serve-gemma4 serve-socratteachllm serve-teacher-online \
-        setup-l40s pre-commit
+        setup-l40s pre-commit start-local-tl-server
 
 # Default target
 help:
@@ -22,7 +22,8 @@ help:
 	@echo "  serve-consultant      Run scripts/serve_consultant.sh"
 	@echo "  serve-gemma4          Run scripts/serve_gemma4.sh"
 	@echo "  serve-socratteachllm  Run scripts/serve_socratteachllm.sh"
-	@echo "  serve-teacher-online  Run scripts/serve_teacher_online.sh"
+	@echo "  serve-teacher-online  Run scripts/serve_teacher_online.sh
+  start-local-tl-server  Start local llama.cpp server for dataset translation (Qwen3.5-9B)"
 	@echo ""
 	@echo "  WAVE HPC (SLURM):"
 	@echo "  slurm                 git pull + sbatch wave_eval.slurm + print status"
@@ -95,6 +96,9 @@ serve-socratteachllm:
 
 serve-teacher-online:
 	bash scripts/serve_teacher_online.sh
+
+start-local-tl-server:
+	bash scripts/start_tl_server.sh
 
 # ── WAVE HPC ──────────────────────────────────────────────────────────────────
 
