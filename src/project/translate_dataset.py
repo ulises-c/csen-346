@@ -52,6 +52,11 @@ LOCAL_CHECKPOINT_EVERY: int = 50
 MODEL: str = "Qwen/Qwen3.5-27B"
 BASE_URL: str = "http://localhost:8000/v1"
 
+# Max tokens the model may generate per call. Raise this if the server has
+# free VRAM headroom (each 1K tokens of context ≈ ~200 MB KV cache on this model).
+# 8192 is safe with ~15 GB free VRAM; match this to the server's -c value.
+MAX_TOKENS: int = 8192
+
 INPUT_PATH: str = "references/KELE/SocratDataset.json"
 OUTPUT_PATH: str = "references/KELE/SocratDataset-EN.json"
 CHECKPOINT_PATH: str = "references/KELE/translate_checkpoint.json"
@@ -158,7 +163,7 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.1,
-                max_tokens=4096,
+                max_tokens=MAX_TOKENS,
             )
             return json.loads(_strip_fences(resp.choices[0].message.content))
         except Exception as e:
