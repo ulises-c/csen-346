@@ -239,7 +239,7 @@ def translate_record(client: OpenAI, model: str, record: dict, retries: int = 3)
             result = _parse_json(resp.choices[0].message.content)
             expected = len(record["dialogue"])
             got = len(result.get("dialogue", []))
-            if got != expected:
+            if got < expected:
                 raise ValueError(f"dialogue truncated: got {got} turns, expected {expected}")
             return result
         except Exception as e:
