@@ -158,16 +158,17 @@ def _strip_fences(text: str) -> str:
     return re.sub(r"\s*```$", "", text)
 
 
-def _safe_quotes(obj: object) -> object:
-    """Replace ASCII double-quotes inside string values with single quotes.
+# Matches inline option arrays embedded in student text, e.g.:
+#   ["缺水", "缺阳光", "缺肥料"] or ['Yes', 'No']
+# The model converts single-quoted versions back to double-quoted in its output,
+# so stripping the array entirely is safer. Options are already in the options field.
+_INLINE_ARRAY_RE = re.compile(r'\s*\[(?:"[^"]*"|\'[^\']*\')(?:,\s*(?:"[^"]*"|\'[^\']*\'))*\]')
 
-    Some source records embed inline option arrays like ["A", "B"] inside
-    student text fields. The model reproduces those as unescaped " in its
-    JSON output, breaking json.loads. Converting to single quotes eliminates
-    the hazard; the translated output keeps single quotes, which is fine.
-    """
+
+def _safe_quotes(obj: object) -> object:
+    """Strip inline option arrays and remaining ASCII double-quotes from string values."""
     if isinstance(obj, str):
-        return obj.replace('"', "'")
+        return _INLINE_ARRAY_RE.sub("", obj).replace('"', "'")
     if isinstance(obj, list):
         return [_safe_quotes(x) for x in obj]
     if isinstance(obj, dict):
