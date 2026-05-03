@@ -119,7 +119,7 @@ CHECKPOINT_PATH: str = "references/KELE/translate_checkpoint.json"
 
 ```bash
 # Auth — run once before any HF upload:
-hf login
+hf auth login
 
 # Smoke test — 10 records, verify JSON parse rate and translation quality:
 python -m project.translate_dataset --smoke-test 10
@@ -161,7 +161,7 @@ This downloads the HF checkpoint to the local path before the main loop starts, 
 | Every 500 records | `translate_checkpoint.json` (partial results) | `upload_file()` to dataset repo |
 | End of run | Full translated dataset as Parquet | `Dataset.push_to_hub()` |
 
-Auth for all uploads is handled automatically from `hf login` (stored token) or `HF_TOKEN` env var — no token in code.
+Auth for all uploads is handled automatically from `hf auth login` (stored token) or `HF_TOKEN` env var — no token in code.
 
 ---
 
@@ -211,7 +211,7 @@ Before treating the dataset as final, run a validation pass on a random 5% sampl
 
 1. Confirm vLLM + ROCm loads Qwen3.5-27B on the R9700 (smoke test first)
 2. Download `Qwen/Qwen3.5-27B` weights (GGUF Q4_K_M or GPTQ depending on vLLM backend)
-3. Run `hf login` so checkpoint uploads and final push work
+3. Run `hf auth login` so checkpoint uploads and final push work
 4. Run 10-record smoke test; verify JSON parse rate and translation quality before committing to the full overnight run
 
 ---

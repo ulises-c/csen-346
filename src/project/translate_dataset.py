@@ -6,7 +6,7 @@ Saves a local checkpoint every LOCAL_CHECKPOINT_EVERY records and uploads
 it to HuggingFace every HF_CHECKPOINT_EVERY records, so the run can be
 resumed from HF if the local machine dies.
 
-Auth: run `hf login` once (or set HF_TOKEN env var) before starting.
+Auth: run `hf auth login` once (or set HF_TOKEN env var) before starting.
 
 Usage:
     # Smoke test (10 records):
@@ -35,7 +35,7 @@ from openai import OpenAI
 # ── Job Configuration — edit here before running ──────────────────────────────
 #
 # Set PUSH_TO_HUB=True to auto-upload the completed dataset and periodic
-# checkpoints to HuggingFace. Requires `hf login` or HF_TOKEN env var.
+# checkpoints to HuggingFace. Requires `hf auth login` or HF_TOKEN env var.
 PUSH_TO_HUB: bool = True
 HF_REPO: str = "ulises-c/SocratDataset-EN"
 
