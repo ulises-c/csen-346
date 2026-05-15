@@ -14,8 +14,32 @@ run never gets worse than the two-call run for any individual turn.
 """
 
 import json
+import os
 import time
 from typing import Any
+
+# Optional few-shot exemplars to nudge the teacher toward terse, single-question
+# Chinese phrasing matching the SocratDataset ground truth. Drawn from train
+# split dialogue 1 (id=1, not in test split) covering stages b, c, d.
+_FEW_SHOT_TEACHER_BLOCK = """---
+
+# 第四部分：教师风格示例
+以下是优秀教师回复的示例。请注意它们的简洁、亲切、且每条仅含一个问题：
+
+示例1（b阶段，state=b6）:
+学生: 我觉得种子可能在花里面。
+老师: 嗯，花是植物的重要部分，它确实和种子的产生有关。那么你还记得花的哪个部分会变成种子或者保护种子吗？
+
+示例2（c阶段，state=c9）:
+学生: 是不是花瓣会变成种子？
+老师: 有趣的想法！但我们再想一想，花瓣的主要作用是吸引昆虫来帮助授粉。你觉得种子需要一个什么样的地方来保护它呢？
+
+示例3（d阶段，state=d33）:
+学生: 哦，我见过！果实里面有种子。
+老师: 没错！果实是用来保护种子的。那么现在你能回答这个问题了吗：植物的种子通常在哪个部分？
+
+请遵循这种风格：开头不要长篇铺垫，只问一个有针对性的问题，语气亲切。
+"""
 
 import openai
 
@@ -121,6 +145,13 @@ class SocraticTeachingSystemUnified(SocraticTeachingSystem):
         """
         state_action_lines = "\n".join(
             f"{state}：{action}" for state, action in self.state_to_action.items()
+        )
+
+        # Opt-in few-shot exemplars: gated on KELE_FEW_SHOT_TEACHER=1.
+        # When unset, few_shot_block is empty and the prompt is identical to
+        # the pre-existing fusion-think configuration (no behavior change).
+        few_shot_block = (
+            _FEW_SHOT_TEACHER_BLOCK if os.environ.get("KELE_FEW_SHOT_TEACHER") == "1" else ""
         )
 
         return f"""# 角色指令
@@ -264,7 +295,7 @@ e34：学生正确给出题目答案
 - 语气应该非常亲切并具有鼓励性
 - 除非所选状态对应的操作要求，否则不能给出过于明显的提示
 - 如果state=e34（操作为：对题目进行总结），则总结题目且不再提出问题
-
+{few_shot_block}
 ---
 
 # 输出格式
