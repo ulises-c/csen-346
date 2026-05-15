@@ -26,7 +26,7 @@
 \maketitle
 
 \begin{abstract}
-We reproduce and extend KELE \citep{peng2025kele}, a multi-agent framework for structured Socratic teaching with large language models. KELE decomposes Socratic dialogue into five teaching stages governed by SocRule, using a consultant--teacher architecture where one LLM selects teaching strategies and another generates responses. We reimplement the full pipeline, serve SocratTeachLLM locally via vLLM, and evaluate on the 681-dialogue test split of SocratDataset. Our primary reproduction with GPT-4o as live consultant achieves ROUGE-2 of 26.04 and BLEU-4 of 19.60. Working under a 32\,GB single-GPU compute budget that forecloses the canonical two-model stack, we develop a \emph{unified} architecture in which one open-weight backbone serves both roles through a single fusion structured-output call, eliminating per-run API spend and freeing VRAM for larger backbones. Across a smoke--mini--full progression spanning $\{$Qwen3.6-35B-A3B, Qwen 27B Q5, Gemma 4 31B$\} \times \{$think, no-think$\} \times \{$two-call, fusion$\}$, fusion-think uniformly dominates. Qwen3.6-35B-A3B fusion-think delivers a \textbf{+12.76-point absolute lift} in overall state accuracy on the full 681-dialogue test split (\textbf{1.49$\times$}, with 3--5$\times$ lifts on the harder middle and closure stages), and our headline candidate \textbf{Gemma 4 31B} surpasses A3B on every smoke and mini metric we measure, projecting a substantially higher full-run state accuracy at no additional cost. We also release \textbf{SocratDataset-EN}, a complete English translation of all 6,803 SocratDataset dialogues (see \S\ref{sec:dataset-en}). Code, data, and trained checkpoints are publicly available.
+We reproduce and extend KELE \citep{peng2025kele}, a multi-agent framework for structured Socratic teaching with large language models. KELE decomposes Socratic dialogue into five teaching stages governed by SocRule, using a consultant--teacher architecture where one LLM selects teaching strategies and another generates responses. We reimplement the full pipeline, serve SocratTeachLLM locally via vLLM, and evaluate on the 681-dialogue test split of SocratDataset. Our primary reproduction with GPT-4o as live consultant achieves ROUGE-2 of 26.04 and BLEU-4 of 19.60. Working under a 32\,GB single-GPU compute budget that forecloses the canonical two-model stack, we develop a \emph{unified} architecture in which one open-weight backbone serves both roles through a single fusion structured-output call, eliminating per-run API spend and freeing VRAM for larger backbones. Across a smoke--mini--full progression spanning $\{$Qwen3.6-35B-A3B, Qwen 27B Q5, Gemma 4 31B$\} \times \{$think, no-think$\} \times \{$two-call, fusion$\}$, fusion-think uniformly dominates. Qwen3.6-35B-A3B fusion-think delivers a \textbf{+12.76-point absolute lift} in overall state accuracy on the full 681-dialogue test split (\textbf{1.49$\times$}, with 3--5$\times$ lifts on the harder middle and closure stages), and our headline candidate \textbf{Gemma 4 31B} surpasses A3B on every smoke and mini metric we measure, projecting a substantially higher full-run state accuracy at no additional cost. We also release \textbf{SocratDataset-EN}, a complete English translation of all 6,803 SocratDataset dialogues (see \S\ref{sec:dataset-en}). A parallel 13-model elimination tournament ($n{=}50$ each, thinking disabled) independently validates the Gemma~4 family at the top of the leaderboard; a verified thinking-enabled round is in progress (\S\ref{sec:tournament}). Code, data, and trained checkpoints are publicly available at \url{https://github.com/ulises-c/csen-346}.
 \end{abstract}
 
 %% ============================================================
@@ -383,6 +383,43 @@ After locking the A3B headline, we integrated Gemma 4 31B \citep{gemma2025techni
 
 \paragraph{Why Gemma beats A3B at this scale.} A3B activates only $\sim$3B of 35B parameters per token; this is what makes it $\sim 1.85\times$ faster but also caps its in-context reasoning depth on the 22-state stage~c classification. Gemma 4 31B is a dense 31B model, paying full per-token compute and in exchange producing a sharper structured-state distribution, particularly visible on stage~c ($+6.4$ points at mini) and stage~d ($+7.0$ points at mini). The schema-fallback rate is $0/148$ at mini for Gemma, identical to A3B's $0/145$.
 
+\subsection{Tournament: 13-model sweep (thinking disabled)}
+\label{sec:tournament}
+
+To identify the best single-backbone fusion candidate across a wider model space than the three tested in \S\ref{sec:smoke}--\ref{sec:gemma}, we ran a structured elimination tournament covering all 13 locally available models, $n{=}50$ dialogues each. Every model served as both consultant and teacher in unified (fusion) mode with thinking disabled (\texttt{enable\_thinking=False}). Table~\ref{tab:tournament} reports state accuracy and ROUGE-1, sorted by state accuracy.
+
+\begin{table}[t]
+  \centering
+  \small
+  \resizebox{\columnwidth}{!}{%
+  \begin{tabular}{@{}lcccr@{}}
+    \toprule
+    \textbf{Model} & \textbf{St.\ acc} & \textbf{R-1} & \textbf{B-4} & \textbf{Clock} \\
+    & ($n{=}50$) & & & ($n{=}50$) \\
+    \midrule
+    Gemma 4 26B-A4B Q4 (MoE)   & \textbf{38.67\%} & 32.2 & 5.7 & 3h 05m \\
+    Gemma 4 31B Q5              & 35.86\% & 33.0 & 6.4 & 5h 36m \\
+    Qwen 27B Q4                 & 30.67\% & 33.2 & 7.2 & 59m \\
+    Qwen 27B Q5                 & 28.62\% & 33.4 & 7.2 & 1h 06m \\
+    Qwen3 14B Q4                & 22.48\% & 39.5 & 11.5 & 14m \\
+    Mistral Small 24B Q4        & 21.85\% & 37.1 & 9.6 & 25m \\
+    Qwen 35B-A3B Q4 (MoE)      & 19.74\% & 31.3 & 5.9 & 21m \\
+    Qwopus 35B-A3B Q4 (MoE)    & 18.57\% & 32.8 & 6.6 & 17m \\
+    Qwen3.5 9B Q4               & 15.64\% & 28.2 & 4.4 & 19m \\
+    GLM-4.7 23B-A3B Q4          & 13.16\% & 33.0 & 5.3 & 18m \\
+    Gemma 3 27B Q4              & 12.99\% & 34.6 & 7.4 & 31m \\
+    Phi-4 14B Q5                & 10.63\% & 35.8 & 7.9 & 25m \\
+    DeepSeek R1 14B Q5          & \phantom{0}8.17\% & 35.7 & 10.6 & 47m \\
+    \bottomrule
+  \end{tabular}%
+  }
+  \caption{Tournament no-think round ($n{=}50$, thinking disabled). Sorted by state accuracy. A second run with \texttt{thinking\_budget=8192} was executed but per-turn timing confirmed thinking was not active ($<1.3$\,s/turn overhead vs.\ the $\sim$40--160\,s/turn expected for 8{,}192 reasoning tokens); those results are treated as a second no-think baseline consistent with $n{=}50$ sample variance. A verified thinking run (run~3) is in progress.}
+  \label{tab:tournament}
+\end{table}
+
+\paragraph{Findings.}
+The Gemma 4 family leads by a substantial margin, with Gemma 4 26B-A4B (MoE, 38.67\%) edging Gemma 4 31B (dense, 35.86\%) at $\sim$2$\times$ lower wall-clock cost. No non-Gemma-4 model exceeds 31\% state accuracy. The Qwen 27B family (Q4: 30.67\%, Q5: 28.62\%) occupies the tier immediately below, followed by Qwen3 14B and Mistral Small 24B at $\sim$22\%. High ROUGE-1 does not predict high state accuracy: Qwen3 14B (39.5 R-1) and DeepSeek R1 14B (35.7 R-1) rank 5th and last respectively, confirming that text overlap is driven by teacher generation style while state accuracy captures pedagogical routing quality. The tournament results are fully consistent with the smoke and mini findings from \S\ref{sec:smoke}--\ref{sec:gemma}, which identified the Gemma 4 family as the forward candidate. A verified thinking-enabled run (run~3, currently in progress) will provide the thinking-mode comparison and is the primary open experiment for the next deliverable (\S\ref{sec:nextsteps}).
+
 \subsection{Cross-architecture comparison: all evaluated runs}
 \label{sec:allruns}
 
@@ -424,7 +461,7 @@ Table~\ref{tab:allruns} consolidates every run we executed, grouped by architect
     \bottomrule
   \end{tabular}%
   }
-  \caption{Complete experimental record. ``STL'' = SocratTeachLLM (teacher). All open-weight smoke/mini/full rows use a single backbone serving both consultant and teacher roles. The dashed line in the consultant sensitivity rows reflects that those runs were submitted as off-rig batch jobs (WAVE Slurm; M4 CPU+R9700) and detailed wall-clock is omitted. The projected Gemma full row is the open work for the next deliverable (\S\ref{sec:nextsteps}).}
+  \caption{Complete experimental record. ``STL'' = SocratTeachLLM (teacher). All open-weight smoke/mini/full rows use a single backbone serving both consultant and teacher roles. The dashed line in the consultant sensitivity rows reflects that those runs were submitted as off-rig batch jobs (WAVE Slurm; M4 CPU+R9700) and detailed wall-clock is omitted. The projected Gemma full row is the primary open experiment (\S\ref{sec:nextsteps}). Tournament sweep results (13 models, $n{=}50$, thinking disabled) are reported separately in Table~\ref{tab:tournament}.}
   \label{tab:allruns}
 \end{table*}
 
@@ -439,15 +476,17 @@ Table~\ref{tab:allruns} consolidates every run we executed, grouped by architect
 
 \paragraph{ROUGE/BLEU is a stylistic plateau for the open-weight family.} Across Qwen 27B, Qwen A3B, and Gemma 4 31B, ROUGE-1 stays in the $30$--$34$ band on smoke and converges near $30.5$ at scale. SocratTeachLLM was \emph{trained} on the ground-truth teacher phrasing in SocratDataset; no open-weight base model we tested reaches that band by zero-shot prompting alone. The pedagogical signal is in state accuracy.
 
-\paragraph{Compute economics.} The headline A3B full run cost $0$ USD in API spend (vs.\ \$17.49 for the GPT-4o baseline) and $\approx 16.5$\,GPU-hours of local compute. The projected Gemma full run costs $0$ USD and $\approx 30$\,GPU-hours.
+\paragraph{Compute economics.} The headline A3B full run cost $0$ USD in API spend (vs.\ \$17.49 for the GPT-4o baseline) and $\approx 16.5$\,GPU-hours of local compute. The projected Gemma full run costs $0$ USD and $\approx 30$\,GPU-hours (mini-rate extrapolation; a verified thinking run is in progress to confirm).
+
+\paragraph{The Gemma 4 family dominates the tournament.} The 13-model no-think sweep (Table~\ref{tab:tournament}) confirms the Gemma 4 family at the top of the leaderboard. Gemma 4 26B-A4B (MoE, 38.67\%) leads Gemma 4 31B (dense, 35.86\%) at $\sim$2$\times$ lower wall-clock cost; no other model exceeds 31\% state accuracy. This is consistent with all preceding smoke and mini results and reinforces the Gemma 4 family as the forward candidate. A verified thinking-enabled comparison (run~3) will appear in the next deliverable.
 
 \subsection{Next steps}
 \label{sec:nextsteps}
 
-The 2026-05-14 deliverable is gated on three follow-on experiments, in priority order:
+Three follow-on experiments remain, in priority order:
 
 \begin{enumerate}
-    \item \textbf{Gemma 4 31B fusion-think full run ($n{=}681$, $\approx 30$\,h overnight).} If the run lands within $\pm 3$ points of the projected $46.71\%$, it supersedes A3B as our headline result and becomes the basis for the paper's empirical claims.
+    \item \textbf{Verified thinking run (tournament run~3) + Gemma 4 31B full run ($n{=}681$).} The no-think tournament (\S\ref{sec:tournament}) establishes Gemma 4 26B-A4B and 31B as the top two candidates. Run~3 (currently in progress) will confirm which model benefits more from thinking before committing to the full run. If Gemma 4 31B's smoke--mini-average projection ($\approx 46.71\%$) holds, it supersedes A3B as the headline result. Gemma 4 26B-A4B (MoE, $\sim$2$\times$ faster) is the fallback if the full-run wall clock proves prohibitive.
     \item \textbf{Surface-form recovery on the locked A3B run.} Two cheap, composable interventions target the $\approx 14$-point ROUGE-1 gap: (a)~teacher-style prompt engineering with $3$-shot ground-truth exemplars instructing terse, single-question responses ($\sim 30$\,min smoke); (b)~LoRA fine-tune of A3B on $\langle$dialogue history, teacher response$\rangle$ pairs from the SocratDataset training split ($\sim 30$\,min training, no extra inference VRAM). SocratDataset-EN (\S\ref{sec:dataset-en}) additionally makes this fine-tuning path accessible with English-language tooling. If LoRA closes even half the gap while preserving state accuracy, the combined system would be Pareto-superior to GPT-4o on every reported metric.
     \item \textbf{Hierarchical state classifier ablation.} The proposed Chinese-BERT two-stage classifier (\S 3.7) remains a high-value experiment for stage~c specifically. We will train it on the 42{,}000 labeled training-split turns and run it as a drop-in consultant against a frozen Gemma 4 31B teacher, isolating the structured-classification signal from the generation signal.
 \end{enumerate}
@@ -459,7 +498,7 @@ We do not plan to revisit the 27B Q5 backbone: its smoke fusion-think state accu
 %% ============================================================
 \section{Conclusion}
 
-We reproduced the KELE consultant--teacher framework and extended it under a single-GPU compute budget that foreclosed the canonical two-model stack. By collapsing consultant and teacher into a single open-weight backbone served through a fusion structured-output call, we recovered the framework's pedagogical signal while eliminating per-run API spend. Qwen 3.6 35B-A3B fusion-think delivered a $+12.76$-point absolute lift in overall state accuracy on the full 681-dialogue test split ($1.49\times$, with $3$--$5\times$ multipliers on the harder middle and closure stages), and our forward candidate Gemma 4 31B surpasses it on every smoke and mini metric we measured, projecting an additional $+8$-point lift at full scale. The remaining headline weakness --- a $\approx 14$-point ROUGE-1 gap against a SocratTeachLLM teacher trained directly on the ground-truth corpus --- is the focus of the next deliverable, with prompt-engineering and LoRA interventions queued against the locked A3B run.
+We reproduced the KELE consultant--teacher framework and extended it under a single-GPU compute budget that foreclosed the canonical two-model stack. By collapsing consultant and teacher into a single open-weight backbone served through a fusion structured-output call, we recovered the framework's pedagogical signal while eliminating per-run API spend. Qwen 3.6 35B-A3B fusion-think delivered a $+12.76$-point absolute lift in overall state accuracy on the full 681-dialogue test split ($1.49\times$, with $3$--$5\times$ multipliers on the harder middle and closure stages), and our forward candidate Gemma 4 31B surpasses it on every smoke and mini metric we measured, projecting an additional $+8$-point lift at full scale. A 13-model elimination tournament ($n{=}50$, thinking disabled) independently validates the Gemma 4 family at the top of the leaderboard, with Gemma 4 26B-A4B (MoE) leading at 38.67\% state accuracy and no other model exceeding 31\%; a verified thinking-enabled round is in progress. The remaining headline weakness --- a $\approx 14$-point ROUGE-1 gap against a SocratTeachLLM teacher trained directly on the ground-truth corpus --- is the focus of the next deliverable, with prompt-engineering and LoRA interventions queued against the locked A3B run.
 
 Beyond the empirical numbers, the campaign yielded two methodological contributions worth carrying forward: (i)~a smoke--mini--full gating protocol with smoke--mini averaging as a low-cost, high-accuracy full-run predictor, and (ii)~the fusion architecture as a practical primitive for running KELE-style multi-agent pipelines on consumer-grade hardware.
 
@@ -470,7 +509,7 @@ Beyond the empirical numbers, the campaign yielded two methodological contributi
 
 \paragraph{Single-GPU evaluation.} All open-weight runs execute on one RTX 5090 (32\,GB VRAM). This precludes the canonical KELE stack with SocratTeachLLM teacher and a separately served frontier consultant; we mitigate this by collapsing both roles into one backbone via the fusion architecture (\S\ref{sec:budget}), but the comparison to KELE's two-model setup is therefore architectural-pivot-with-gain rather than direct.
 
-\paragraph{Headline forward candidate is unconfirmed at full scale.} The Gemma 4 31B headline projection ($\boldsymbol{+20.77}$ points over GPT-4o baseline) rests on smoke ($n{=}5$) and mini ($n{=}25$) data. Although the smoke--mini-average heuristic predicted A3B's full-run number to within $0.10$ points, a single calibration data point is insufficient to bound the projection error; the full Gemma run (\S\ref{sec:nextsteps}) is the gating experiment for the 2026-05-14 deliverable.
+\paragraph{Headline forward candidate is unconfirmed at full scale.} The Gemma 4 31B headline projection ($\boldsymbol{+20.77}$ points over GPT-4o baseline) rests on smoke ($n{=}5$) and mini ($n{=}25$) data, with corroborating evidence from the no-think tournament (35.86\% at $n{=}50$, second behind only Gemma 4 26B-A4B). Although the smoke--mini-average heuristic predicted A3B's full-run number to within $0.10$ points, a single calibration data point is insufficient to bound the projection error; the full Gemma run (\S\ref{sec:nextsteps}) is the gating experiment. A verified thinking-enabled tournament run (run~3) is in progress and will inform the final configuration choice before the full run is committed.
 
 \paragraph{ROUGE/BLEU surface-form gap.} Our open-weight teachers paraphrase pedagogically rich but stylistically distinct Chinese relative to SocratDataset's ground-truth phrasing, which depresses surface-form metrics ($\approx 14$ points on ROUGE-1, BLEU-4). State accuracy is the more decision-relevant metric in this setting, but readers who weight reproducible phrasing highly should view the ROUGE/BLEU figures as bounding the system's adequacy on imitation rather than instruction.
 
@@ -487,7 +526,7 @@ This work uses a publicly released educational dialogue dataset (SocratDataset) 
 
 The intended use of the system is automated Socratic-style scaffolding for elementary-school science questions, deployed as a tutoring aid under teacher supervision rather than as an autonomous instructor. We caution against treating LLM-generated pedagogical content as authoritative without expert review: open-weight teachers occasionally produce factually plausible but incorrect explanations (a known limitation of zero-shot LLM tutoring), and the structured state classification we evaluate measures pedagogical strategy selection rather than factual correctness of the generated content. Deployment in any consequential educational setting should pair the system with ground-truth answer keys and human instructor review of dialogue transcripts.
 
-We release all code, configuration, and trained checkpoints openly to enable reproduction, scrutiny, and downstream improvement of these results.
+We release all code, configuration, and trained checkpoints openly at \url{https://github.com/ulises-c/csen-346} to enable reproduction, scrutiny, and downstream improvement of these results.
 
 \bibliography{custom}
 
