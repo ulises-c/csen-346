@@ -1,0 +1,16 @@
+{
+  "experiment": "glm47-23b",
+  "teacher_model": "GLM 23B A3B",
+  "teacher_base_url": "http://localhost:8080/v1",
+  "consultant_model": "GLM 23B A3B",
+  "consultant_base_url": "http://localhost:8080/v1",
+  "thinking_budget": 8192,
+  "max_teaching_rounds": 8,
+  "unified": true,
+  "total_dialogues": 50,
+  "completed": 50,
+  "total_elapsed_seconds": 1244.8,
+  "started_at": "2026-05-14 02:25:02",
+  "finished_at": "2026-05-14 02:45:47",
+  "unified_fallback_count": 1
+}
