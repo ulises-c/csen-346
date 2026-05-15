@@ -1,0 +1,16 @@
+{
+  "experiment": "qwopus35b-a3b-local-smoke-unified",
+  "teacher_model": "Qwopus 35B A3B",
+  "teacher_base_url": "http://localhost:8080/v1",
+  "consultant_model": "Qwopus 35B A3B",
+  "consultant_base_url": "http://localhost:8080/v1",
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": true,
+  "total_dialogues": 5,
+  "completed": 5,
+  "total_elapsed_seconds": 356.64,
+  "started_at": "2026-05-15 04:19:27",
+  "finished_at": "2026-05-15 04:25:24",
+  "unified_fallback_count": 3
+}

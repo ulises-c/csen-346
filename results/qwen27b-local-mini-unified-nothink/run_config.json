@@ -1,0 +1,16 @@
+{
+  "experiment": "qwen27b-local-mini-unified-nothink",
+  "teacher_model": "Qwen 27B Q5",
+  "teacher_base_url": "http://localhost:8080/v1",
+  "consultant_model": "Qwen 27B Q5",
+  "consultant_base_url": "http://localhost:8080/v1",
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": true,
+  "total_dialogues": 25,
+  "completed": 25,
+  "total_elapsed_seconds": 648.43,
+  "started_at": "2026-05-15 04:07:49",
+  "finished_at": "2026-05-15 04:18:38",
+  "unified_fallback_count": 0
+}
