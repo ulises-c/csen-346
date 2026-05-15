@@ -59,7 +59,7 @@ Stage c (the 22-state hard middle) is unusually high vs the tournament's c=14.6.
 | Run | n | State acc | ROUGE-1 | BLEU-4 | Notes |
 |---|---:|---:|---:|---:|---|
 | **No-think (n=50, 5090)** | 50 dialogues / 300 turns | **19.67%** | 30.55 | 5.59 | Matches tournament R9700 19.74% to 0.07 pts — 5090 reproduction validated |
-| Think (n=50, 5090) | _running_ | _pending_ | _pending_ | _pending_ | Required serve_qwen35b_a3b_think.sh — original A3B serve has --reasoning off baked in since commit ae9fd69 |
+| **Think (n=50, 5090)** | 50 dialogues / 299 turns | **38.13%** | 32.87 | 6.32 | Required serve_qwen35b_a3b_think.sh; +18.46 pts gradient at matched n |
 | Tournament reference (R9700 no-think) | 50 | 19.74% | 31.3 | 5.9 | Ulises's run |
 | Locked headline (5090 think full) | 681 dialogues / 4171 turns | 38.70% | 30.63 | 5.86 | Max's 5/05 run, predates --reasoning off |
 
