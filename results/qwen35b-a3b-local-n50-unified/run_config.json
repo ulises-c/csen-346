@@ -1,0 +1,16 @@
+{
+  "experiment": "qwen35b-a3b-local-n50-unified",
+  "teacher_model": "Qwen 35B A3B",
+  "teacher_base_url": "http://localhost:8080/v1",
+  "consultant_model": "Qwen 35B A3B",
+  "consultant_base_url": "http://localhost:8080/v1",
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": true,
+  "total_dialogues": 50,
+  "completed": 50,
+  "total_elapsed_seconds": 4000.88,
+  "started_at": "2026-05-15 00:42:56",
+  "finished_at": "2026-05-15 01:49:37",
+  "unified_fallback_count": 2
+}

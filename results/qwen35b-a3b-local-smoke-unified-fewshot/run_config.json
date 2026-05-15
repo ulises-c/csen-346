@@ -1,0 +1,16 @@
+{
+  "experiment": "qwen35b-a3b-local-smoke-unified-fewshot",
+  "teacher_model": "Qwen 35B A3B",
+  "teacher_base_url": "http://localhost:8080/v1",
+  "consultant_model": "Qwen 35B A3B",
+  "consultant_base_url": "http://localhost:8080/v1",
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": true,
+  "total_dialogues": 5,
+  "completed": 5,
+  "total_elapsed_seconds": 432.91,
+  "started_at": "2026-05-15 01:50:05",
+  "finished_at": "2026-05-15 01:57:18",
+  "unified_fallback_count": 0
+}
