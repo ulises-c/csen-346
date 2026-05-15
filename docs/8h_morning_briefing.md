@@ -8,7 +8,13 @@
 
 ## TL;DR for the morning
 
-I extended the paper's §4.7 with 10 new datapoints and corrected a flawed claim before PR #50 merges. The headline result of the run is that **3-shot teacher exemplars on the locked A3B configuration are a Pareto improvement at mini scale: +8.07 pts state accuracy AND +2.98 pts ROUGE-1.** This bumps Next Steps item 2 from "queued LoRA experiment" to "validated prompt-eng wins; LoRA optional."
+I extended the paper's §4.7 with **11 new datapoints** and corrected a flawed claim before PR #50 merges. Two headline results:
+
+1. **3-shot teacher exemplars on locked A3B deliver a modest, bounded ROUGE recovery** — mean R-1 lift +1.5 pts across n=5/n=25/n=50, closing ~11% of the surface-form gap to GPT-4o at neutral state-accuracy cost and zero VRAM. (The eye-catching mini-tier Pareto win, +8.07 state, did NOT survive at n=50 — favorable small-n variance. I caught this by running an n=50 confirmation in the final hour and immediately re-wrote the paper claim to be honest.)
+
+2. **A3B think-benefit gradient is robust across n** — matched-n=50 think (38.13%) vs no-think (19.67%) gives Δ = +18.46, within 0.5 pts of the locked headline's +18.96 cross-scale gradient. 5090 reproduces R9700 tournament A3B no-think to within 0.07 pts.
+
+Also: **the previously committed Gemma row in Table 7 was wrong** (I had introduced the flaw earlier — Gemma 4 doesn't have a separable thinking toggle at llama.cpp; what I called a "+0–6 gradient" was sample variance). Patched before PR #50 merges to main.
 
 ## What changed in the paper (`acl_latex.tex`)
 
@@ -56,11 +62,13 @@ I extended the paper's §4.7 with 10 new datapoints and corrected a flawed claim
 
 ## Open questions for the morning
 
-1. **Is the ROUGE recovery mini result ready to publish?** I claim yes at mini ($n{=}148$ turns). Full-run confirmation ($n{=}681$) is the obvious next experiment but would cost ~16h.
+1. **Is the (revised) ROUGE recovery result paper-ready?** Yes — three sample-size validation makes the modest claim defensible. Full-run ($n{=}681$) is optional; the n=50 already shows the asymptote.
 
-2. **Does the 27B Q5 mini gradient (+10.52) replace the smoke gradient (+16.58) in the paper, or do we keep both?** The current Table 7 shows both — wider range is honest but less punchy.
+2. **Does the 27B Q5 mini gradient (+10.52) replace the smoke gradient (+16.58) in the paper, or do we keep both?** Current Table 7 shows both. Wider range is honest but less punchy.
 
-3. **A3B + 3-shot at n=50 in progress** (kicked off ~05:05, ETA 06:00). If it lands by 8 AM, the prompt-eng result will have 3 sample sizes (n=5, n=25, n=50). If not, mini is the load-bearing measurement.
+3. **A3B + 3-shot n=50 confirmation** — completed at 06:05. State -0.55, R-1 +0.46 vs no-exemplar n=50. This is what triggered the paper revision above (mini's +8 was small-n variance).
+
+4. **Should we add a methodology note in the paper about multi-tier validation for prompt-engineering claims?** I think yes — added to Limitations. Single-tier prompt-eng evaluations would have overstated this result by ~10x. Worth being on the record about.
 
 ## All eval results (final state)
 
