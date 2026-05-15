@@ -1,0 +1,16 @@
+{
+  "experiment": "gemma3-27b",
+  "teacher_model": "Gemma 3 27B",
+  "teacher_base_url": "http://localhost:8080/v1",
+  "consultant_model": "Gemma 3 27B",
+  "consultant_base_url": "http://localhost:8080/v1",
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": true,
+  "total_dialogues": 50,
+  "completed": 50,
+  "total_elapsed_seconds": 1832.22,
+  "started_at": "2026-05-14 04:13:46",
+  "finished_at": "2026-05-14 04:44:18",
+  "unified_fallback_count": 0
+}

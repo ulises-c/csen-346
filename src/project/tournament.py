@@ -539,10 +539,31 @@ def cmd_status(_args: argparse.Namespace) -> None:
     print_leaderboard(state)
 
 
+def _round_dialogues_incomplete(state: TournamentState) -> bool:
+    """True if the current round exists but any active model has fewer than n_per_round dialogues.
+
+    Catches the warmup-then-continue case: warmup runs n=5 with n_per_round=50,
+    clears round_complete, so the next `run` call would otherwise bump to the next
+    round. Checking actual dialogue counts keeps it on the current round instead.
+    """
+    if state.round == 0:
+        return False
+    tournament_dir = REPO_ROOT / "results" / "tournament"
+    for mid in state.models_active:
+        dlg_dir = tournament_dir / f"round{state.round}" / mid / "dialogues"
+        if dlg_dir.exists():
+            n_existing = len(list(dlg_dir.glob("*.json")))
+            if 0 < n_existing < state.n_per_round:
+                return True
+    return False
+
+
 def cmd_run(args: argparse.Namespace) -> None:  # pragma: no cover
     state = load_state()
-    # Only start a new round when not resuming an interrupted one
-    if not state.round_complete:
+    # Start a new round only when not resuming an interrupted/incomplete one.
+    # round_complete handles mid-run crashes; _round_dialogues_incomplete handles
+    # warmup → continue (e.g. warmup n=5 then full run targeting n_per_round=50).
+    if not state.round_complete and not _round_dialogues_incomplete(state):
         state.round += 1
     round_key = f"round{state.round}"
     n = args.n if args.n is not None else state.n_per_round

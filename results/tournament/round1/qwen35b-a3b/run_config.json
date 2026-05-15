@@ -9,8 +9,8 @@
   "unified": true,
   "total_dialogues": 50,
   "completed": 50,
-  "total_elapsed_seconds": 1273.87,
-  "started_at": "2026-05-13 17:19:05",
-  "finished_at": "2026-05-13 17:40:18",
-  "unified_fallback_count": 0
+  "total_elapsed_seconds": 1538.9,
+  "started_at": "2026-05-14 18:22:08",
+  "finished_at": "2026-05-14 18:47:47",
+  "unified_fallback_count": 1
 }
