@@ -16,9 +16,11 @@ RESULTS = Path("results")
 PATTERNS: tuple[tuple[str, str], ...] = (
     ("A4B smoke (5090)",            "gemma4-26b-a4b-local-smoke-unified"),
     ("A4B mini  (5090)",            "gemma4-26b-a4b-local-mini-unified"),
+    ("A3B n=50 no-think",           "qwen35b-a3b-local-n50-unified-nothink"),
     ("A3B n=50 think (matched-n)",  "qwen35b-a3b-local-n50-unified"),
     ("A3B + 3-shot smoke",          "qwen35b-a3b-local-smoke-unified-fewshot"),
     ("A3B + 3-shot mini",           "qwen35b-a3b-local-mini-unified-fewshot"),
+    ("A3B + 3-shot n=50",           "qwen35b-a3b-local-n50-unified-fewshot"),
     ("27B Q5 mini think",           "qwen27b-local-mini-unified"),
     ("27B Q5 mini no-think",        "qwen27b-local-mini-unified-nothink"),
     ("Qwopus think smoke",          "qwopus35b-a3b-local-smoke-unified"),
