@@ -1,0 +1,16 @@
+{
+  "experiment": "gemma4-26b-a4b-local-smoke-unified",
+  "teacher_model": "Gemma 4 26B A4B",
+  "teacher_base_url": "http://localhost:8080/v1",
+  "consultant_model": "Gemma 4 26B A4B",
+  "consultant_base_url": "http://localhost:8080/v1",
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": true,
+  "total_dialogues": 5,
+  "completed": 5,
+  "total_elapsed_seconds": 356.9,
+  "started_at": "2026-05-15 00:03:02",
+  "finished_at": "2026-05-15 00:08:59",
+  "unified_fallback_count": 0
+}

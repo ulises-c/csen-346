@@ -81,3 +81,52 @@ PR #50 (claude/blissful-poitras-024c46) is unchanged from Ulises's last push;
 this branch is a parallel investigation, NOT auto-merged. Max decides whether
 to merge this branch into PR #50 (preferred), open a new PR, or cherry-pick the
 paper fix only.
+
+## Runbook — post-A4B-mini sequence
+
+When A4B mini metrics land, fire this chain manually with verification at each step:
+
+```bash
+# 1. Kill A4B server
+kill $(pgrep -f "llama-server.*A4B")
+sleep 3
+
+# 2. Boot A3B + run n=50 think (matched-n) + keep server
+PATH="$PWD/.venv/bin:$PATH" bash scripts/eval_qwen35b_a3b_n50.sh n50 --unified --keep-server
+
+# 3. A3B prompt-eng smoke (reuse A3B server, suffix fewshot)
+KELE_FEW_SHOT_TEACHER=1 PATH="$PWD/.venv/bin:$PATH" \
+  bash scripts/eval_qwen35b_a3b.sh smoke --unified --keep-server --suffix fewshot
+
+# 4. A3B prompt-eng mini (reuse A3B server)
+KELE_FEW_SHOT_TEACHER=1 PATH="$PWD/.venv/bin:$PATH" \
+  bash scripts/eval_qwen35b_a3b.sh mini --unified --keep-server --suffix fewshot
+
+# 5. Kill A3B server
+kill $(pgrep -f "llama-server.*A3B" | head -1)
+sleep 3
+
+# 6. 27B Q5 mini think (boots own server)
+PATH="$PWD/.venv/bin:$PATH" bash scripts/eval_qwen27b.sh mini --unified --keep-server
+
+# 7. 27B Q5 mini no-think (reuse 27B server)
+PATH="$PWD/.venv/bin:$PATH" bash scripts/eval_qwen27b.sh mini --unified --nothink --keep-server
+
+# 8. Kill 27B server
+kill $(pgrep -f "llama-server.*Qwen 27B")
+sleep 3
+
+# 9. Qwopus think smoke + mini
+PATH="$PWD/.venv/bin:$PATH" bash scripts/eval_qwopus35b_a3b.sh smoke --unified --keep-server
+PATH="$PWD/.venv/bin:$PATH" bash scripts/eval_qwopus35b_a3b.sh mini --unified --keep-server
+
+# 10. Final tear-down
+pkill -f llama-server
+
+# 11. Update paper with new numbers (docs/8h_paper_draft_inserts.md as template)
+# 12. Final commit + push
+```
+
+Failure handling: if any step's output dir already exists, `rm -rf` it first
+to avoid stale metrics. If server boot fails, check `server_*.log` and
+`run_*.log` in the experiment dir.
