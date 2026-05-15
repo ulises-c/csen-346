@@ -19,8 +19,9 @@ import time
 from typing import Any
 
 # Optional few-shot exemplars to nudge the teacher toward terse, single-question
-# Chinese phrasing matching the SocratDataset ground truth. Drawn from train
-# split dialogue 1 (id=1, not in test split) covering stages b, c, d.
+# Chinese phrasing matching the SocratDataset ground truth. Drawn from train-split
+# dialogues 1, 2, 3 (all non-overlapping with the test split) for diversity
+# across distinct question types; covers stages b, c, d.
 _FEW_SHOT_TEACHER_BLOCK = """---
 
 # 第四部分：教师风格示例
@@ -30,15 +31,15 @@ _FEW_SHOT_TEACHER_BLOCK = """---
 学生: 我觉得种子可能在花里面。
 老师: 嗯，花是植物的重要部分，它确实和种子的产生有关。那么你还记得花的哪个部分会变成种子或者保护种子吗？
 
-示例2（c阶段，state=c9）:
-学生: 是不是花瓣会变成种子？
-老师: 有趣的想法！但我们再想一想，花瓣的主要作用是吸引昆虫来帮助授粉。你觉得种子需要一个什么样的地方来保护它呢？
+示例2（c阶段，state=c12）:
+学生: 植物通过根从土壤中吸收水和养分。
+老师: 植物除了从土壤中吸收养分外，还需要阳光来进行光合作用。你知道蘑菇是否需要阳光来获取养分吗？
 
 示例3（d阶段，state=d33）:
-学生: 哦，我见过！果实里面有种子。
-老师: 没错！果实是用来保护种子的。那么现在你能回答这个问题了吗：植物的种子通常在哪个部分？
+学生: 光合作用可以让植物制造食物。
+老师: 非常好！所以，结合我们讨论的内容，你认为植物的叶子从新芽到落叶，是一个生命历程吗？
 
-请遵循这种风格：开头不要长篇铺垫，只问一个有针对性的问题，语气亲切。
+请严格遵循这种风格：开头不要长篇铺垫，只问一个有针对性的问题，语气亲切。
 """
 
 import openai
