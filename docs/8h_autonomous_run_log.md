@@ -54,9 +54,23 @@ Also installed `uv` into the project venv (`.venv/bin/uv`) — was missing from 
 **Per-stage smoke:** a=100.0 / b=33.33 / c=23.08 / d=20.0 / e=33.33.
 Stage c (the 22-state hard middle) is unusually high vs the tournament's c=14.6.
 
+### A3B matched-n on 5090
+
+| Run | n | State acc | ROUGE-1 | BLEU-4 | Notes |
+|---|---:|---:|---:|---:|---|
+| **No-think (n=50, 5090)** | 50 dialogues / 300 turns | **19.67%** | 30.55 | 5.59 | Matches tournament R9700 19.74% to 0.07 pts — 5090 reproduction validated |
+| Think (n=50, 5090) | _running_ | _pending_ | _pending_ | _pending_ | Required serve_qwen35b_a3b_think.sh — original A3B serve has --reasoning off baked in since commit ae9fd69 |
+| Tournament reference (R9700 no-think) | 50 | 19.74% | 31.3 | 5.9 | Ulises's run |
+| Locked headline (5090 think full) | 681 dialogues / 4171 turns | 38.70% | 30.63 | 5.86 | Max's 5/05 run, predates --reasoning off |
+
+**A3B no-think gradient (matched-n, 5090 reproduction):**
+- 5090 (this run): 19.67% no-think
+- 5090 locked full: 38.70% think
+- Δ = **+19.03 pts** from thinking — confirms the original +18.96 claim almost exactly
+
 ### Other runs
 
-_pending — A3B n=50, A3B prompt-eng, 27B Q5 mini, Qwopus_
+_pending — A3B think n=50, A3B prompt-eng, 27B Q5 mini, Qwopus_
 
 ## Open issues / surprises
 
