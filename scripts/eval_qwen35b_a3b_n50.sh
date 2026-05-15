@@ -31,6 +31,7 @@ KEEP_SERVER=false
 DO_COMPARE=true
 NOTHINK=false
 UNIFIED=false
+EXTRA_SUFFIX=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,18 +40,19 @@ while [[ $# -gt 0 ]]; do
     --no-compare)    DO_COMPARE=false; shift ;;
     --nothink)       NOTHINK=true; shift ;;
     --unified)       UNIFIED=true; shift ;;
+    --suffix)        EXTRA_SUFFIX="-$2"; shift 2 ;;
     -h|--help)
       sed -n '2,16p' "$0"
       exit 0 ;;
     *)
       echo "Unknown arg: $1" >&2
-      echo "Usage: $0 {smoke|mini|full|n50} [--keep-server] [--no-compare] [--nothink] [--unified]" >&2
+      echo "Usage: $0 {smoke|mini|full} [--keep-server] [--no-compare] [--nothink] [--unified] [--suffix <name>]" >&2
       exit 1 ;;
   esac
 done
 
 if [[ -z "$MODE" ]]; then
-  echo "Usage: $0 {smoke|mini|full|n50} [--keep-server] [--no-compare] [--nothink] [--unified]" >&2
+  echo "Usage: $0 {smoke|mini|full} [--keep-server] [--no-compare] [--nothink] [--unified]" >&2
   exit 1
 fi
 
@@ -66,10 +68,10 @@ if $NOTHINK; then
   SUFFIX="${SUFFIX}-nothink"
 fi
 case "$MODE" in
-  smoke) N=5;   OUT_DIR="results/qwen35b-a3b-local-smoke${SUFFIX}"; SUBCMD="test"     ;;
-  n50)   N=50;  OUT_DIR="results/qwen35b-a3b-local-n50${SUFFIX}";   SUBCMD="test"     ;;
-  mini)  N=25;  OUT_DIR="results/qwen35b-a3b-local-mini${SUFFIX}";  SUBCMD="test"     ;;
-  full)  N=0;   OUT_DIR="results/qwen35b-a3b-local${SUFFIX}";       SUBCMD="evaluate" ;;
+  smoke) N=5;   OUT_DIR="results/qwen35b-a3b-local-smoke${SUFFIX}${EXTRA_SUFFIX}"; SUBCMD="test"     ;;
+  n50)   N=50;  OUT_DIR="results/qwen35b-a3b-local-n50${SUFFIX}${EXTRA_SUFFIX}";   SUBCMD="test"     ;;
+  mini)  N=25;  OUT_DIR="results/qwen35b-a3b-local-mini${SUFFIX}${EXTRA_SUFFIX}";  SUBCMD="test"     ;;
+  full)  N=0;   OUT_DIR="results/qwen35b-a3b-local${SUFFIX}${EXTRA_SUFFIX}";       SUBCMD="evaluate" ;;
 esac
 
 # ── Constants / env-overridable paths ─────────────────────────────────────────
