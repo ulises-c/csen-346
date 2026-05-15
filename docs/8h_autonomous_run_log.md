@@ -68,9 +68,30 @@ Stage c (the 22-state hard middle) is unusually high vs the tournament's c=14.6.
 - 5090 locked full: 38.70% think
 - Δ = **+19.03 pts** from thinking — confirms the original +18.96 claim almost exactly
 
-### Other runs
+### Other runs — all complete
 
-_pending — A3B think n=50, A3B prompt-eng, 27B Q5 mini, Qwopus_
+| Run | n | State acc | ROUGE-1 | BLEU-4 | Notes |
+|---|---:|---:|---:|---:|---|
+| **A3B + 3-shot smoke** | 32 turns | 37.50% | 33.96 | 7.01 | Locked smoke 42.42 → −4.92 trade-off at smoke scale (32 turns) |
+| **A3B + 3-shot mini** ⭐ | 148 turns | **43.24%** | **33.49** | **6.59** | Locked mini 35.17 / 30.51 — **Pareto win at mini: state +8.07, R-1 +2.98, R-2 +1.61, B-4 +1.13**; stage b +21.4, stage c +17.0 |
+| 27B Q5 mini think | 146 turns | 45.89% | 29.36 | 4.99 | Consistent with smoke 46.88% |
+| 27B Q5 mini no-think | 147 turns | 35.37% | 31.14 | 6.47 | Matched-n Δ = +10.52 pts (smaller than smoke Δ of +16.58) |
+| Qwopus smoke think | 30 turns | 33.33% | 33.77 | 8.29 | vs tournament no-think 18.57% → Δ +14.76 |
+| Qwopus mini think | 146 turns | 30.14% | 35.39 | 8.38 | vs tournament no-think 18.57% → Δ +11.57; smoke-mini avg 31.74% → +13.17 |
+
+### Headline summary
+
+**Paper-strengthening findings:**
+
+1. **Prompt-eng ROUGE recovery is a Pareto win.** 3-shot teacher exemplars (drawn from train dialogues 1, 2, 3 — verified non-overlapping with test split) deliver +8.07 state acc AND +2.98 ROUGE-1 at mini scale. Stage c (the hardest 22-state classification) gets the biggest lift (+17 pts). Zero VRAM cost, ~360 char prompt overhead.
+
+2. **A3B think-benefit gradient is robust across n.** Matched-n=50 think (38.13%) vs no-think (19.67%) gives Δ = +18.46, within 0.5 pts of the +18.96 in the locked headline (n=681 think vs n=50 no-think). 5090 reproduces R9700 tournament A3B no-think to within 0.07 pts — hardware-independent measurement.
+
+3. **Qwopus 35B-A3B is the 2nd MoE datapoint.** Think mode (smoke-mini avg 31.74%) vs tournament no-think (18.57%) → Δ = +13.17 pts. Smaller than A3B's +19, consistent with the hypothesis that LoRA-fine-tuned models partially absorb reasoning into adapter weights.
+
+4. **27B Q5 mini in both modes** refines the gradient: think 45.89% / no-think 35.37% → Δ = +10.52 at n=25, narrower than the smoke's +16.58 at n=33.
+
+5. **A4B is the cost-efficient fallback, not the new headline.** Smoke-mini avg 38.14% projected full vs Gemma 31B's projected 46.71%. A4B's role: 2× faster (5090) backbone if Gemma 31B full-run wall-clock proves prohibitive. Per-turn instrumentation confirms A4B emits ~6 KB of reasoning content per turn (always-on, no toggle).
 
 ## Open issues / surprises
 
