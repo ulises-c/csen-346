@@ -21,7 +21,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.47.0",
     "pydantic>=2.13.4",
-    "google-genai>=2.4.0",
+    "google-genai>=2.6.0",
     "peft>=0.19.1",
     "trl>=1.4.0",
 ]
