@@ -6,7 +6,7 @@ authors = [{ name = "Ulises Chavarria", email = "ulises.engineer@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "openai>=2.37.0,<3.0.0",
+    "openai>=2.38.0,<3.0.0",
     "transformers>=5.9.0",
     "accelerate>=1.2.0",
     "bitsandbytes>=0.45.0",
