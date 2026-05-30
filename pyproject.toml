@@ -23,7 +23,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "google-genai>=2.6.0",
     "peft>=0.19.1",
-    "trl>=1.4.0",
+    "trl>=1.5.1",
     "tiktoken>=0.7.0",
     "pyspellchecker>=0.9.0",
 ]
