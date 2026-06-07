@@ -32,7 +32,7 @@ dependencies = [
 # Experiment tracking for the state-classifier training scripts. Optional so the
 # core install and the no-tracking code path stay dependency-free; opt in with
 # `uv sync --extra wandb` (or `pip install -e ".[wandb]"`).
-wandb = ["wandb>=0.18.0"]
+wandb = ["wandb>=0.27.2"]
 
 # CUDA-only training acceleration. flash-linear-attention engages Qwen3.5's
 # Triton gated-delta-rule kernels (~2.8x fwd+bwd over the pure-PyTorch fallback;
