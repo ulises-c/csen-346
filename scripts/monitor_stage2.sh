@@ -34,7 +34,7 @@ POLL_SECONDS=300
 cd "$REPO_DIR" || exit 1
 
 log() {
-    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$SELF_LOG"
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$SELF_LOG"
 }
 
 # ── Live training-log comment ────────────────────────────────────────────────
@@ -230,9 +230,8 @@ last_reported_ckpt="$(latest_ckpt_step)"
 
 while true; do
     if training_running; then
-        step="$(last_step)"
-        log "Stage 2 running${step:+ — step $step}"
         ckpt_now="$(latest_ckpt_step)"
+        log "Stage 2 running — ckpt step $ckpt_now"
         if (( ckpt_now > 0 )) && (( ckpt_now % PROGRESS_EVERY == 0 )) \
             && (( ckpt_now > last_reported_ckpt )); then
             log_progress_from_checkpoint "$ckpt_now"
