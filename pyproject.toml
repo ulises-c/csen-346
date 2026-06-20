@@ -43,7 +43,7 @@ wandb = ["wandb>=0.27.2"]
 # the issue #100 gfx1201 patch and otherwise page-fault. Keeping it CUDA-opt-in
 # means the AMD path keeps its known-good pure-PyTorch fallback. causal-conv1d is
 # intentionally excluded (only fuses the cheap conv; needs nvcc to build).
-cuda = ["flash-linear-attention>=0.5.0"]
+cuda = ["flash-linear-attention>=0.5.1"]
 
 # Web UI for the live demo. Install with `uv sync --extra demo`.
 demo = ["chainlit>=2.4,<3"]

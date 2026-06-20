@@ -777,7 +777,7 @@ requires-dist = [
     { name = "chainlit", marker = "extra == 'demo'", specifier = ">=2.4,<3" },
     { name = "datasets", specifier = ">=3.2.0" },
     { name = "fastapi", specifier = ">=0.136.3" },
-    { name = "flash-linear-attention", marker = "extra == 'cuda'", specifier = ">=0.5.0" },
+    { name = "flash-linear-attention", marker = "extra == 'cuda'", specifier = ">=0.5.1" },
     { name = "google-genai", specifier = ">=2.8.0" },
     { name = "huggingface-hub", specifier = ">=1.19.0" },
     { name = "openai", specifier = ">=2.41.1,<3.0.0" },
@@ -1005,28 +1005,27 @@ wheels = [
 
 [[package]]
 name = "fla-core"
-version = "0.5.0"
+version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "einops" },
-    { name = "torch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/03/14/2aabd37839b9f3c6a67fbc5678f906d04d0c242c603ac234eefe02df99a6/fla_core-0.5.0.tar.gz", hash = "sha256:476dd94711702af81cc4827010d9209f6053d8cdceac8e43d3c8497071f07a81", size = 418171, upload-time = "2026-04-21T20:25:40.948Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/62/99e149f19a447ce809d7f4fa64ae61c073da337505b9db7f389502470820/fla_core-0.5.1.tar.gz", hash = "sha256:7f3cf56edfbaa9115f4937d1181372e5c7b11809ad8eb2e411fffc3caf729f48", size = 498800, upload-time = "2026-06-18T18:17:15.377Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f4/03/96e6820d176256353670b41ca56dabbbebe129674b4f4ad7b54a152b7b36/fla_core-0.5.0-py3-none-any.whl", hash = "sha256:5c826ff32daf6b629658e3e4f6125d87cf8c32eea937e3be9ba85f51951d809a", size = 595276, upload-time = "2026-04-21T20:25:37.698Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/78/a55ee7a62515dcb9220770dd99dfe59ac6599da8af84ad1d20f9f407df4d/fla_core-0.5.1-py3-none-any.whl", hash = "sha256:02150d34aa1e37f6b8ed9b2feec5d29af93680573e5077ed981238179c11fb06", size = 702955, upload-time = "2026-06-18T18:17:12.229Z" },
 ]
 
 [[package]]
 name = "flash-linear-attention"
-version = "0.5.0"
+version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fla-core" },
     { name = "transformers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/79/5c/1db76cc829c951117a3112f306d50333bd71399d2e35807fe7c99ffc2007/flash_linear_attention-0.5.0.tar.gz", hash = "sha256:22b789a47f07738b4382ecdf775d7bb40e0d803c467c34f8e2ecd6a1dc780938", size = 160419, upload-time = "2026-04-21T20:25:42.344Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/e8/8f115be585a046795e4a1f7ade727889219bb66b8d96cc668b8c9e437c0e/flash_linear_attention-0.5.1.tar.gz", hash = "sha256:8840fd4c37de8b0612dc8fd493867f3d330672ba2f17c024a2ce37239634e247", size = 221733, upload-time = "2026-06-18T18:17:16.661Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cc/16/7736db08806981562c728f32ea1dcb4565948fa9faffdbf4ffbf72522fbf/flash_linear_attention-0.5.0-py3-none-any.whl", hash = "sha256:92e64e989ed34355c1f838232597b2e39783ee0494ada3199b58e156aa1d8eb8", size = 319037, upload-time = "2026-04-21T20:25:39.473Z" },
+    { url = "https://files.pythonhosted.org/packages/68/3c/5819fb19dc071302ca818616a4e64d4454e1f1193929eb8365c8d38e9052/flash_linear_attention-0.5.1-py3-none-any.whl", hash = "sha256:9022862f0a238752372c81290694b8b2ed1cb2d13fc40d340ffeeb554d6bee5c", size = 403096, upload-time = "2026-06-18T18:17:14.025Z" },
 ]
 
 [[package]]
