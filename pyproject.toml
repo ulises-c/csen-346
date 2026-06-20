@@ -91,7 +91,7 @@ dev = [
     "pyright>=1.1.0",
     "ruff>=0.15.16",
     "codespell>=2.3.0",
-    "matplotlib>=3.10.9",
+    "matplotlib>=3.11.0",
 ]
 
 [tool.codespell]
