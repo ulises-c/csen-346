@@ -20,6 +20,9 @@
         download-gemma4-31b \
         prequant-gemma4-31b-l40s transfer-gemma4-31b-nf4 \
         train-gemma4-31b-dry-run train-gemma4-31b-stage2 train-gemma4-31b-stage2-preq \
+        train-gemma4-31b-stage2-unsloth train-gemma4-31b-eos-gate eos-gate-gemma4-31b \
+        gpu-preflight diagnose-gfx1201-fault \
+        profile-gemma4-31b \
         tournament tournament-think tournament-warmup tournament-warmup-think tournament-status tournament-eliminate \
         tournament-finalize tournament-archive tournament-restore tournament-reset \
         tournament-download tournament-help
@@ -77,7 +80,13 @@ help:
 	@echo "  download-gemma4-31b         Download google/gemma-4-31b-it weights to HF cache (~60 GB)"
 	@echo "  prequant-gemma4-31b-l40s    Print instructions for pre-quantizing to NF4 on L40S"
 	@echo "  transfer-gemma4-31b-nf4     rsync NF4 checkpoint from L40S (HOST=user@host)"
-	@echo "  train-gemma4-31b-stage2-preq  Train Stage 2b from pre-quantized NF4 checkpoint"
+	@echo "  train-gemma4-31b-stage2-preq  Train Stage 2b from local pre-quantized NF4 checkpoint"
+	@echo "  train-gemma4-31b-stage2-unsloth  Train Stage 2b from unsloth bnb-4bit Gemma 4 31B (no local prequant)"
+	@echo "  train-gemma4-31b-eos-gate    100-step checkpoint for EOS gate (unsloth path, ~30 min)"
+	@echo "  eos-gate-gemma4-31b          Run EOS gate against outputs/eos-gate-gemma4-31b/final"
+	@echo "  gpu-preflight                Fast GPU gate (clean KFD + fwd/bwd) — run before any (re)launch"
+	@echo "  diagnose-gfx1201-fault       Serialized-kernel run to localize the backward page fault"
+	@echo "  profile-gemma4-31b           Profile a real Stage 2 step (attention vs NF4-dequant; FA2 de-risk)"
 	@echo "  eval-gemma4-31b-smoke  Run scripts/eval_gemma4_31b.sh smoke  (n=5)"
 	@echo "  eval-gemma4-31b-mini   Run scripts/eval_gemma4_31b.sh mini   (n=25)"
 	@echo "  eval-gemma4-31b-full   Run scripts/eval_gemma4_31b.sh full   (n=681)"
@@ -377,8 +386,30 @@ eval-gemma4-31b-fusion-smoke:
 
 # ── Gemma 4 31B SFT training (Stage 2b) ──────────────────────────────────────
 # No patch-fla-rocm needed — Gemma 4 uses standard softmax attention (no FLA).
-# ROCm env vars (TORCH_USE_HIPBLASLT=0, garbage_collection_threshold:0.8) are
-# gfx1201 workarounds that apply to all training targets.
+#
+# The gfx1201 page fault (Memory access fault / page not present,
+# PERMISSION_FAULTS:0x3) during the QLoRA backward is NON-DETERMINISTIC and not
+# yet attributed to any config knob: the SAME config (same git SHA) both finishes
+# 100 steps and crashes at step 10 across repeated runs (wandb-verified — see PR
+# #101 and docs/GFX1201_RDNA4_TRAINING.md §6.1). Four root-cause theories
+# (workers, GC threshold, hipBLASLt, LR) were each published then falsified.
+# Current knobs are PRECAUTIONARY, not proven fixes:
+#   TORCH_USE_HIPBLASLT=0           — rocBLAS fallback (HIPBLASLT=1 still crashed,
+#                                     so this is precaution, not the cure)
+#   PYTORCH_HIP_ALLOC_CONF=gc:0.8   — trims the backward peak; GC-off also crashed
+# The real next step is `make diagnose-gfx1201-fault` (serialized kernels → names
+# the faulting kernel) and the ablation matrix in §6.1 — NOT another knob flip.
+# Every (re)launch is gated on `make gpu-preflight` (clean KFD + working fwd/bwd):
+# a prior fault leaves the GPU dirty and the next run faults early on stale PTEs.
+
+gpu-preflight:
+	bash scripts/test_gpu_stack.sh --preflight
+
+# Localize the backward page fault: run ~120 steps with serialized kernel launches
+# so the async VM fault becomes synchronous and the traceback/dmesg name the exact
+# faulting kernel (bnb NF4 dequant vs grad-ckpt recompute vs allocator).
+diagnose-gfx1201-fault: gpu-preflight
+	bash scripts/diagnose_gfx1201_fault.sh
 
 download-gemma4-31b:
 	uv run hf download google/gemma-4-31b-it
@@ -386,10 +417,10 @@ download-gemma4-31b:
 train-gemma4-31b-dry-run:
 	uv run python scripts/train_sft.py --config configs/train-sft-gemma4-31b-qlora.env --dry-run
 
-train-gemma4-31b-stage2:
+train-gemma4-31b-stage2: gpu-preflight
 	mkdir -p outputs/sft-stage2-gemma4-31b
 	nohup env TORCH_USE_HIPBLASLT=0 \
-	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8,expandable_segments:True \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
 	  uv run --no-sync python scripts/train_sft.py \
 	  --config configs/train-sft-stage2-gemma4-31b.env \
 	  > outputs/sft-stage2-gemma4-31b/train.log 2>&1 &
@@ -406,16 +437,76 @@ transfer-gemma4-31b-nf4:
 	mkdir -p models/gemma-4-31b-nf4
 	rsync -avP "$(HOST):gemma-4-31b-nf4/" models/gemma-4-31b-nf4/
 
-train-gemma4-31b-stage2-preq:
+train-gemma4-31b-stage2-preq: gpu-preflight
 	mkdir -p outputs/sft-stage2-gemma4-31b
 	nohup env TORCH_USE_HIPBLASLT=0 \
-	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8,expandable_segments:True \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
 	  TRAIN_BASE_MODEL=models/gemma-4-31b-nf4 \
 	  TRAIN_PREQ=true \
 	  uv run --no-sync python scripts/train_sft.py \
 	  --config configs/train-sft-stage2-gemma4-31b.env \
 	  > outputs/sft-stage2-gemma4-31b/train.log 2>&1 &
 	@echo "Training started. Monitor: tail -f outputs/sft-stage2-gemma4-31b/train.log"
+
+# Train from the community pre-quantized unsloth bnb-4bit checkpoint (~19 GB NF4).
+# Skips the L40S prequant + rsync step entirely: weights download already 4-bit,
+# so there is no ~62 GB BF16 CPU staging at load (the R9700's actual blocker).
+# TRAIN_PREQ=true is required — it tells train_sft.py to read the embedded
+# quantization_config instead of building a live BitsAndBytesConfig (which would
+# double-quantize the already-quantized checkpoint).
+train-gemma4-31b-stage2-unsloth: gpu-preflight
+	mkdir -p outputs/sft-stage2-gemma4-31b
+	nohup env TORCH_USE_HIPBLASLT=0 \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
+	  TRAIN_BASE_MODEL=unsloth/gemma-4-31B-it-unsloth-bnb-4bit \
+	  TRAIN_PREQ=true \
+	  TRAIN_HF_REPO=ulises-c/SocratesLM-31B-stage2b-QLoRA \
+	  TRAIN_HF_PUSH_EVERY=50 \
+	  uv run --no-sync python scripts/train_sft.py \
+	  --config configs/train-sft-stage2-gemma4-31b.env \
+	  > outputs/sft-stage2-gemma4-31b/train.log 2>&1 &
+	@echo "Training started. Monitor: tail -f outputs/sft-stage2-gemma4-31b/train.log"
+
+# Train 100 steps on the same unsloth path as the real run to produce an adapter
+# for the EOS gate. Uses a separate output dir so it never collides with the real run.
+train-gemma4-31b-eos-gate:
+	mkdir -p outputs/eos-gate-gemma4-31b
+	setsid env TORCH_USE_HIPBLASLT=0 \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
+	  TRAIN_BASE_MODEL=unsloth/gemma-4-31B-it-unsloth-bnb-4bit \
+	  TRAIN_PREQ=true \
+	  TRAIN_MAX_STEPS=100 \
+	  TRAIN_SAVE_STEPS=100 \
+	  TRAIN_OUTPUT_DIR=outputs/eos-gate-gemma4-31b \
+	  uv run --no-sync python scripts/train_sft.py \
+	  --config configs/train-sft-stage2-gemma4-31b.env \
+	  > outputs/eos-gate-gemma4-31b/train.log 2>&1 &
+	@echo "EOS-gate checkpoint training started (~30 min)."
+	@echo "Monitor: tail -f outputs/eos-gate-gemma4-31b/train.log"
+	@echo "When done, run: make eos-gate-gemma4-31b"
+
+eos-gate-gemma4-31b:
+	env TORCH_USE_HIPBLASLT=0 \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
+	  TRAIN_BASE_MODEL=unsloth/gemma-4-31B-it-unsloth-bnb-4bit \
+	  TRAIN_PREQ=true \
+	  TRAIN_METHOD=qlora \
+	  TRAIN_BF16=true \
+	  uv run --no-sync python scripts/eos_gate.py \
+	  --config configs/train-sft-stage2-gemma4-31b.env \
+	  --adapter outputs/eos-gate-gemma4-31b/final
+
+# De-risk the FA2 bet: profile where the real Stage 2 step spends its ~70s.
+# Mirrors the stage2-unsloth env so the profiled step matches the real run.
+# Prints a kernel self-time table + attention-vs-gemm/dequant bucket summary.
+# If attention dominates → patching the flash-attn Triton backward is worth it;
+# if NF4 dequant/GEMM dominates → FA2 buys little. ~6 min (6 steps).
+profile-gemma4-31b:
+	env TORCH_USE_HIPBLASLT=1 \
+	  TRAIN_BASE_MODEL=unsloth/gemma-4-31B-it-unsloth-bnb-4bit \
+	  TRAIN_PREQ=true \
+	  uv run --no-sync python scripts/profile_train_step.py \
+	  --config configs/train-sft-stage2-gemma4-31b.env
 
 # ── Tournament ────────────────────────────────────────────────────────────────
 

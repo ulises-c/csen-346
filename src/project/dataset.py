@@ -592,6 +592,182 @@ def load_ultrachat(
 
 
 # ---------------------------------------------------------------------------
+# Inference-matching SFT sources (socrat-zh-sft, socrat-en-sft)
+# ---------------------------------------------------------------------------
+# These produce one record per dialogue *turn* in the exact single-message format
+# that socratic_teaching_system.py:socrates_teacher sends at inference, fixing the
+# train/serve schema drift that caused output collapse on the 5090-trained model.
+#
+# Differences from the multi-turn socrat-zh/en sources:
+#   - System prompt: the 7-line inference rules block, not _SOCRAT_ZH/EN_SYSTEM
+#   - Problem context (问题/选项/提示/知识点) NOT included — inference never sends it
+#   - Message structure: one (system, user, assistant) triple per turn
+#   - User message: 历史对话记录 blob + 当前学生输入 label, matching socrates_teacher()
+#   - History format: "学生: ...\n老师: ...\n" pairs, matching get_formatted_history()
+
+_TEACHER_INFERENCE_SYSTEM = """\
+你是一位使用苏格拉底教学法的小学科学教师，擅长启发式教学。
+接下来你会收到历史对话记录、当前学生输入和苏格拉底教学顾问对当前教学对话的评估及建议操作；
+你的任务是遵循建议的操作并参考评估结果对学生提问以完成苏格拉底式教学。
+以下是你需要遵守的规则：
+- 每次只能提出一个问题（输出时请检查问题数量，如超出请删去多余问题）
+- 提出的问题必须与解题直接相关（输出时请检查问题是否偏离解题，如偏题请重新输出与解题直接相关的问题）
+- 请确保提问符合小学阶段学生的知识水平，避免过于困难
+- 语气应该非常亲切并具有鼓励性
+- 除非苏格拉底教学顾问建议的操作要求，否则不能给出过于明显的提示
+- 如果接收到的建议操作为：对题目进行总结，则总结题目且不再提出问题"""
+
+
+def _build_inference_user_message(
+    history_turns: list[tuple[str, str]],
+    student_input: str,
+    evaluation: str,
+    action: str,
+) -> str:
+    """Build the user message exactly as socrates_teacher() does at inference.
+
+    history_turns: list of (student, teacher) pairs for completed turns before this one.
+    evaluation/action are the consultant fields as inference sends them: the
+    free-form consultant prose and get_action_for_state(state) respectively.
+    """
+    if history_turns:
+        history_lines = []
+        for s, t in history_turns:
+            history_lines.append(f"学生: {s}")
+            history_lines.append(f"老师: {t}")
+        formatted_history = "\n".join(history_lines)
+    else:
+        formatted_history = ""
+
+    return (
+        f"\n历史对话记录:\n{formatted_history}\n\n"
+        f"当前学生输入: {student_input}\n\n"
+        f"苏格拉底教学顾问评估结果: {evaluation}\n"
+        f"苏格拉底教学顾问建议的操作: {action}\n"
+    )
+
+
+def _socrat_zh_to_sft_records(record: dict) -> list[dict]:
+    """One SocratDataset-ZH dialogue → N per-turn SFT records in inference format."""
+    from src.project.socratic_teaching_system import get_action_for_state
+
+    dialogue = record.get("dialogue", [])
+    records = []
+    history: list[tuple[str, str]] = []
+
+    for i, turn in enumerate(dialogue):
+        state = _strip_quotes(turn.get("state", ""))
+        if not (state and _strip_quotes(turn.get("action", ""))):
+            history.append((turn["student"], turn["teacher"]))
+            continue
+
+        action = get_action_for_state(state)
+        evaluation = _strip_quotes(turn.get("evaluation", "")) or f"学生处于 {state} 状态"
+        user_msg = _build_inference_user_message(history, turn["student"], evaluation, action)
+        records.append(
+            {
+                "id": f"{record['id']}_{i}",
+                "source": "socrat-zh-sft",
+                "messages": [
+                    {"role": "system", "content": _TEACHER_INFERENCE_SYSTEM},
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": turn["teacher"]},
+                ],
+                "ground_truth_states": [state],
+            }
+        )
+        history.append((turn["student"], turn["teacher"]))
+
+    return records
+
+
+def _socrat_en_to_sft_records(record: dict) -> list[dict]:
+    """One SocratDataset-EN dialogue → N per-turn SFT records in inference format."""
+    from src.project.socratic_teaching_system import get_action_for_state
+
+    dialogue = record.get("dialogue", [])
+    records = []
+    history: list[tuple[str, str]] = []
+
+    for i, turn in enumerate(dialogue):
+        state = turn.get("state", "")
+        if not (state and turn.get("action", "")):
+            history.append((turn["student"], turn["teacher"]))
+            continue
+
+        action = get_action_for_state(state)
+        evaluation = turn.get("evaluation", "") or f"学生处于 {state} 状态"
+        user_msg = _build_inference_user_message(history, turn["student"], evaluation, action)
+        records.append(
+            {
+                "id": f"{record['id']}_{i}",
+                "source": "socrat-en-sft",
+                "messages": [
+                    {"role": "system", "content": _TEACHER_INFERENCE_SYSTEM},
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": turn["teacher"]},
+                ],
+                "ground_truth_states": [state],
+            }
+        )
+        history.append((turn["student"], turn["teacher"]))
+
+    return records
+
+
+def load_socrat_zh_sft(
+    split: str = "train",
+    seed: int = 42,
+    hf_repo: str = "ulises-c/SocratDataset",
+) -> list[dict]:
+    """Load SocratDataset-ZH as per-turn inference-matching SFT records.
+
+    Splits at the dialogue level before expanding to per-turn records so that
+    all turns of a dialogue stay in the same partition. Splitting on the flat
+    per-turn list would scatter a dialogue's turns across train/test, causing
+    history blobs in test records to contain teacher responses seen in training.
+    """
+    from datasets import load_dataset as hf_load
+
+    raw = [dict(r) for r in hf_load(hf_repo, split="train")]
+    if split == "all":
+        converted: list[dict] = []
+        for r in raw:
+            converted.extend(_socrat_zh_to_sft_records(r))
+        return converted
+    split_raw = _split(raw, split, seed)
+    converted = []
+    for r in split_raw:
+        converted.extend(_socrat_zh_to_sft_records(r))
+    return converted
+
+
+def load_socrat_en_sft(
+    split: str = "train",
+    seed: int = 42,
+    hf_repo: str = "ulises-c/SocratDataset-EN",
+) -> list[dict]:
+    """Load SocratDataset-EN as per-turn inference-matching SFT records.
+
+    Splits at the dialogue level before expanding to per-turn records — same
+    reasoning as load_socrat_zh_sft.
+    """
+    from datasets import load_dataset as hf_load
+
+    raw = [dict(r) for r in hf_load(hf_repo, split="train")]
+    if split == "all":
+        converted: list[dict] = []
+        for r in raw:
+            converted.extend(_socrat_en_to_sft_records(r))
+        return converted
+    split_raw = _split(raw, split, seed)
+    converted = []
+    for r in split_raw:
+        converted.extend(_socrat_en_to_sft_records(r))
+    return converted
+
+
+# ---------------------------------------------------------------------------
 # Unified entry points
 # ---------------------------------------------------------------------------
 
@@ -600,9 +776,12 @@ _SOURCE_LOADERS = {
     "openhermes": load_openhermes,
     "ultrachat": load_ultrachat,
     "slimorca": load_slimorca,
-    # Stage 2 — Socratic teaching
+    # Stage 2 — Socratic teaching (multi-turn, legacy format)
     "socrat-zh": load_socrat_zh,
     "socrat-en": load_socrat_en,
+    # Stage 2 — inference-matching per-turn SFT format (use these for SFT training)
+    "socrat-zh-sft": load_socrat_zh_sft,
+    "socrat-en-sft": load_socrat_en_sft,
     "socrat-synthetic": load_socrat_synthetic,
     "socrat-synthetic-en": load_socrat_synthetic_en,
     "socrateach-multi": load_socrateach_multi,
