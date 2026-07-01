@@ -1,5 +1,11 @@
 .PHONY: help run install-hooks pre-commit sync-mirror setup setup-repo \
 		online-demo local-demo _demo-preflight \
+		nvidia-preflight _classifier-ckpt \
+		train-gemma4-12b train-gemma4-12b-dry-run monitor-train-gemma4-12b \
+		serve-gemma4-12b serve-gemma4-12b-mtp serve-gemma4-12b-sft \
+		eval-gemma4-12b-base-smoke eval-gemma4-12b-base-full \
+		eval-gemma4-12b-sft-smoke eval-gemma4-12b-sft-full \
+		monitor-eval-gemma4-12b-base monitor-eval-gemma4-12b-sft \
 		slurm \
         post-eval-shutdown run-eval \
         eval-qwen27b-smoke eval-qwen27b-mini eval-qwen27b-full \
@@ -20,6 +26,9 @@
         download-gemma4-31b \
         prequant-gemma4-31b-l40s transfer-gemma4-31b-nf4 \
         train-gemma4-31b-dry-run train-gemma4-31b-stage2 train-gemma4-31b-stage2-preq \
+        train-gemma4-31b-stage2-unsloth train-gemma4-31b-eos-gate eos-gate-gemma4-31b \
+        gpu-preflight diagnose-gfx1201-fault \
+        profile-gemma4-31b \
         tournament tournament-think tournament-warmup tournament-warmup-think tournament-status tournament-eliminate \
         tournament-finalize tournament-archive tournament-restore tournament-reset \
         tournament-download tournament-help
@@ -68,19 +77,25 @@ help:
 	@echo "  local-demo            Local demo via llama.cpp on this machine (downloads classifier if missing)"
 	@echo "  serve-demo            Self-host the top-performer stack for a live demo (RTX 5090 + Tailscale)"
 	@echo "  start-local-tl-server  Start local llama.cpp server for dataset translation (Qwen3.5-9B)"
-	@echo "  eval-qwen27b-smoke    Run scripts/eval_qwen27b.sh smoke (n=5,   ~5 min)"
-	@echo "  eval-qwen27b-mini     Run scripts/eval_qwen27b.sh mini  (n=25,  ~15 min)"
-	@echo "  eval-qwen27b-full     Run scripts/eval_qwen27b.sh full  (n=681, ~75 h — measured)"
-	@echo "  eval-qwen35b-a3b-smoke Run scripts/eval_qwen35b_a3b.sh smoke (n=5,   ~2 min projected)"
-	@echo "  eval-qwen35b-a3b-mini  Run scripts/eval_qwen35b_a3b.sh mini  (n=25,  ~5 min projected)"
-	@echo "  eval-qwen35b-a3b-full  Run scripts/eval_qwen35b_a3b.sh full  (n=681, ~20-30 h projected)"
+	@echo "  eval-qwen27b-smoke    Run scripts/eval_llamacpp.sh qwen27b smoke (n=5,   ~5 min)"
+	@echo "  eval-qwen27b-mini     Run scripts/eval_llamacpp.sh qwen27b mini  (n=25,  ~15 min)"
+	@echo "  eval-qwen27b-full     Run scripts/eval_llamacpp.sh qwen27b full  (n=681, ~75 h — measured)"
+	@echo "  eval-qwen35b-a3b-smoke Run scripts/eval_llamacpp.sh qwen35b-a3b smoke (n=5,   ~2 min projected)"
+	@echo "  eval-qwen35b-a3b-mini  Run scripts/eval_llamacpp.sh qwen35b-a3b mini  (n=25,  ~5 min projected)"
+	@echo "  eval-qwen35b-a3b-full  Run scripts/eval_llamacpp.sh qwen35b-a3b full  (n=681, ~20-30 h projected)"
 	@echo "  download-gemma4-31b         Download google/gemma-4-31b-it weights to HF cache (~60 GB)"
 	@echo "  prequant-gemma4-31b-l40s    Print instructions for pre-quantizing to NF4 on L40S"
 	@echo "  transfer-gemma4-31b-nf4     rsync NF4 checkpoint from L40S (HOST=user@host)"
-	@echo "  train-gemma4-31b-stage2-preq  Train Stage 2b from pre-quantized NF4 checkpoint"
-	@echo "  eval-gemma4-31b-smoke  Run scripts/eval_gemma4_31b.sh smoke  (n=5)"
-	@echo "  eval-gemma4-31b-mini   Run scripts/eval_gemma4_31b.sh mini   (n=25)"
-	@echo "  eval-gemma4-31b-full   Run scripts/eval_gemma4_31b.sh full   (n=681)"
+	@echo "  train-gemma4-31b-stage2-preq  Train Stage 2b from local pre-quantized NF4 checkpoint"
+	@echo "  train-gemma4-31b-stage2-unsloth  Train Stage 2b from unsloth bnb-4bit Gemma 4 31B (no local prequant)"
+	@echo "  train-gemma4-31b-eos-gate    100-step checkpoint for EOS gate (unsloth path, ~30 min)"
+	@echo "  eos-gate-gemma4-31b          Run EOS gate against outputs/eos-gate-gemma4-31b/final"
+	@echo "  gpu-preflight                Fast GPU gate (clean KFD + fwd/bwd) — run before any (re)launch"
+	@echo "  diagnose-gfx1201-fault       Serialized-kernel run to localize the backward page fault"
+	@echo "  profile-gemma4-31b           Profile a real Stage 2 step (attention vs NF4-dequant; FA2 de-risk)"
+	@echo "  eval-gemma4-31b-smoke  Run scripts/eval_llamacpp.sh gemma4-31b smoke  (n=5)"
+	@echo "  eval-gemma4-31b-mini   Run scripts/eval_llamacpp.sh gemma4-31b mini   (n=25)"
+	@echo "  eval-gemma4-31b-full   Run scripts/eval_llamacpp.sh gemma4-31b full   (n=681)"
 	@echo ""
 	@echo "  Fusion smoke targets (single-call architecture, see SOCRATIC_FUSION_PLAN.md):"
 	@echo "  eval-qwen27b-fusion-smoke           27B + unified (think on)"
@@ -320,13 +335,13 @@ test-vllm:
 	bash scripts/test_vllm_rocm.sh
 
 eval-qwen27b-smoke:
-	bash scripts/eval_qwen27b.sh smoke
+	bash scripts/eval_llamacpp.sh qwen27b smoke
 
 eval-qwen27b-mini:
-	bash scripts/eval_qwen27b.sh mini
+	bash scripts/eval_llamacpp.sh qwen27b mini
 
 eval-qwen27b-full:
-	bash scripts/eval_qwen27b.sh full
+	bash scripts/eval_llamacpp.sh qwen27b full
 
 serve-qwen35b-a3b:
 	bash scripts/serve_qwen35b_a3b.sh
@@ -338,47 +353,166 @@ serve-qwopus35b-a3b:
 	bash scripts/serve_qwopus35b_a3b.sh
 
 eval-qwen35b-a3b-smoke:
-	bash scripts/eval_qwen35b_a3b.sh smoke
+	bash scripts/eval_llamacpp.sh qwen35b-a3b smoke
 
 eval-qwen35b-a3b-mini:
-	bash scripts/eval_qwen35b_a3b.sh mini
+	bash scripts/eval_llamacpp.sh qwen35b-a3b mini
 
 eval-qwen35b-a3b-full:
-	bash scripts/eval_qwen35b_a3b.sh full
+	bash scripts/eval_llamacpp.sh qwen35b-a3b full
 
 eval-gemma4-31b-smoke:
-	bash scripts/eval_gemma4_31b.sh smoke
+	bash scripts/eval_llamacpp.sh gemma4-31b smoke
 
 eval-gemma4-31b-mini:
-	bash scripts/eval_gemma4_31b.sh mini
+	bash scripts/eval_llamacpp.sh gemma4-31b mini
 
 eval-gemma4-31b-full:
-	bash scripts/eval_gemma4_31b.sh full
+	bash scripts/eval_llamacpp.sh gemma4-31b full
 
 # ── Fusion smoke targets (single-call architecture) ──────────────────────────
 # See docs/SOCRATIC_FUSION_PLAN.md. Each writes to a distinct results/ dir
 # so all four can coexist alongside the existing two-call smoke results.
 
 eval-qwen27b-fusion-smoke:
-	bash scripts/eval_qwen27b.sh smoke --unified
+	bash scripts/eval_llamacpp.sh qwen27b smoke --unified
 
 eval-qwen27b-fusion-nothink-smoke:
-	bash scripts/eval_qwen27b.sh smoke --unified --nothink
+	bash scripts/eval_llamacpp.sh qwen27b smoke --unified --nothink
 
 eval-qwen35b-a3b-fusion-smoke:
-	bash scripts/eval_qwen35b_a3b.sh smoke --unified
+	bash scripts/eval_llamacpp.sh qwen35b-a3b smoke --unified
 
 eval-qwen35b-a3b-fusion-nothink-smoke:
-	bash scripts/eval_qwen35b_a3b.sh smoke --unified --nothink
+	bash scripts/eval_llamacpp.sh qwen35b-a3b smoke --unified --nothink
 
 # Gemma 4 has no thinking-mode equivalent, so only the --unified variant exists.
 eval-gemma4-31b-fusion-smoke:
-	bash scripts/eval_gemma4_31b.sh smoke --unified
+	bash scripts/eval_llamacpp.sh gemma4-31b smoke --unified
+
+# ── Gemma 4 12B SFT-uplift PoC (NVIDIA RTX 4000 Ada) ─────────────────────────
+# Baseline (base 12B teacher) vs 1-epoch Socratic QLoRA SFT, same Qwen3.5-LoRA
+# state classifier as consultant. NVIDIA box — none of the gfx1201/ROCm env that
+# the 31B targets carry. See the 12B PoC plan + configs/train-sft-gemma4-12b-qlora.env.
+# Serving and eval are separate steps: the 20 GB card hosts ONE model at a time, so
+# the eval targets assume the matching server (serve-gemma4-12b{,-sft}) is already up.
+
+# CUDA fwd/bwd smoke through the training kernel paths — the NVIDIA analogue of
+# gpu-preflight (which is the ROCm/gfx1201 gate). Hard gate before train/serve.
+nvidia-preflight:
+	uv run --no-sync python scripts/test_training_gpu_nvidia.py
+
+train-gemma4-12b-dry-run:
+	uv run python scripts/train_sft.py --config configs/train-sft-gemma4-12b-qlora.env --dry-run
+
+# Live-quantize the bf16 base to NF4 on load (TRAIN_PREQ=false → the code builds
+# the bnb 4-bit config). unsloth/gemma-4-12b-it is the FULL bf16 model, not a
+# bnb-4bit checkpoint, so TRAIN_PREQ=true loaded it in bf16 (~24 GB) and OOM'd on
+# the 20 GB card; live quant is ~7.7 GB resident, leaving ~13 GB for activations.
+# expandable_segments avoids allocator fragmentation at the VRAM edge (CUDA box).
+train-gemma4-12b: nvidia-preflight
+	mkdir -p outputs/sft-gemma4-12b-qlora
+	nohup env TRAIN_BASE_MODEL=unsloth/gemma-4-12b-it \
+	  TRAIN_PREQ=false \
+	  PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+	  TRAIN_HF_REPO=ulises-c/SocratesLM-12B-QLoRA \
+	  TRAIN_HF_PUSH_EVERY=50 \
+	  uv run --no-sync python scripts/train_sft.py \
+	  --config configs/train-sft-gemma4-12b-qlora.env \
+	  > outputs/sft-gemma4-12b-qlora/train.log 2>&1 &
+	@echo "Training started. Monitor: tail -f outputs/sft-gemma4-12b-qlora/train.log"
+
+# Auto-resume training crawl for the known-unstable box: owns the train→crash→
+# resume loop, archives each fault, quarantines partial checkpoints, walks the GPU
+# power limit DOWN per crash (stability search), and logs to issue #130. Re-invokes
+# `make train-gemma4-12b` (nvidia-preflight + auto-resume) on every fault. Set
+# LOG_COMMENT_ID=<id> to post rows to a pinned issue comment; unset = local log only.
+# See scripts/monitor_train_gemma4_12b.sh.
+monitor-train-gemma4-12b:
+	bash scripts/monitor_train_gemma4_12b.sh
+
+# Serve (port 8080, one at a time). serve-gemma4-12b-mtp attaches the MTP drafter.
+serve-gemma4-12b:
+	bash scripts/serve_gemma4_12b.sh
+
+serve-gemma4-12b-mtp:
+	MTP=1 bash scripts/serve_gemma4_12b.sh
+
+serve-gemma4-12b-sft:
+	bash scripts/serve_gemma4_12b_sft.sh
+
+# Ensure the Qwen3.5-LoRA classifier checkpoint is present (consultant for both evals).
+_classifier-ckpt:
+	@if [[ ! -f "$(BERT_CKPT)/model.safetensors" ]]; then \
+	  echo "Classifier checkpoint not found — downloading from HF…"; \
+	  hf download ulises-c/socrates-state-classifier-qwen3.5-lora --local-dir "$(BERT_CKPT)"; \
+	fi
+
+# Eval: Qwen3.5-LoRA consultant (on CPU, frees VRAM for the teacher) + Gemma 12B
+# teacher. smoke = n=5 sanity gate; full = n=681. Keep base/SFT invocations
+# identical except the --experiment config so the delta isolates the SFT adapter.
+eval-gemma4-12b-base-smoke: _classifier-ckpt
+	KELE_BERT_DEVICE=cpu uv run python -m src.project.kele --experiment gemma4-12b-local \
+	  test --n 5 --bert-consultant "$(BERT_CKPT)" --output results/gemma4-12b-base-smoke
+
+eval-gemma4-12b-base-full: _classifier-ckpt
+	WANDB_EVAL=1 KELE_BERT_DEVICE=cpu uv run python -m src.project.kele --experiment gemma4-12b-local \
+	  evaluate --bert-consultant "$(BERT_CKPT)" --output results/gemma4-12b-base
+
+eval-gemma4-12b-sft-smoke: _classifier-ckpt
+	KELE_BERT_DEVICE=cpu uv run python -m src.project.kele --experiment gemma4-12b-sft-local \
+	  test --n 5 --bert-consultant "$(BERT_CKPT)" --output results/gemma4-12b-sft-smoke
+
+eval-gemma4-12b-sft-full: _classifier-ckpt
+	WANDB_EVAL=1 KELE_BERT_DEVICE=cpu uv run python -m src.project.kele --experiment gemma4-12b-sft-local \
+	  evaluate --bert-consultant "$(BERT_CKPT)" --output results/gemma4-12b-sft
+
+# Monitored eval crawl for the known-unstable box: owns serve+eval, polls server
+# health out-of-band, repairs error/truncated dialogues before relaunch, walks the
+# GPU power limit down per crash, and logs to issue #130. MTP=1 attaches the
+# drafter (-mtp output suffix). See scripts/monitor_eval_gemma4_12b.sh.
+#   make monitor-eval-gemma4-12b-base            # base, MTP off  → results/gemma4-12b-base
+#   MTP=1 make monitor-eval-gemma4-12b-base      # base, MTP on   → results/gemma4-12b-base-mtp
+#   make monitor-eval-gemma4-12b-sft             # SFT            → results/gemma4-12b-sft
+monitor-eval-gemma4-12b-base: _classifier-ckpt
+	bash scripts/monitor_eval_gemma4_12b.sh base
+
+monitor-eval-gemma4-12b-sft: _classifier-ckpt
+	bash scripts/monitor_eval_gemma4_12b.sh sft
+
+# Consultant ablation (handoff T1.1): both no-consultant (self-consult) arms back to
+# back, SFT then base, one model at a time. No _classifier-ckpt dep — self-consult
+# uses no external classifier. Long-running; launch detached (nohup … &).
+#   nohup make noconsult-chain-gemma4-12b > outputs/noconsult_chain.nohup 2>&1 &
+noconsult-chain-gemma4-12b:
+	bash scripts/noconsult_chain_gemma4_12b.sh
 
 # ── Gemma 4 31B SFT training (Stage 2b) ──────────────────────────────────────
 # No patch-fla-rocm needed — Gemma 4 uses standard softmax attention (no FLA).
-# ROCm env vars (TORCH_USE_HIPBLASLT=0, garbage_collection_threshold:0.8) are
-# gfx1201 workarounds that apply to all training targets.
+#
+# The gfx1201 page fault (Memory access fault / page not present,
+# PERMISSION_FAULTS:0x3) during the QLoRA backward is NON-DETERMINISTIC and not
+# yet attributed to any config knob: the SAME config (same git SHA) both finishes
+# 100 steps and crashes at step 10 across repeated runs (wandb-verified — see PR
+# #101 and docs/GFX1201_RDNA4_TRAINING.md §6.1). Four root-cause theories
+# (workers, GC threshold, hipBLASLt, LR) were each published then falsified.
+# Current knobs are PRECAUTIONARY, not proven fixes:
+#   TORCH_USE_HIPBLASLT=0           — rocBLAS fallback (HIPBLASLT=1 still crashed,
+#                                     so this is precaution, not the cure)
+#   PYTORCH_HIP_ALLOC_CONF=gc:0.8   — trims the backward peak; GC-off also crashed
+# The real next step is `make diagnose-gfx1201-fault` (serialized kernels → names
+# the faulting kernel) and the ablation matrix in §6.1 — NOT another knob flip.
+# Every (re)launch is gated on `make gpu-preflight` (clean KFD + working fwd/bwd):
+# a prior fault leaves the GPU dirty and the next run faults early on stale PTEs.
+
+gpu-preflight:
+	bash scripts/test_gpu_stack.sh --preflight
+
+# Localize the backward page fault: run ~120 steps with serialized kernel launches
+# so the async VM fault becomes synchronous and the traceback/dmesg name the exact
+# faulting kernel (bnb NF4 dequant vs grad-ckpt recompute vs allocator).
+diagnose-gfx1201-fault: gpu-preflight
+	bash scripts/diagnose_gfx1201_fault.sh
 
 download-gemma4-31b:
 	uv run hf download google/gemma-4-31b-it
@@ -386,10 +520,10 @@ download-gemma4-31b:
 train-gemma4-31b-dry-run:
 	uv run python scripts/train_sft.py --config configs/train-sft-gemma4-31b-qlora.env --dry-run
 
-train-gemma4-31b-stage2:
+train-gemma4-31b-stage2: gpu-preflight
 	mkdir -p outputs/sft-stage2-gemma4-31b
 	nohup env TORCH_USE_HIPBLASLT=0 \
-	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8,expandable_segments:True \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
 	  uv run --no-sync python scripts/train_sft.py \
 	  --config configs/train-sft-stage2-gemma4-31b.env \
 	  > outputs/sft-stage2-gemma4-31b/train.log 2>&1 &
@@ -406,16 +540,76 @@ transfer-gemma4-31b-nf4:
 	mkdir -p models/gemma-4-31b-nf4
 	rsync -avP "$(HOST):gemma-4-31b-nf4/" models/gemma-4-31b-nf4/
 
-train-gemma4-31b-stage2-preq:
+train-gemma4-31b-stage2-preq: gpu-preflight
 	mkdir -p outputs/sft-stage2-gemma4-31b
 	nohup env TORCH_USE_HIPBLASLT=0 \
-	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8,expandable_segments:True \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
 	  TRAIN_BASE_MODEL=models/gemma-4-31b-nf4 \
 	  TRAIN_PREQ=true \
 	  uv run --no-sync python scripts/train_sft.py \
 	  --config configs/train-sft-stage2-gemma4-31b.env \
 	  > outputs/sft-stage2-gemma4-31b/train.log 2>&1 &
 	@echo "Training started. Monitor: tail -f outputs/sft-stage2-gemma4-31b/train.log"
+
+# Train from the community pre-quantized unsloth bnb-4bit checkpoint (~19 GB NF4).
+# Skips the L40S prequant + rsync step entirely: weights download already 4-bit,
+# so there is no ~62 GB BF16 CPU staging at load (the R9700's actual blocker).
+# TRAIN_PREQ=true is required — it tells train_sft.py to read the embedded
+# quantization_config instead of building a live BitsAndBytesConfig (which would
+# double-quantize the already-quantized checkpoint).
+train-gemma4-31b-stage2-unsloth: gpu-preflight
+	mkdir -p outputs/sft-stage2-gemma4-31b
+	nohup env TORCH_USE_HIPBLASLT=0 \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
+	  TRAIN_BASE_MODEL=unsloth/gemma-4-31B-it-unsloth-bnb-4bit \
+	  TRAIN_PREQ=true \
+	  TRAIN_HF_REPO=ulises-c/SocratesLM-31B-stage2b-QLoRA \
+	  TRAIN_HF_PUSH_EVERY=50 \
+	  uv run --no-sync python scripts/train_sft.py \
+	  --config configs/train-sft-stage2-gemma4-31b.env \
+	  > outputs/sft-stage2-gemma4-31b/train.log 2>&1 &
+	@echo "Training started. Monitor: tail -f outputs/sft-stage2-gemma4-31b/train.log"
+
+# Train 100 steps on the same unsloth path as the real run to produce an adapter
+# for the EOS gate. Uses a separate output dir so it never collides with the real run.
+train-gemma4-31b-eos-gate:
+	mkdir -p outputs/eos-gate-gemma4-31b
+	setsid env TORCH_USE_HIPBLASLT=0 \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
+	  TRAIN_BASE_MODEL=unsloth/gemma-4-31B-it-unsloth-bnb-4bit \
+	  TRAIN_PREQ=true \
+	  TRAIN_MAX_STEPS=100 \
+	  TRAIN_SAVE_STEPS=100 \
+	  TRAIN_OUTPUT_DIR=outputs/eos-gate-gemma4-31b \
+	  uv run --no-sync python scripts/train_sft.py \
+	  --config configs/train-sft-stage2-gemma4-31b.env \
+	  > outputs/eos-gate-gemma4-31b/train.log 2>&1 &
+	@echo "EOS-gate checkpoint training started (~30 min)."
+	@echo "Monitor: tail -f outputs/eos-gate-gemma4-31b/train.log"
+	@echo "When done, run: make eos-gate-gemma4-31b"
+
+eos-gate-gemma4-31b:
+	env TORCH_USE_HIPBLASLT=0 \
+	  PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8 \
+	  TRAIN_BASE_MODEL=unsloth/gemma-4-31B-it-unsloth-bnb-4bit \
+	  TRAIN_PREQ=true \
+	  TRAIN_METHOD=qlora \
+	  TRAIN_BF16=true \
+	  uv run --no-sync python scripts/eos_gate.py \
+	  --config configs/train-sft-stage2-gemma4-31b.env \
+	  --adapter outputs/eos-gate-gemma4-31b/final
+
+# De-risk the FA2 bet: profile where the real Stage 2 step spends its ~70s.
+# Mirrors the stage2-unsloth env so the profiled step matches the real run.
+# Prints a kernel self-time table + attention-vs-gemm/dequant bucket summary.
+# If attention dominates → patching the flash-attn Triton backward is worth it;
+# if NF4 dequant/GEMM dominates → FA2 buys little. ~6 min (6 steps).
+profile-gemma4-31b:
+	env TORCH_USE_HIPBLASLT=1 \
+	  TRAIN_BASE_MODEL=unsloth/gemma-4-31B-it-unsloth-bnb-4bit \
+	  TRAIN_PREQ=true \
+	  uv run --no-sync python scripts/profile_train_step.py \
+	  --config configs/train-sft-stage2-gemma4-31b.env
 
 # ── Tournament ────────────────────────────────────────────────────────────────
 

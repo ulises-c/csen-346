@@ -4,6 +4,115 @@ Engineering decisions, what we've tried, and what's next. Each entry is dated an
 
 ---
 
+## 2026-06-10 — Gemma 4 12B BASE, MTP OFF complete ✅ — losslessness confirmed at n=681, run-to-run σ calibrated
+
+**Ran:** Full Chinese test set (n=681), identical to the 06-09 MTP-on baseline except the drafter: MTP OFF, f16 KV pinned via the new `GEMMA4_12B_KV=f16` (the engine default q4_0 would have been a second variable), 85 W pinned (`POWER_START_W=85`), **4 eval workers against `-np 4`** (the MTP-on run was sequential). Monitor crawl, 681/681 valid, **0 errors, 0 crashes in 17.4 h**. First run with `bert_consultant` recorded in `run_config.json`.
+
+### MTP on/off quality A/B (the 1:1 the drafter promised)
+
+| metric | MTP ON (n=3991 turns) | MTP OFF (n=4033 turns) | Δ |
+|---|---:|---:|---:|
+| state_accuracy | 50.30 | 49.62 | −0.68 pp |
+| rouge1 | 28.69 | 28.56 | −0.13 |
+| rougeL | 21.24 | 21.02 | −0.22 |
+| bleu4 | 5.28 | 5.22 | −0.06 |
+
+Every delta is within sampling noise — **MTP losslessness empirically confirmed at full n=681**. Per-stage shapes match (a=100 both; b/c/d/e within ~2 pp).
+
+### Bonus: run-to-run σ for the convergence budget
+
+These are two identical-config full runs differing only as seeds do — the cleanest variance estimate we have: **state accuracy run-to-run spread ≈ 0.7 pp at n=681**. Combined with the 06-09 convergence curve (±1 pp band entered at n≈200–300), a partial eval at n≈300 reads the state-acc headline to within ~1–1.5 pp total uncertainty.
+
+### Throughput: parallelism vs MTP at 85 W
+
+- MTP ON, 1 stream: 23.6 dlg/hr.
+- MTP OFF, 4 streams: **39.1 dlg/hr** (1.66× aggregate) — but per-stream only ~9.8 dlg/hr, i.e. batching at the 85 W cap costs ~58% per-stream speed.
+- **Winner for step 3 (SFT eval): MTP ON** on per-stream speed; MTP + 4 workers is untested and likely the true optimum if VRAM allows (drafter + f16 KV + 4 slots fit before, so it should).
+
+### Ops notes
+
+- W&B incident "Metric ingestion delayed" (Jun 9 16:47 PDT) made all charts render empty for hours despite the server acknowledging every row (`historyKeys` counted them) — backlog drained by Jun 10 afternoon, all runs fully queryable, no data loss. Lesson: check status.wandb.com before debugging the client.
+- One transient gh 401 dropped the 450-dialogue progress row on issue #130 — single occurrence, auth healthy before and after.
+- Artifacts: `results/gemma4-12b-base/`, W&B `gemma4-12b-base` (qitilwco, 69 live curve points logged through the incident).
+
+---
+
+## 2026-06-09 (PM) — Per-dialogue W&B metric curves + 12B-base leaderboard placement
+
+**Ran:** No new model eval. Built incremental metric logging for the eval pipeline, replayed the completed `gemma4-12b-base-mtp` run into a 69-point convergence curve, and placed the run on the master leaderboard with corrected consultant attribution.
+
+### Tooling (kele.py / metrics.py / wandb_tracking.py)
+
+- **Live per-N-dialogue W&B logging:** evals with `WANDB_EVAL=1` now keep the W&B run open and log the full metric set every `WANDB_EVAL_LOG_EVERY` completed dialogues (default 10, `0` disables), step = completed-dialogue count, in both sequential and parallel paths. Crash-resumes start a new same-named W&B run whose steps continue where the last stopped (curves overlay in the UI). Closes the "live per-checkpoint state_accuracy" item proposed in #130.
+- **`wandb-replay` subcommand:** `python -m src.project.kele wandb-replay --output results/<exp> [--every N] [--order completion|id]` recomputes metrics over growing prefixes of the saved per-dialogue JSONs and logs a metric-vs-n curve for an already-finished run — no re-eval.
+- `eval/n_turns` is logged alongside every point (metrics are computed per-turn, ~5.9 turns/dialogue) and can be used as the chart x-axis.
+
+### Convergence read (replay of `gemma4-12b-base-mtp`, W&B run `gemma4-12b-base-mtp-curve` / vcj442ce)
+
+Answers the open "is n≈400 enough?" question, per metric:
+
+- **state_accuracy:** within ~1 pp of the n=681 value (50.30) from **n≈200**, within ~0.5 pp from n≈450. Partial evals are fine for the state-acc headline.
+- **ROUGE/BLEU:** slow monotone downward drift the whole run (rouge1 30.83 @ n=50 → 29.28 @ n=400 → 28.69 @ n=681); only within ~0.5 pp of final around **n≈450–500**. Caveat: the replay used completion order (file mtime), which correlates with dialogue length/difficulty — part of the drift may be ordering bias, not sampling error. A `--order id` (or shuffled) replay would disambiguate before locking a text-overlap budget.
+- Implication for cross-run comparison: **n=50 cells read ~1–2 pp high on rouge1** relative to full runs.
+
+### Leaderboard placement (state accuracy, the metric that matters here)
+
+`gemma4-12b-base-mtp` ranks **#4 of the full n=681 runs** and #26/107 overall. Corrected attribution: its consultant is the **T4 Qwen3.5-0.8B LoRA classifier** (`state-clf-qwen3.5-0.8b-lora-wandb/final`, via `--bert-consultant`) — the **same classifier family as the `t4-bert-*` leaders** — with a bare (no `fewshot10`) Gemma4-12B-base teacher. Within the T4 full-run family: 55.39 (gemma+fewshot10) / 53.40 (a3b+fewshot10) / 53.04 (qwen27b-nothink+fewshot10) / **50.30 (this run, no fewshot)**. Same classifier ⇒ the 3–5 pp gap is a *context* effect (the classifier reads teacher responses in the dialogue history), so SFT-improving the teacher should pull state acc toward the 53–55 band via cleaner classifier inputs.
+
+### Gotchas logged
+
+- **`run_config.json` misstates the consultant.** It copies `CONSULTANT_MODEL_NAME` from the env config ("Gemma 4 12B") and does not record `--bert-consultant`; the actual consultant was the T4 classifier. Fixed same day: `run_batch_evaluation` now writes `bert_consultant` (ckpt path or null) into `run_config.json`; configs written before the fix lack the field.
+- **W&B history-ingestion lag:** freshly finished runs show "no data for the selected runs" in charts and 0 rows via the API even though the server's `historyKeys` metadata counts all uploaded rows (filestream accepted 69/69 with no errors). Runs ≥ ~18 h old query fine. Server-side indexing delay — wait before debugging the client. Curve run was still un-queryable ~30 min after finish.
+
+---
+
+## 2026-06-09 — Gemma 4 12B BASE teacher baseline COMPLETE ✅ (NVIDIA SFT-uplift PoC, phase 1)
+
+**Ran:** Full Chinese test set (`ulises-c/SocratDataset`, n=681) — base `gemma-4-12b-it` (Unsloth UD-Q8_K_XL GGUF) as teacher, Qwen3.5-0.8B-LoRA state classifier (`ulises-c/socrates-state-classifier-qwen3.5-lora`) as consultant, dual-role on llama.cpp port 8080. **MTP speculative drafter ON**, GPU power-capped at 85 W. Driven by `scripts/monitor_eval_gemma4_12b.sh` (crash-crawl). This is the **base baseline** for the 1-epoch Socratic QLoRA SFT-uplift question; uplift = SFT − base on state accuracy.
+
+### Final metrics (`results/gemma4-12b-base-mtp/metrics_summary.json`)
+
+| stage | state acc |
+|---|---:|
+| a | 100.0% |
+| b | 44.55% |
+| c | 32.85% |
+| d | 35.98% |
+| e | 60.21% |
+| **overall** | **50.3%** |
+
+Text-overlap (diagnostic, memorization-prone — weight lightly): ROUGE-1 28.69 · ROUGE-2 11.90 · ROUGE-L 21.24 · BLEU-4 5.28 (681 dialogues, 3991 turns).
+
+### Headlines
+
+- **Overall state accuracy 50.3%** is the number SFT must beat. Per-stage shape: perfect opener (a = 100%), collapse through the middle states (b/c/d ≈ 33–45%), partial recovery at the summary (e = 60%).
+- The noisy n=5 smoke read 56.25% — the full n=681 (50.3%) is the stable baseline; do not compare against the smoke.
+- Eval samples at the llama.cpp default (temp 0.8); MTP is distribution-lossless, so on-vs-off differ only as seeds do.
+
+### MTP on/off throughput A/B (see issue #130, comment 4653475343)
+
+- **Decode:** 21.6 → 48.8 tok/s = **2.3×**, ~50–55% draft acceptance (f16 KV avoids the q8_0 0%-acceptance failure mode).
+- **End-to-end** (same 5 dialogues, `elapsed_seconds`): 281 → 141 s/dlg = **~2.0×** (12.8 → 25.6 dlg/hr). MTP roughly halves wall-clock; an MTP-off full run would be ~52 h vs the ~29 h observed.
+
+### Run health
+
+681/681 valid, **0 errors, 0 crashes across ~29 h (1732 min) at 85 W**, 23.6 dlg/hr. The "fault every 30 min–2 h" risk did not materialize at this cap — 85 W is stable for inference on this card.
+
+### Artifact pointers
+
+- Results: `results/gemma4-12b-base-mtp/` (per-dialogue JSONs + `metrics_summary.json`)
+- W&B: `csen346-eval` run `gemma4-12b-base-mtp` → https://wandb.ai/uchavarria-santa-clara-university/csen346-eval/runs/537mjkk2
+- Live eval log: issue #130 (pinned table + MTP A/B comment 4653475343)
+- Eval restricted to Chinese-only via `kele.load_dataset` default (`ulises-c/SocratDataset`); the bilingual `+SocratDataset-EN` default added in `73adf12` was reverted for this PoC.
+
+### Next
+
+- **G5 SFT train** (`make train-gemma4-12b`, QLoRA 1 epoch → `ulises-c/SocratesLM-12B-QLoRA`) — compute-bound, so max power (`-pl 130`) is worth it there.
+- **G8 SFT eval** (MTP-on, same Chinese n=681) → **G9 compare** vs this 50.3% baseline.
+- Open (proposed in #130): live per-checkpoint `state_accuracy` in the eval log + an MTP-off run to test whether n≈400 suffices vs full 681.
+
+---
+
 ## 2026-06-02 — Canonical-baseline unified score landed (`GPT-4o + SocratTeachLLM · n=681` at unified 52.99) + n=681 STL leaderboard rows
 
 **Ran:** Three LLM-judge passes against previously un-judged n=681 cells, on branch `mk/unified-for-gpt4o-stl`. Sonnet 4.6 judge, 10 workers. Total wall-clock ≈ 33 min × 3 in parallel, total cost ≈ $66.

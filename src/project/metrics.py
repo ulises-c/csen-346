@@ -58,18 +58,37 @@ def compute_bleu(predictions: list[str], references: list[str]) -> float:
     return result.score
 
 
+def load_dialogue_records(dialogues_dir: Path, *, skip_invalid: bool = False) -> list[dict]:
+    """Load dialogue JSONs sorted by filename (= dialogue id).
+
+    skip_invalid tolerates partially-written files — needed when incremental
+    metrics logging reads the dir while parallel eval workers are still writing.
+    """
+    records = []
+    for f in sorted(dialogues_dir.glob("*.json")):
+        try:
+            records.append(json.loads(f.read_text()))
+        except (json.JSONDecodeError, OSError):
+            if not skip_invalid:
+                raise
+    return records
+
+
 def compute_state_accuracy(dialogues_dir: Path) -> StateAccuracy:
     """Compute how often our consultant picks the correct state vs ground truth.
 
     Returns overall accuracy and per-stage accuracy (a, b, c, d, e).
     """
+    return _state_accuracy_from_records(load_dialogue_records(dialogues_dir))
+
+
+def _state_accuracy_from_records(records: list[dict]) -> StateAccuracy:
     correct = 0
     total = 0
     stage_correct: dict[str, int] = {}
     stage_total: dict[str, int] = {}
 
-    for f in sorted(dialogues_dir.glob("*.json")):
-        data = json.loads(f.read_text())
+    for data in records:
         if "error" in data:
             continue
         for turn in data.get("dialogue", []):
@@ -100,11 +119,14 @@ def compute_state_accuracy(dialogues_dir: Path) -> StateAccuracy:
 
 def extract_predictions_and_references(dialogues_dir: Path) -> tuple[list[str], list[str]]:
     """Extract teacher response predictions and ground truth references from dialogue outputs."""
+    return _extract_from_records(load_dialogue_records(dialogues_dir))
+
+
+def _extract_from_records(records: list[dict]) -> tuple[list[str], list[str]]:
     predictions = []
     references = []
 
-    for f in sorted(dialogues_dir.glob("*.json")):
-        data = json.loads(f.read_text())
+    for data in records:
         if "error" in data:
             continue
         for turn in data.get("dialogue", []):
@@ -119,14 +141,23 @@ def extract_predictions_and_references(dialogues_dir: Path) -> tuple[list[str], 
 
 def compute_all_metrics(dialogues_dir: Path) -> dict:
     """Compute all automated metrics for a completed evaluation run."""
-    predictions, references = extract_predictions_and_references(dialogues_dir)
+    return compute_metrics_from_records(load_dialogue_records(dialogues_dir))
+
+
+def compute_metrics_from_records(records: list[dict]) -> dict:
+    """Compute all automated metrics over in-memory dialogue records.
+
+    Record-based so partial-run metrics (per-N-dialogues W&B logging, replay
+    curves) can be computed over any prefix of completed dialogues.
+    """
+    predictions, references = _extract_from_records(records)
 
     if not predictions:
         return {"error": "No dialogue data found"}
 
     rouge = compute_rouge(predictions, references)
     bleu = compute_bleu(predictions, references)
-    state_acc = compute_state_accuracy(dialogues_dir)
+    state_acc = _state_accuracy_from_records(records)
 
     return {
         "n_turns": len(predictions),

@@ -1,3 +1,5 @@
+# TODO(MELE rename): rename this module to MELE.py and change imports across the
+# board — KELE→MELE is a major architectural change touching every importer.
 """
 KELE Socratic Teaching System — working copy extended from the original.
 
@@ -10,12 +12,14 @@ import os
 import random
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
 from src.project.config import load_config
 from src.project.socratic_teaching_system import SocraticTeachingSystem
+from src.project.wandb_tracking import EvalTracker
 
 RESOURCES_DIR = Path(__file__).resolve().parents[2] / "references" / "KELE"
 
@@ -79,7 +83,7 @@ def load_dataset(
     seed: int = 42,
     source: str = "hf",
     hf_repo: str | list[str] = [  # noqa: B006
-        "ulises-c/SocratDataset-EN",
+        # "ulises-c/SocratDataset-EN",  # uncomment to eval the bilingual set (zh+en, ~1361 test)
         "ulises-c/SocratDataset",
     ],
 ) -> list[dict]:
@@ -210,6 +214,28 @@ def _write_progress_log(
         )
 
 
+def _make_incremental_metrics_logger(
+    tracker: EvalTracker, dialogues_dir: Path
+) -> Callable[[int], None] | None:
+    """Per-N-dialogues W&B logging (WANDB_EVAL_LOG_EVERY, default 10): recompute
+    metrics over everything on disk and log at step=completed, so eval metrics
+    form a convergence curve instead of a single end-of-run point."""
+    every = int(os.environ.get("WANDB_EVAL_LOG_EVERY", "10"))
+    if every < 1:
+        return None
+    from src.project.metrics import compute_metrics_from_records, load_dialogue_records
+
+    def on_result(completed: int) -> None:
+        if completed % every:
+            return
+        records = load_dialogue_records(dialogues_dir, skip_invalid=True)
+        metrics = compute_metrics_from_records(records)
+        if "error" not in metrics:
+            tracker.log_step(metrics, step=completed)
+
+    return on_result
+
+
 def _run_sequential(
     pending: list[dict],
     dialogues_dir: Path,
@@ -218,6 +244,7 @@ def _run_sequential(
     total_dataset: int,
     completed_initial: int,
     start_time: float,
+    on_result: Callable[[int], None] | None = None,
 ) -> int:
     completed = completed_initial
     for item in pending:
@@ -240,6 +267,8 @@ def _run_sequential(
             flush=True,
         )
         _write_progress_log(progress_log, completed, total_dataset, rate, remaining, elapsed)
+        if on_result is not None:
+            on_result(completed)
     return completed
 
 
@@ -255,6 +284,7 @@ def _run_parallel(
     experiment: str | None,
     unified: bool,
     bert_consultant: str | None,
+    on_result: Callable[[int], None] | None = None,
 ) -> tuple[int, list[SocraticTeachingSystem]]:
     """Run pending dialogues concurrently using a ThreadPoolExecutor.
 
@@ -317,6 +347,8 @@ def _run_parallel(
                 _write_progress_log(
                     progress_log, completed, total_dataset, rate, remaining, elapsed
                 )
+                if on_result is not None:
+                    on_result(completed)
 
     return completed_box[0], worker_systems
 
@@ -335,6 +367,7 @@ def run_batch_evaluation(
     bert_consultant: str | None = None,
     workers: int | None = None,
     sample_seed: int | None = None,
+    hf_repo: str | list[str] | None = None,
 ) -> None:
     """Run the full evaluation pipeline on the dataset.
 
@@ -354,7 +387,10 @@ def run_batch_evaluation(
     if workers < 1:
         workers = 1
 
-    dataset = load_dataset(dataset_path, split=split)
+    if hf_repo:
+        dataset = load_dataset(dataset_path, split=split, hf_repo=hf_repo)
+    else:
+        dataset = load_dataset(dataset_path, split=split)
     total = len(dataset)
 
     # Filter to start_id, optionally random-subsample, then apply limit.
@@ -450,6 +486,17 @@ def run_batch_evaluation(
     if completed and pending:
         print(f"  (resuming: {completed} already on disk, {len(pending)} to run)")
 
+    # WANDB_EVAL_RUN_NAME lets a caller distinguish runs that share an
+    # --experiment but differ otherwise (e.g. the same teacher served with
+    # MTP off vs on → distinct output dirs, same experiment config).
+    run_name = os.environ.get("WANDB_EVAL_RUN_NAME") or experiment or output_dir.name
+    tracker = EvalTracker()
+    on_result = None
+    if num_workers == 1:
+        tracker.start(run_name)
+        if tracker.active:
+            on_result = _make_incremental_metrics_logger(tracker, dialogues_dir)
+
     if workers == 1:
         completed = _run_sequential(
             pending,
@@ -459,6 +506,7 @@ def run_batch_evaluation(
             len(dataset),
             completed,
             start_time,
+            on_result=on_result,
         )
     else:
         completed, worker_systems = _run_parallel(
@@ -472,6 +520,7 @@ def run_batch_evaluation(
             experiment=experiment,
             unified=unified,
             bert_consultant=bert_consultant,
+            on_result=on_result,
         )
         # Aggregate fallback counts across worker systems for unified mode.
         if unified:
@@ -491,6 +540,9 @@ def run_batch_evaluation(
         "teacher_base_url": cfg.teacher.base_url,
         "consultant_model": cfg.consultant.model_name,
         "consultant_base_url": cfg.consultant.base_url,
+        # --bert-consultant replaces the LLM consultant entirely; without this
+        # field run_config misattributes state decisions to consultant_model.
+        "bert_consultant": bert_consultant,
         "thinking_budget": cfg.consultant.thinking_budget,
         "max_teaching_rounds": cfg.max_teaching_rounds,
         "unified": unified,
@@ -521,6 +573,56 @@ def run_batch_evaluation(
         with open(output_dir / "metrics_summary.json", "w") as f:
             json.dump(metrics, f, indent=2)
         print(format_metrics_table(metrics))
+        tracker.finish(metrics, step=completed)
+
+
+def replay_wandb(
+    output_dir: Path,
+    every: int = 10,
+    run_name: str | None = None,
+    order: str = "completion",
+) -> None:
+    """Re-log a finished eval to W&B as a per-dialogue metric curve.
+
+    Recomputes metrics over growing prefixes of the saved dialogues and logs
+    one point per ``every`` dialogues, turning a run that produced a single
+    end-of-run data point into a convergence curve — no re-evaluation needed.
+
+    order='completion' replays in the order dialogues actually finished
+    (file mtime); order='id' replays sorted by dialogue id.
+    """
+    from src.project.metrics import compute_metrics_from_records
+
+    dialogues_dir = output_dir / "dialogues"
+    files = sorted(dialogues_dir.glob("*.json"))
+    if order == "completion":
+        files.sort(key=lambda f: f.stat().st_mtime)
+    records = []
+    for f in files:
+        data = json.loads(f.read_text())
+        if "error" not in data:
+            records.append(data)
+    if not records:
+        print(f"No valid dialogues in {dialogues_dir}")
+        return
+
+    # Explicit replay request implies wandb logging — bypass the WANDB_EVAL gate.
+    os.environ.setdefault("WANDB_EVAL", "1")
+    tracker = EvalTracker()
+    tracker.start(run_name or os.environ.get("WANDB_EVAL_RUN_NAME") or f"{output_dir.name}-curve")
+    if not tracker.active:
+        return
+
+    print(f"Replaying {len(records)} dialogues from {dialogues_dir} (every {every}, {order} order)")
+    for n in [*range(every, len(records), every), len(records)]:
+        metrics = compute_metrics_from_records(records[:n])
+        tracker.log_step(metrics, step=n)
+        print(
+            f"  n={n:>4}  rouge1={metrics['rouge1']:>6.2f}  rougeL={metrics['rougeL']:>6.2f}"
+            f"  bleu4={metrics['bleu4']:>6.2f}"
+            f"  state_acc={metrics['state_accuracy']['overall']:>6.2f}"
+        )
+    tracker.finish()
 
 
 def interactive(
@@ -619,12 +721,43 @@ def main() -> None:
         "at least this value.",
     )
     eval_parser.add_argument(
+        "--hf-repo",
+        type=str,
+        nargs="+",
+        default=None,
+        help="One or more HuggingFace dataset repo IDs to evaluate (concatenated). "
+        "Default: ulises-c/SocratDataset (ZH). Use e.g. ulises-c/SocratDataset-EN "
+        "(held-out EN) or ulises-c/SocratDataset-SYNTHETIC{,-EN} with --split all "
+        "(synthetic sets are tiny, never-trained OOD probes).",
+    )
+    eval_parser.add_argument(
         "--dataset-path",
         type=Path,
         default=None,
         help="Path to a SocratDataset JSON file. Defaults to references/KELE/"
         "SocratDataset.json (the original Chinese dataset). Use "
         "references/KELE-EN/SocratDataset.json for the English translation.",
+    )
+
+    # Replay a finished eval into W&B as a per-dialogue metric curve
+    replay_parser = sub.add_parser(
+        "wandb-replay",
+        help="Re-log a finished eval's results dir to W&B as a per-dialogue metric curve",
+    )
+    replay_parser.add_argument(
+        "--output", type=Path, required=True, help="Results dir containing dialogues/"
+    )
+    replay_parser.add_argument(
+        "--every", type=int, default=10, help="Log one point per N dialogues"
+    )
+    replay_parser.add_argument(
+        "--run-name", type=str, default=None, help="W&B run name (default: <dir>-curve)"
+    )
+    replay_parser.add_argument(
+        "--order",
+        choices=["completion", "id"],
+        default="completion",
+        help="Prefix order: completion (file mtime, the order dialogues finished) or id",
     )
 
     # Quick test mode — run on a handful of dialogues
@@ -653,6 +786,14 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # weave.init auto-patches the openai clients in socratic_teaching_system, so a
+    # single gated call here traces the whole consultant→teacher loop. Off unless set.
+    weave_project = os.getenv("WEAVE_PROJECT")
+    if weave_project:
+        import weave  # pyright: ignore[reportMissingImports]
+
+        weave.init(weave_project)
+
     if args.command == "interactive":
         interactive(
             experiment=args.experiment,
@@ -675,6 +816,14 @@ def main() -> None:
             bert_consultant=args.bert_consultant,
             workers=args.workers,
             sample_seed=args.sample_seed,
+            hf_repo=args.hf_repo,
+        )
+    elif args.command == "wandb-replay":
+        replay_wandb(
+            args.output,
+            every=args.every,
+            run_name=args.run_name,
+            order=args.order,
         )
     elif args.command == "test":
         run_batch_evaluation(

@@ -26,6 +26,7 @@ dependencies = [
     "trl>=1.6.0",
     "tiktoken>=0.7.0",
     "pyspellchecker>=0.9.0",
+    "wandb>=0.18.0",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +48,13 @@ cuda = ["flash-linear-attention>=0.5.1"]
 
 # Web UI for the live demo. Install with `uv sync --extra demo`.
 demo = ["chainlit>=2.4,<3"]
+
+# LLM call tracing + eval (issue #111) for the inference/eval side. Opt in with
+# `uv sync --extra weave`; gated at runtime behind WEAVE_PROJECT (default off, no
+# behavior change when unset). weave.init() auto-patches the openai clients in
+# socratic_teaching_system — traces the consultant→teacher dialogue loop. Traces
+# (dialogue text) egress to the W&B cloud; keep off on the headless training box.
+weave = ["weave>=0.52"]
 
 [project.scripts]
 kele = "src.project.kele:main"
@@ -100,11 +108,12 @@ dev = [
 # Binary image formats (PDF/PNG/JPG) match false positives against compressed
 # byte sequences inside the file streams; runtime logs are noise. Skip them
 # outright — none are human-edited source content.
-skip = "uv.lock,*references*,*deliverables*,*results*,.venv,*data*,*logs*,*.pdf,*.png,*.jpg,*.jpeg,*.gif"
+skip = "uv.lock,*references*,*deliverables*,*results*,.venv,*data*,*logs*,*.pdf,*.png,*.jpg,*.jpeg,*.gif,*outputs*,*.log"
 # Terms that are not typos:
 #   rouge   — ROUGE (NLP metric: Recall-Oriented Understudy for Gisting Evaluation)
 #   nothink — Qwen model inference mode flag (think / nothink)
 #   re-use  — hyphenated form is valid; codespell prefers the unhyphenated reuse
+#   hsa     — AMD ROCm HSA_OVERRIDE_GFX_VERSION env var (not "has")
 ignore-words-list = "rouge,nothink,re-use,hsa"
 
 [build-system]

@@ -1,0 +1,95 @@
+
+========== ROCm / HIP build ==========
+7.2.53211-364a905
+7.2.3
+
+========== OS / kernel ==========
+Linux cachy 7.0.10-2-cachyos #1 SMP PREEMPT_DYNAMIC Thu, 28 May 2026 21:12:58 +0000 x86_64 GNU/Linux
+PRETTY_NAME="CachyOS"
+
+========== GPU / driver / firmware / VBIOS ==========
+
+
+============================ ROCm System Management Interface ============================
+============================== Version of System Component ===============================
+Driver version: 7.0.10-2-cachyos
+==========================================================================================
+================================== End of ROCm SMI Log ===================================
+
+
+============================ ROCm System Management Interface ============================
+========================================= VBIOS ==========================================
+GPU[0]		: VBIOS version: 113-1E4990U-S83
+==========================================================================================
+====================================== Product Info ======================================
+GPU[0]		: Card Series: 		AMD Radeon AI PRO R9700
+GPU[0]		: Card Model: 		0x7551
+GPU[0]		: Card Vendor: 		Advanced Micro Devices, Inc. [AMD/ATI]
+GPU[0]		: Card SKU: 		1E4990U
+GPU[0]		: Subsystem ID: 	-0x1b67
+GPU[0]		: Device Rev: 		0xc0
+GPU[0]		: Node ID: 		1
+GPU[0]		: GUID: 		44204
+GPU[0]		: GFX Version: 		gfx1201
+==========================================================================================
+================================== End of ROCm SMI Log ===================================
+
+-- amdgpu module --
+srcversion:     A855299D7FF772A65584BCB
+vermagic:       7.0.10-2-cachyos SMP preempt mod_unload 
+
+-- rocminfo (gfx target) --
+  Name:                    AMD Ryzen 9 5900X 12-Core Processor
+  Marketing Name:          AMD Ryzen 9 5900X 12-Core Processor
+  Vendor Name:             CPU                                
+  Compute Unit:            24                                 
+  Name:                    gfx1201                            
+  Marketing Name:          AMD Radeon AI PRO R9700            
+  Vendor Name:             AMD                                
+  Compute Unit:            64                                 
+      Name:                    amdgcn-amd-amdhsa--gfx1201         
+      Name:                    amdgcn-amd-amdhsa--gfx12-generic   
+
+========== ROCm component package versions ==========
+comgr 2:7.2.3-1
+hip-runtime-amd 7.2.3-1.1
+hipblas 7.2.3-1.1
+hipblas-common 7.2.3-1
+hipblaslt 7.2.3-1
+hipcub 7.2.3-1.1
+hipfft 7.2.3-1.1
+hiprand 7.2.3-1.1
+hipsolver 7.2.3-1.1
+hipsparse 7.2.3-1.1
+linux-firmware-amdgpu 1:20260519-1
+miopen-hip 7.2.3-1
+rocblas 7.2.3-1
+rocm-cmake 7.2.3-1
+rocm-core 7.2.3-1.1
+rocm-device-libs 2:7.2.3-1
+rocm-hip-libraries 7.2.3-1
+rocm-hip-runtime 7.2.3-1
+rocm-hip-sdk 7.2.3-1
+rocm-language-runtime 7.2.3-1
+rocm-llvm 2:7.2.3-1
+rocm-opencl-runtime 7.2.3-1
+rocm-smi-lib 7.2.0-2.1
+rocminfo 7.2.3-1.1
+
+========== Tensile library files present (issue #7192 lead) ==========
+-rw-r--r-- 1 root root 910520 May  5 08:13 /opt/rocm/lib/rocblas/library/Kernels.so-000-gfx1200.hsaco
+-rw-r--r-- 1 root root 910520 May  5 08:13 /opt/rocm/lib/rocblas/library/Kernels.so-000-gfx1201.hsaco
+-rw-r--r-- 1 root root  17653 May  5 08:13 /opt/rocm/lib/rocblas/library/TensileLibrary_lazy_gfx1200.dat
+-rw-r--r-- 1 root root  17653 May  5 08:13 /opt/rocm/lib/rocblas/library/TensileLibrary_lazy_gfx1201.dat
+
+========== Calling stack (torch / hip / bitsandbytes) ==========
+torch 2.11.0+rocm7.2 | hip 7.2.26015 | bnb 0.49.2
+
+========== rocblas-bench availability (for the standalone reproducer) ==========
+rocblas-bench: FOUND -> /opt/rocm/bin/rocblas-bench
+Next (separate GPU run): add ROCBLAS_LAYER=2 to the training launch env to emit the
+exact "rocblas-bench --transposeA ... -m 608 -n 5376 -k 21504 --lda ... --ldb ..." line
+for the faulting GEMM -- that command line is the stack-independent reproducer.
+
+========== DONE ==========
+Saved to: /home/ollie/Github/csen-346/docs/diagnostics/gfx1201-report-env-20260601-191024.txt
