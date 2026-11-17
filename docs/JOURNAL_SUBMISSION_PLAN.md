@@ -195,19 +195,26 @@ Run at the dialogue count Phase 3 justifies, on the headline configuration unles
 
 ## 5. Dependabot
 
-Eleven PRs were open on 2026-11-17, all failing Lint because CI ran an unpinned ruff. That is fixed
+Eleven PRs were open on 2026-11-17, ten of them failing Lint because CI ran an unpinned ruff. That is fixed
 on main. The repository ruleset requires Lint and Test to pass and the branch to be up to date, so
 each merge puts the others behind again; merge one, let Dependabot rebase, repeat.
 
-Three need a decision, not just a rebase:
+The repository's auto-merge workflow merges patch and minor bumps by itself once they are green.
+On 2026-11-17, after the rebase, it merged **transformers 5.9 → 5.23** (#177) and
+actions/checkout (#171). Phase 1 therefore runs on transformers 5.23; if anything in serving or
+classifier loading breaks there, check that bump first.
 
-- **ruff 0.15.22 → 0.16.0:** the new formatter reformats about ten files. Merge it together with a
-  formatting commit.
-- **datasets 4 → 5** and **transformers 5.9 → 5.14:** run the classifier and evaluation smoke tests
-  before merging, or hold them until Phase 4 is finished so the environment stays fixed while the
-  paper's runs are produced.
-- **bitsandbytes 0.49.2 → 0.50.0:** only matters for training; 0.50 is also what a ROCm 10 torch
+Still needing a decision, not just a rebase:
+
+- **ruff 0.15.22 → 0.17.5:** the newer formatter reformats about ten files. Merge it together with
+  a formatting commit.
+- **datasets 4 → 5:** a major bump. Run the classifier and evaluation smoke tests before merging,
+  or hold it until Phase 4 is finished.
+- **bitsandbytes 0.49.2 → 0.50.2:** only matters for training; 0.50 is also what a ROCm 10 torch
   needs.
+
+Consider pausing auto-merge for the `uv` ecosystem while the paper's runs are produced, so the
+environment stays fixed between runs.
 
 ## Log
 
