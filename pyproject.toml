@@ -6,24 +6,24 @@ authors = [{ name = "Ulises Chavarria", email = "ulises.engineer@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "openai>=2.38.0,<3.0.0",
+    "openai>=2.46.0,<3.0.0",
     "transformers>=5.9.0",
-    "accelerate>=1.2.0",
+    "accelerate>=1.14.0",
     "bitsandbytes>=0.45.0",
-    "huggingface-hub>=1.16.1",
+    "huggingface-hub>=1.24.0",
     "rouge-score>=0.1.2",
     "sacrebleu>=2.4.0",
-    "tqdm>=4.67.0",
+    "tqdm>=4.68.4",
     "rich>=13.9.0",
     "datasets>=3.2.0",
-    "scikit-learn>=1.6.0",
-    "scipy>=1.15.0",
-    "fastapi>=0.136.3",
-    "uvicorn>=0.49.0",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.18.0",
+    "fastapi>=0.139.0",
+    "uvicorn>=0.51.0",
     "pydantic>=2.13.4",
-    "google-genai>=2.8.0",
+    "google-genai>=2.12.1",
     "peft>=0.19.1",
-    "trl>=1.5.1",
+    "trl>=1.8.0",
     "tiktoken>=0.7.0",
     "pyspellchecker>=0.9.0",
     "wandb>=0.18.0",
@@ -33,7 +33,7 @@ dependencies = [
 # Experiment tracking for the state-classifier training scripts. Optional so the
 # core install and the no-tracking code path stay dependency-free; opt in with
 # `uv sync --extra wandb` (or `pip install -e ".[wandb]"`).
-wandb = ["wandb>=0.27.2"]
+wandb = ["wandb>=0.28.0"]
 
 # CUDA-only training acceleration. flash-linear-attention engages Qwen3.5's
 # Triton gated-delta-rule kernels (~2.8x fwd+bwd over the pure-PyTorch fallback;
@@ -44,7 +44,7 @@ wandb = ["wandb>=0.27.2"]
 # the issue #100 gfx1201 patch and otherwise page-fault. Keeping it CUDA-opt-in
 # means the AMD path keeps its known-good pure-PyTorch fallback. causal-conv1d is
 # intentionally excluded (only fuses the cheap conv; needs nvcc to build).
-cuda = ["flash-linear-attention>=0.5.0"]
+cuda = ["flash-linear-attention>=0.5.1"]
 
 # Web UI for the live demo. Install with `uv sync --extra demo`.
 demo = ["chainlit>=2.4,<3"]
@@ -94,12 +94,12 @@ typeCheckingMode = "basic"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0.0",
+    "pytest>=9.1.1",
     "pytest-cov>=6.0.0",
-    "pyright>=1.1.0",
-    "ruff>=0.15.16",
-    "codespell>=2.3.0",
-    "matplotlib>=3.10.9",
+    "pyright>=1.1.411",
+    "ruff>=0.15.22",
+    "codespell>=2.4.3",
+    "matplotlib>=3.11.0",
 ]
 
 [tool.codespell]
