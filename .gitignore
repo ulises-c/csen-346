@@ -69,6 +69,8 @@ references/KELE-EN/.cache/
 # Railguard
 .railguard/*
 
+# W&B local run artifacts
+wandb/
 # macOS
 .DS_Store
 **/.DS_Store

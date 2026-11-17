@@ -14,7 +14,10 @@ import openai
 
 import src.project.socratic_teaching_system as stss
 import src.project.tournament_utilizations as tu
-from src.project.socratic_teaching_system import SocraticTeachingSystem
+from src.project.socratic_teaching_system import (
+    SocraticTeachingSystem,
+    SocraticTeachingSystemOracle,
+)
 
 
 def make_system(**overrides):
@@ -28,6 +31,54 @@ def make_system(**overrides):
     )
     kwargs.update(overrides)
     return SocraticTeachingSystem(**kwargs)
+
+
+def make_oracle(**overrides):
+    kwargs = dict(
+        consultant_api_key="x",
+        consultant_base_url="http://localhost:1/v1",
+        consultant_model_name="consultant",
+        teacher_api_key="x",
+        teacher_base_url="http://localhost:2/v1",
+        teacher_model_name="teacher",
+    )
+    kwargs.update(overrides)
+    return SocraticTeachingSystemOracle(**kwargs)
+
+
+def test_oracle_honors_primed_ground_truth_state_and_derives_action(monkeypatch):
+    sys = make_oracle()
+    monkeypatch.setattr(sys, "socrates_teacher", lambda si, ev, ac: f"[teacher:{ac}]")
+
+    sys.prime_oracle_state("c10")
+    resp = sys.process_student_input("为什么？")
+
+    assert sys.current_state == "c10"
+    last = sys.consultant_history[-1]
+    assert last["state"] == "c10"
+    assert last["action"] == sys.get_action_for_state("c10")
+    assert "标准答案状态" in last["evaluation"]
+    assert resp == f"[teacher:{sys.get_action_for_state('c10')}]"
+
+
+def test_oracle_bypasses_max_round_guard(monkeypatch):
+    # More teaching turns than max_teaching_rounds must NOT force d33 — the GT
+    # state is authoritative (this is the whole point of the oracle).
+    sys = make_oracle(max_teaching_rounds=2)
+    monkeypatch.setattr(sys, "socrates_teacher", lambda si, ev, ac: "ok")
+
+    for st in ["b2", "c8", "c9", "c10"]:  # 4 teaching turns, max=2
+        sys.prime_oracle_state(st)
+        sys.process_student_input("x")
+
+    assert sys.current_state == "c10"  # not clamped to d33 by the base guard
+
+
+def test_oracle_falls_back_to_current_state_when_unprimed(monkeypatch):
+    sys = make_oracle()
+    monkeypatch.setattr(sys, "socrates_teacher", lambda si, ev, ac: "ok")
+    sys.process_student_input("x")  # never primed
+    assert sys.current_state == "a0"
 
 
 def test_reset_session_initial_state():

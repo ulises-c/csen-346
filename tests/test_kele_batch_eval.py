@@ -60,6 +60,45 @@ def test_run_batch_evaluation_creates_expected_output_files(tmp_path, monkeypatc
     assert json.loads((output_dir / "metrics_summary.json").read_text()) == metrics
 
 
+_PROBE_SYSTEM = SimpleNamespace(
+    teacher_model_name="teacher-model", consultant_model_name="consultant-model"
+)
+
+
+def test_run_batch_evaluation_forwards_hf_repo_and_split_to_load_dataset(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_load_dataset(*args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(kele, "load_dataset", fake_load_dataset)
+    monkeypatch.setattr(kele, "create_system", lambda *a, **kw: _PROBE_SYSTEM)
+    monkeypatch.setattr(kele, "load_config", lambda *a, **kw: fake_config())
+    install_fake_metrics(monkeypatch, {"rouge1": 0})
+
+    kele.run_batch_evaluation(
+        tmp_path / "results",
+        split="all",
+        hf_repo=["ulises-c/SocratDataset-SYNTHETIC"],
+    )
+
+    assert captured["split"] == "all"
+    assert captured["hf_repo"] == ["ulises-c/SocratDataset-SYNTHETIC"]
+
+
+def test_run_batch_evaluation_omits_hf_repo_kwarg_when_unset(tmp_path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(kele, "load_dataset", lambda *a, **kw: captured.update(kw) or [])
+    monkeypatch.setattr(kele, "create_system", lambda *a, **kw: _PROBE_SYSTEM)
+    monkeypatch.setattr(kele, "load_config", lambda *a, **kw: fake_config())
+    install_fake_metrics(monkeypatch, {"rouge1": 0})
+
+    kele.run_batch_evaluation(tmp_path / "results")
+
+    assert "hf_repo" not in captured  # falls back to load_dataset's default ZH repo
+
+
 def test_run_batch_evaluation_skips_existing_dialogue_files(tmp_path, monkeypatch):
     dataset = [
         {"id": 1, "question": "Q1", "answer": "A1", "dialogue": []},

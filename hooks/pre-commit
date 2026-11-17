@@ -16,7 +16,7 @@ info() { echo -e "${BOLD}→${RESET} $*"; }
 # Step 1: Formatting (ruff format --check)
 # ---------------------------------------------------------------------------
 info "Checking formatting (ruff format --check) …"
-if uvx ruff format --check .; then
+if uv run ruff format --check .; then
   pass "Formatting OK"
 else
   fail "Formatting check failed. Run 'ruff format .' to fix."
@@ -27,7 +27,7 @@ fi
 # Step 2: Linting (ruff check)
 # ---------------------------------------------------------------------------
 info "Checking linting (ruff check) …"
-if uvx ruff check .; then
+if uv run ruff check .; then
   pass "Linting OK"
 else
   fail "Linting failed. Run 'ruff check --fix .' to auto-fix where possible."
@@ -38,7 +38,7 @@ fi
 # Step 3: Type checking (pyright — mirrors CI lint job)
 # ---------------------------------------------------------------------------
 info "Type checking (pyright) …"
-if uv run --no-sync pyright; then
+if uv run --no-sync python -m pyright; then
   pass "Type check OK"
 else
   fail "Type check failed. Fix the errors above before committing."
@@ -49,7 +49,7 @@ fi
 # Step 4: Spell check (codespell — mirrors CI lint job)
 # ---------------------------------------------------------------------------
 info "Spell checking (codespell) …"
-if uv run --no-sync codespell .; then
+if uv run --no-sync python -m codespell_lib .; then
   pass "Spell check OK"
 else
   fail "Spell check failed. Fix the typos above before committing."
@@ -78,7 +78,7 @@ fi
 # Note: using pytest directly avoids ambiguity with the shell builtin `test`.
 # ---------------------------------------------------------------------------
 info "Running tests …"
-if uv run --no-sync pytest -rs --cov --cov-report=term-missing; then
+if uv run --no-sync python -m pytest -rs --cov --cov-report=term-missing; then
   pass "Tests passed"
 else
   fail "Tests failed."

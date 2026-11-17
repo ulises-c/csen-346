@@ -14,13 +14,24 @@
 #
 # No model weights are downloaded. Each step is independent.
 #
+# This is the single unified GPU checker for the project — clean-state, driver,
+# torch, bitsandbytes, transformers, PEFT, TRL, attention, llama.cpp. Do not add
+# parallel one-off GPU check scripts; extend this one.
+#
 # TODO: extend step 1 to also support NVIDIA/CUDA (nvidia-smi) for RTX 5090.
 #   When nvidia-smi is found, skip ROCm-specific probes and use CUDA backend
 #   checks instead. This allows the same script to run on both AMD and NVIDIA
 #   machines without manual modification.
 #
 # Usage:
-#   bash scripts/test_gpu_stack.sh
+#   bash scripts/test_gpu_stack.sh                  # full 13-step stack test
+#   bash scripts/test_gpu_stack.sh --preflight      # fast training gate: clean
+#                                                     state + torch fwd/bwd (~5s)
+#   bash scripts/test_gpu_stack.sh --wait-clean 120 # poll up to 120s for a clean
+#                                                     GPU (used by the resume monitor)
+#
+# Clean-state tunables (env): GPU_PROC_PATTERN (default train_sft\.py),
+#   GPU_VRAM_THRESHOLD_MB (default 1024).
 #
 # Exit code: 0 if all non-optional steps pass, 1 if any fail.
 
@@ -33,7 +44,140 @@ fail()  { echo -e "  ${RED}FAIL${NC}  $*"; }
 warn()  { echo -e "  ${YELLOW}WARN${NC}  $*"; }
 step()  { echo -e "\n${BOLD}[$1/13] $2${NC}"; }
 
+# ── GPU clean-state + fwd/bwd helpers (shared by --preflight / --wait-clean and
+#    the resume monitor) ────────────────────────────────────────────────────────
+# A gfx1201 page fault leaves the amdkfd dirty: orphaned procs keep a HIP context
+# and stale VRAM mapped, so the next launch faults early on stale page-table
+# entries (docs/GFX1201_RDNA4_TRAINING.md §10). These confirm the GPU is actually
+# free and functional before a (re)launch — the gate the monitor used to skip.
+GPU_PROC_PATTERN="${GPU_PROC_PATTERN:-train_sft\\.py}"
+GPU_VRAM_THRESHOLD_MB="${GPU_VRAM_THRESHOLD_MB:-1024}"
+
+gpu_vram_used_mb() {
+    rocm-smi --showmeminfo vram --json 2>/dev/null | .venv/bin/python -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print(-1); sys.exit(0)
+best = 0
+for card in d.values():
+    if isinstance(card, dict):
+        for k, v in card.items():
+            if "used" in k.lower() and "memory" in k.lower():
+                try:
+                    best = max(best, int(str(v).strip()))
+                except ValueError:
+                    pass
+print(best // (1024 * 1024))
+'
+}
+
+gpu_clean_state() {
+    local used pids is_dirty=0
+    pids="$(rocm-smi --showpids 2>/dev/null | grep -iE "$GPU_PROC_PATTERN" || true)"
+    used="$(gpu_vram_used_mb)"
+    if [[ -n "$pids" ]]; then
+        fail "GPU busy — process matching /$GPU_PROC_PATTERN/ still resident:"
+        printf '%s\n' "$pids" | sed 's/^/         /'
+        is_dirty=1
+    fi
+    if [[ "$used" -lt 0 ]]; then
+        warn "VRAM usage unreadable (rocm-smi JSON parse failed) — inconclusive"
+    elif [[ "$used" -gt "$GPU_VRAM_THRESHOLD_MB" ]]; then
+        fail "VRAM used ${used}MB > ${GPU_VRAM_THRESHOLD_MB}MB threshold (stale allocation?)"
+        is_dirty=1
+    else
+        pass "GPU idle — VRAM used ${used}MB (≤ ${GPU_VRAM_THRESHOLD_MB}MB), no training proc"
+    fi
+    return "$is_dirty"
+}
+
+gpu_fwd_bwd() {
+    local out
+    out="$(.venv/bin/python - 2>&1 <<'PY'
+import sys
+import torch
+if not torch.cuda.is_available():
+    print("FAIL torch sees no GPU"); sys.exit(1)
+try:
+    torch.manual_seed(0)
+    a = torch.randn(2048, 2048, device="cuda", dtype=torch.bfloat16, requires_grad=True)
+    b = torch.randn(2048, 2048, device="cuda", dtype=torch.bfloat16)
+    ((a @ b).float().pow(2).mean()).backward()
+    torch.cuda.synchronize()
+    if a.grad is None or not torch.isfinite(a.grad).all():
+        print("FAIL gradient missing/non-finite — GPU compute is wedged"); sys.exit(1)
+    free, total = torch.cuda.mem_get_info()
+    print(f"fwd+bwd OK  free={free/1024**3:.1f}/{total/1024**3:.1f}GB")
+except Exception as e:  # noqa: BLE001 — any HIP fault here means the GPU is unusable
+    print(f"FAIL fwd+bwd raised {type(e).__name__}: {e}"); sys.exit(1)
+PY
+)"
+    if echo "$out" | grep -q "^FAIL"; then
+        fail "$(echo "$out" | grep '^FAIL' | sed 's/^FAIL //')"
+        return 1
+    fi
+    pass "$out"
+    return 0
+}
+
+# ── Mode dispatch ──────────────────────────────────────────────────────────────
+MODE=full
+WAIT_SECONDS=0
+case "${1:-}" in
+    --preflight)  MODE=preflight ;;
+    --wait-clean) MODE=wait-clean; WAIT_SECONDS="${2:-120}" ;;
+    -h|--help)
+        grep -E '^#( |$)' "$0" | sed -E 's/^# ?//'
+        exit 0 ;;
+    "") ;;
+    *) printf 'error: unknown arg %s (try --help)\n' "$1" >&2; exit 2 ;;
+esac
+
+if ! command -v rocm-smi >/dev/null 2>&1 && [[ "$MODE" != full ]]; then
+    printf 'error: rocm-smi not found — not a ROCm host\n' >&2
+    exit 2
+fi
+
+if [[ "$MODE" == "wait-clean" ]]; then
+    echo -e "${BOLD}Waiting up to ${WAIT_SECONDS}s for a clean GPU${NC}"
+    waited=0
+    while true; do
+        if gpu_clean_state; then
+            pass "GPU clean — safe to (re)launch"
+            exit 0
+        fi
+        if (( waited >= WAIT_SECONDS )); then
+            fail "GPU still dirty after ${waited}s — refusing to launch"
+            exit 1
+        fi
+        sleep 3
+        (( waited += 3 )) || true
+    done
+fi
+
+if [[ "$MODE" == "preflight" ]]; then
+    echo -e "${BOLD}GPU pre-flight — clean state + torch fwd/bwd${NC}"
+    PF_FAIL=0
+    gpu_clean_state || PF_FAIL=$((PF_FAIL + 1))
+    gpu_fwd_bwd     || PF_FAIL=$((PF_FAIL + 1))
+    echo ""
+    if [[ "$PF_FAIL" -eq 0 ]]; then
+        echo -e "${GREEN}${BOLD}Pre-flight passed — GPU clean and computing.${NC}"
+    else
+        echo -e "${RED}${BOLD}Pre-flight failed ($PF_FAIL) — do NOT launch.${NC}"
+        echo "  Clear it: pkill -9 -f '$GPU_PROC_PATTERN'; then re-run. A wedged"
+        echo "  context that survives the kill needs a GPU/driver reset."
+    fi
+    exit "$PF_FAIL"
+fi
+
+# ── Full stack test (MODE=full) ────────────────────────────────────────────────
 FAILURES=0
+
+step 0 "GPU clean state (orphan procs / stale VRAM)"
+gpu_clean_state || warn "GPU not idle — fine if another job is intentionally running"
 
 # ── 1. ROCm driver ────────────────────────────────────────────────────────────
 step 1 "ROCm driver + GPU visibility"
@@ -336,7 +480,7 @@ fi
 
 # ── 9. Efficient attention (PyTorch SDPA + optional flash-attn) ───────────────
 step 9 "Efficient attention — PyTorch SDPA + flash-attn if installed"
-SDPA_OUT=$(.venv/bin/python - 2>&1 <<'PY'
+SDPA_OUT=$(FLASH_ATTENTION_TRITON_AMD_ENABLE=TRUE .venv/bin/python - 2>&1 <<'PY'
 import sys, warnings
 warnings.filterwarnings("ignore")
 try:
@@ -544,10 +688,9 @@ if [[ "$FAILURES" -eq 0 ]]; then
     echo "  LoRA fine-tuning:             step 7 passing = PEFT/LoRA is ready."
     echo "  SFT trainer:                  step 8 passing = TRL SFTTrainer is ready."
     echo "  Efficient attention (torch):  step 9 = PyTorch SDPA + flash-attn (if installed)"
-    echo "    flash_attn install note: PyPI wheel fails on gfx1201 (CK-tile ISA bug)."
-    echo "    Use ROCm fork with Triton backend:"
-    echo "      git clone --recurse-submodules https://github.com/ROCm/flash-attention /tmp/fa"
-    echo "      FLASH_ATTENTION_TRITON_AMD_ENABLE=TRUE uv pip install /tmp/fa --no-build-isolation"
+    echo "    flash_attn install note: PyPI flash-attn 2.8.3+ works on gfx1201 via Triton JIT."
+    echo "    Install (once): FLASH_ATTENTION_TRITON_AMD_ENABLE=TRUE uv pip install flash-attn --no-build-isolation"
+    echo "    Set FLASH_ATTENTION_TRITON_AMD_ENABLE=TRUE at training time too (Triton JIT selects AMD path)."
     echo ""
     echo "  llama-server build:           step 10 = ROCm/HIP flags verified."
     echo "  Flash attention (llama.cpp):  step 11 = FA compiled in; check runtime logs for 'flash attn = 1'."
