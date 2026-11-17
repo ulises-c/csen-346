@@ -10,6 +10,7 @@ from src.project.metrics import (
     compute_bleu,
     compute_rouge,
     compute_state_accuracy,
+    count_language_mismatches,
     extract_predictions_and_references,
     format_metrics_table,
 )
@@ -25,6 +26,61 @@ def test_compute_rouge_identical_chinese_strings():
     assert scores["rouge1"] == 100.0
     assert scores["rouge2"] == 100.0
     assert scores["rougeL"] == 100.0
+
+
+def test_compute_rouge_chinese_matches_character_level_scoring():
+    from rouge_score import rouge_scorer
+
+    from src.project.metrics import _ZhCharTokenizer
+
+    pred, ref = "你觉得水在100度时会怎么样？", "你知道水在什么温度下会沸腾吗？"
+    legacy = rouge_scorer.RougeScorer(
+        ["rouge1", "rouge2", "rougeL"], use_stemmer=False, tokenizer=_ZhCharTokenizer()
+    ).score(ref, pred)
+
+    scores = compute_rouge([pred], [ref])
+
+    for key in ("rouge1", "rouge2", "rougeL"):
+        assert scores[key] == pytest.approx(legacy[key].fmeasure * 100)
+
+
+def test_compute_rouge_english_is_word_level():
+    pred = "What do you think happens to the water when the sun heats the puddle?"
+    ref = "Can you tell me why the moon looks different each night of the month?"
+
+    unrelated = compute_rouge([pred], [ref])
+    identical = compute_rouge([pred], [pred])
+
+    # Character-level scoring gave this unrelated pair ROUGE-1 67.9 / ROUGE-2 29.1.
+    assert unrelated["rouge1"] < 35.0
+    assert unrelated["rouge2"] == 0.0
+    assert identical["rouge1"] == 100.0
+
+
+def test_count_language_mismatches():
+    predictions = ["What is water?", "水是什么？", "Why?"]
+    references = ["水是什么？", "水是什么？", "Why not?"]
+
+    assert count_language_mismatches(predictions, references) == 1
+
+
+def test_compute_all_metrics_reports_language_mismatches(tmp_path):
+    dialogues_dir = tmp_path / "dialogues"
+    dialogues_dir.mkdir()
+    write_dialogue(
+        dialogues_dir / "0001.json",
+        {
+            "dialogue": [
+                {"teacher_response": "What is water?", "ground_truth_teacher": "水是什么？"},
+                {"teacher_response": "水是什么？", "ground_truth_teacher": "水是什么？"},
+            ]
+        },
+    )
+
+    metrics = compute_all_metrics(dialogues_dir)
+
+    assert metrics["language_mismatch_turns"] == 1
+    assert "different languages" in format_metrics_table(metrics)
 
 
 def test_compute_bleu_identical_chinese_strings():
