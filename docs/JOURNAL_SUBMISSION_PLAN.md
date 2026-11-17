@@ -57,8 +57,8 @@ Change or drop:
 ### Phase 0: housekeeping
 
 - [x] Merge #129 (Gemma 12B fine-tune, oracle mode, Claude Code judge backend); close #101.
-- [ ] Merge #183: language-aware ROUGE and `scripts/unified_robustness.py`.
-- [ ] Merge #184: gfx1201 probe work, logs and upstream status.
+- [x] Merge #183: language-aware ROUGE and `scripts/unified_robustness.py`.
+- [x] Merge #184: gfx1201 probe work, logs and upstream status.
 - [ ] Merge the PR carrying this plan and the W&B export.
 - [ ] Dependabot PRs: rebased onto the fixed lint job; merge the ones that pass, decide on the rest
       (see section 5).
@@ -213,9 +213,12 @@ Still needing a decision, not just a rebase:
 - **bitsandbytes 0.49.2 → 0.50.2:** only matters for training; 0.50 is also what a ROCm 10 torch
   needs.
 
-Consider pausing auto-merge for the `uv` ecosystem while the paper's runs are produced, so the
-environment stays fixed between runs.
+**Auto-merge is paused** (2026-11-17) so the environment stays fixed while the paper's runs are
+produced: the `Dependabot auto-merge` workflow is disabled and auto-merge was switched off on the
+open PRs. Dependabot still opens PRs; they now wait for a manual merge. Re-enable with
+`gh workflow enable dependabot-automerge.yml` once Phase 4 is finished.
 
 ## Log
 
 - 2026-11-17: plan written. #129 merged, #101 closed, #183 and #184 opened.
+- 2026-11-17: #183 and #184 merged. Dependabot auto-merge paused. transformers is at 5.23 on main.
