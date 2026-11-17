@@ -5,6 +5,39 @@
 
 ---
 
+## Status update — 2026-11-17
+
+Everything below this section is the June state. What changed since:
+
+- **Upstream fix:** ROCm/rocm-libraries PR #8909 ("bound GLTr transpose-load to tensor end"), merged
+  2026-08-14. It clamps `global_load_tr` operand loads, which had no bounds check on gfx1201 and
+  could read past the end of an operand. It is **not** in ROCm 10.0.0; it is in the 10.1 branch and
+  in nightlies from late September on.
+- **Issue #7992 was closed on 2026-10-08** as resolved by that fix.
+- **Independent confirmations with faulting controls:** a 4x R9700 LoRA reproducer clean at three
+  allocation layouts (comments on #8909), the Qwen3.5 inference case in #12346, and a guard-page
+  probe on ROCm 10.1 in speediedan/interpretune#1001.
+- **A 2026-11-17 comment on #7992 reports the tile still faulting on a 10.3 nightly.** Its
+  reproducer passes `ldb=K` with `transB=T` but allocates `K*N` elements for B, a quarter of what
+  that `ldb` requires. Checked on this R9700 against the ROCm 10.1 wheels: it faults as posted, and
+  runs clean 10 of 10 with B allocated per the BLAS contract or with `ldb=N`. The corrected
+  reproducer is `docs/diagnostics/repro_gemm_ex_ldb.c`. Nothing has been posted upstream about this.
+- **Checked here on ROCm 10.1** (`torch 2.16.0.dev20261117+rocm10.1`, separate venv): a direct
+  `rocblas_gemm_ex` call at M=439 dispatches `Cijk_Ailk_Bjlk … MT64x64x64 … DTVB1 … ISA1201` and is
+  clean; M=607 and M=608 select `MT64x64x32` and are clean. `scripts/probe_gfx1201_tile.py` passes
+  at all eight M values but still never dispatches the `Bjlk` kernel.
+
+**What is not established:**
+
+- The Gemma 4 31B QLoRA run that originally faulted has not been repeated on ROCm 10.1.
+- The standalone runs above use isolated `hipMalloc` buffers, which the upstream threads show can
+  hide this over-read (the extra bytes land in mapped memory). They are weak evidence either way.
+- The original report had the faulting address about 1 GB outside both operands. The bug fixed by
+  #8909 reads just past the end of one operand. It is possible the original fault is a different
+  bug that #8909 does not cover.
+
+---
+
 ## TL;DR
 
 We have a confirmed rocBLAS/Tensile bug on gfx1201 (RDNA4) that crashes QLoRA training via a GPU page fault. The upstream issue is filed and an AMD engineer (Nick) is assigned.
