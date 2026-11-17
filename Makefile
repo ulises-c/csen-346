@@ -175,8 +175,8 @@ run:
 # ── Code quality ─────────────────────────────────────────────────────────────
 
 pre-commit:
-	uvx ruff format .
-	uvx ruff check --fix .
+	uv run ruff format .
+	uv run ruff check --fix .
 	uv run --no-sync pytest -rs
 
 # ── Torch install ────────────────────────────────────────────────────────────

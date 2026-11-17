@@ -13,8 +13,8 @@
 ## Checklist
 
 - [ ] All checks pass — run the pre-commit hook (`make install-hooks`) or manually:
-  - `uvx ruff format --check .` — formatting
-  - `uvx ruff check .` — linting
+  - `uv run ruff format --check .` — formatting
+  - `uv run ruff check .` — linting
   - `uv run pyright` — type checking
   - `uv run codespell .` — spell checking
   - `uv run pytest -rs --cov --cov-report=term-missing` — tests + coverage
