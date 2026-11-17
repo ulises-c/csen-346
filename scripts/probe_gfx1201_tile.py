@@ -80,6 +80,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Build Linear4bit with bias=False (test the non-Bias epilogue path)",
     )
+    p.add_argument(
+        "--nt-linear",
+        action="store_true",
+        help="Use a plain bf16 torch.nn.Linear (no bitsandbytes) to force the NT contraction "
+        "Cijk_Ailk_Bjlk (A·Wᵀ) — the production faulting pattern. bnb.nn.Linear4bit "
+        "double-transposes the dequant weight and lands on the NN kernel Ailk_Bljk instead.",
+    )
+    p.add_argument(
+        "--colmajor-b",
+        action="store_true",
+        help="matmul against a col-major [K,N] bf16 weight (stride (1,K), non-contiguous) — "
+        "reproduces the production DTVB1 Bjlk operand layout from NF4 dequant.",
+    )
     p.add_argument("--shape-3d", action="store_true", help="Use (1, M, K) instead of (M, K)")
     p.add_argument("--ckpt", action="store_true", help="Wrap forward in torch.utils.checkpoint")
     p.add_argument(
@@ -108,13 +121,36 @@ def run_probe(m: int, args: argparse.Namespace) -> None:
     shape_str = f"(1, {m}, 21504)" if args.shape_3d else f"({m}, 21504)"
     print(f"\n##### SWEEP M={m}  shape={shape_str} #####", flush=True)
 
-    layer = bnb.nn.Linear4bit(
-        input_features=21504,
-        output_features=5376,
-        bias=not args.no_bias,
-        compute_dtype=torch.bfloat16,
-        quant_type="nf4",
-    ).to("cuda")
+    if args.colmajor_b:
+        # Reproduce the production B-operand layout: a col-major [K, N] bf16 weight
+        # (stride (1, K), non-contiguous) — exactly what bitsandbytes' NF4 dequant emits —
+        # fed to matmul WITHOUT torch's contiguity normalization. This is the operand that
+        # makes Tensile name the contraction Cijk_Ailk_Bjlk_…DTVB1 (the faulting pattern),
+        # rather than the Bljk path a plain contiguous nn.Linear weight gets normalized to.
+        w_base = torch.randn(5376, 21504, dtype=torch.bfloat16, device="cuda")
+        weight_kn = w_base.t()  # [K=21504, N=5376] col-major, stride (1, 21504), non-contig
+        bias_t = None if args.no_bias else torch.randn(5376, dtype=torch.bfloat16, device="cuda")
+        print(
+            f"col-major B: shape={list(weight_kn.shape)} stride={list(weight_kn.stride())} "
+            f"contig={weight_kn.is_contiguous()}"
+        )
+
+        class _ColB(torch.nn.Module):
+            def forward(self, inp: torch.Tensor) -> torch.Tensor:
+                out = inp @ weight_kn
+                return out if bias_t is None else out + bias_t
+
+        layer = _ColB().to("cuda")
+    elif args.nt_linear:
+        layer = torch.nn.Linear(21504, 5376, bias=not args.no_bias).to("cuda").to(torch.bfloat16)
+    else:
+        layer = bnb.nn.Linear4bit(
+            input_features=21504,
+            output_features=5376,
+            bias=not args.no_bias,
+            compute_dtype=torch.bfloat16,
+            quant_type="nf4",
+        ).to("cuda")
 
     x_shape = (1, m, 21504) if args.shape_3d else (m, 21504)
 
