@@ -120,6 +120,14 @@ echo "Endpoint:  http://localhost:${PORT}/v1/chat/completions"
 echo "Test:      curl http://localhost:${PORT}/v1/models"
 echo "---"
 
+# Recent llama.cpp builds detect that Gemma 4's chat template supports thinking
+# and turn it on (--reasoning auto). The teacher then writes about 600 reasoning
+# tokens before each reply of about 35, which made a 50-dialogue run on the
+# R9700 six times slower. The archived runs' wall times (681 dialogues in 32
+# minutes on a 5090) are only consistent with thinking off, so pin it off.
+# Override with LLAMA_ARG_REASONING=auto. Builds without the option ignore it.
+export LLAMA_ARG_REASONING="${LLAMA_ARG_REASONING:-off}"
+
 exec "$LLAMA_SERVER" \
   -m "$MODEL" \
   "${ALIAS_ARGS[@]}" \
