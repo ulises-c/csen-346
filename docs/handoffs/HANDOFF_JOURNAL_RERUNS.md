@@ -92,11 +92,29 @@ at a 3-bit-class quantization. A larger model is not automatically a stricter ju
 
 Validation, cheapest first:
 
-1. **Controls on run 1's dialogues, no new evaluation needed.** Take about 100 dialogues and judge
-   three versions of each teacher turn: the system's reply, the ground-truth reply, and a wrong
-   reply (one taken from a different dialogue, and one that states the answer outright). A usable
-   judge scores the wrong replies clearly lower. Run each candidate judge on the same turns.
-   About 20 minutes of GPU per candidate with Qwen3.8-27B's throughput.
+1. **Controls on run 1's dialogues, no new evaluation needed: `scripts/judge_validation.py`**
+   (built 2026-11-18, not yet run against a real judge). It samples 30 turns per stage (120 turns,
+   seed 42), keeps the conversation history, and has the judge score seven replies per turn: the
+   system's, the reference, and five bad controls, each aimed at one rubric axis (a reply swapped
+   in from another dialogue, the previous reply repeated, a flat statement with no question,
+   university-level jargon, the closing summary given early). It reports the paired drop against
+   the system's reply with a dialogue-level bootstrap interval, flags controls the judge does not
+   detect, and scores each system reply twice for repeatability. 887 judge calls, about 27
+   minutes at Qwen3.8-27B's speed. Every judge gets the same items, and
+   `--compare A.json B.json` gives item-level agreement between two judges.
+
+   ```bash
+   # on ollie-cachy, daytime, with a judge server up (reasoning off) on port 8086
+   .venv/bin/python scripts/judge_validation.py results/r1-qwen35clf-gemma31b-fewshot10-n681-seed42 \
+     --backend api --base-url http://127.0.0.1:8086/v1 --api-key local --model Qwen3.8-27B-Q5_K_M
+   # Claude through the subscription, from any machine with the dialogues (smaller sample)
+   uv run python scripts/judge_validation.py <run dir> --backend claude-code \
+     --model claude-sonnet-4-6 --per-stage 10
+   ```
+
+   Run it for Qwen3.8-27B, Qwen3.6-27B and Qwen3.8-Flash-Next, then compare. The summary files
+   are small; commit them. There is no wrapper yet that starts the judge server, runs this and
+   stops the server; `scripts/rerun_headline_r9700.sh` stage 2 shows the server command.
 2. **A second system.** Judge run 3 once it exists and compare with run 1.
 3. **Agreement with Claude** on about 100 dialogues through the subscription backend, and with
    human scores (Phase 6).
