@@ -92,3 +92,71 @@ def test_stratified_sample_takes_all_when_pool_small(tmp_path):
     ddir = _make_dialogues(tmp_path)  # only 10 turns per stage available
     sample = llm_judge_eval.build_stratified_sample(ddir, per_stage=50, stages="c", seed=42)
     assert len(sample) == 10  # capped at pool size, no error
+
+
+# ── completeness of a judge pass ──────────────────────────────────────────────
+
+
+def _write_run(tmp_path, n_dialogues=3, n_turns=2):
+    dialogues = tmp_path / "dialogues"
+    dialogues.mkdir()
+    for d in range(n_dialogues):
+        turns = [
+            {"teacher_response": "q?", "ground_truth_teacher": "q?", "ground_truth_state": "b4"}
+            for _ in range(n_turns)
+        ]
+        (dialogues / f"{d:04d}.json").write_text(_json.dumps({"id": d, "dialogue": turns}))
+    return tmp_path
+
+
+def _fake_score(fail_dialogue_ids=()):
+    def score_turn(client, model, dialogue, turn_idx, backend="api"):
+        if dialogue["id"] in fail_dialogue_ids:
+            return None
+        return {
+            "socratic_validity": 2,
+            "advancement": 2,
+            "age_appropriateness": 2,
+            "question_form": 2,
+            "total": 8,
+        }
+
+    return score_turn
+
+
+def test_judge_summary_marks_complete_pass(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+
+    summary = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+
+    assert summary["complete"] is True
+    assert (summary["n_dialogues_judged"], summary["n_dialogues_total"]) == (3, 3)
+    assert (summary["n_turns_judged"], summary["n_turns_total"]) == (6, 6)
+
+
+def test_judge_summary_flags_partial_pass(tmp_path, monkeypatch, capsys):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score(fail_dialogue_ids={1}))
+
+    summary = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+
+    assert summary["complete"] is False
+    assert (summary["n_dialogues_judged"], summary["n_dialogues_total"]) == (2, 3)
+    assert (summary["n_turns_judged"], summary["n_turns_total"]) == (4, 6)
+    assert "incomplete judge pass" in capsys.readouterr().err
+    on_disk = _json.loads((run / "judge_summary.json").read_text())
+    assert on_disk["complete"] is False
+
+
+def test_sequential_smoke_run_is_reported_incomplete(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+
+    summary = llm_judge_eval.judge_results_dir(
+        run, None, "m", workers=1, backend="claude-code", max_turns=3
+    )
+
+    assert summary["n_turns_judged"] == 3
+    assert summary["n_turns_total"] == 6
+    assert summary["complete"] is False

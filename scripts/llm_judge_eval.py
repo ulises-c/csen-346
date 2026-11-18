@@ -42,6 +42,9 @@ from pathlib import Path
 
 import openai
 
+# Exit status when a full judge pass scored fewer turns than the run contains.
+INCOMPLETE_EXIT_CODE = 3
+
 ALL_STATES = (
     ["a0", "a1"]
     + [f"b{i}" for i in range(2, 8)]
@@ -269,6 +272,14 @@ def judge_dialogue(
     return out
 
 
+def count_dialogue_turns(dialogue_files: list[Path]) -> tuple[int, int]:
+    """Return (dialogues, turns) present on disk: what a complete judge pass covers."""
+    n_turns = 0
+    for dfile in dialogue_files:
+        n_turns += len(json.loads(dfile.read_text()).get("dialogue", []))
+    return len(dialogue_files), n_turns
+
+
 def _summarize(
     results_dir: Path,
     model: str,
@@ -277,8 +288,16 @@ def _summarize(
     per_dialogue_summaries: list[dict],
     elapsed: float,
     out_name: str,
+    n_dialogues_total: int,
+    n_turns_total: int,
 ) -> dict:
-    """Aggregate scored turns into the summary dict + write it to disk."""
+    """Aggregate scored turns into the summary dict + write it to disk.
+
+    The summary records how many dialogues and turns the run contains next to
+    how many were judged, and sets ``complete`` only when every turn got a
+    score. A partial pass (judge errors, rate limits, an interrupted run) used
+    to be indistinguishable from a full one.
+    """
     per_stage = {s: {"n": 0, "total": 0.0} for s in "abcde"}
     for s in all_turn_scores:
         gt = s.get("ground_truth_state", "?")
@@ -308,6 +327,9 @@ def _summarize(
         "backend": backend,
         "n_dialogues_judged": len(per_dialogue_summaries),
         "n_turns_judged": n_turns,
+        "n_dialogues_total": n_dialogues_total,
+        "n_turns_total": n_turns_total,
+        "complete": n_turns == n_turns_total and n_turns_total > 0,
         "wall_clock_seconds": elapsed,
         "overall_avg": sum(s["total"] for s in all_turn_scores) / n_turns if n_turns else 0,
         "axis_avgs": {
@@ -329,6 +351,13 @@ def _summarize(
         f"Overall: {summary['overall_avg']:.2f}/10  ({n_turns} turns, "
         f"${cost:.3f} cost, {elapsed:.0f}s wall clock)"
     )
+    if not summary["complete"]:
+        print(
+            f"WARNING: incomplete judge pass: {n_turns}/{n_turns_total} turns in "
+            f"{len(per_dialogue_summaries)}/{n_dialogues_total} dialogues were scored. "
+            "Averages cover the scored subset only.",
+            file=sys.stderr,
+        )
     return summary
 
 
@@ -394,6 +423,7 @@ def judge_sequential(
         per_dialogue_summaries,
         time.time() - started,
         out_name,
+        *count_dialogue_turns(dialogue_files),
     )
 
 
@@ -454,6 +484,7 @@ def judge_results_dir(
         per_dialogue_summaries,
         time.time() - started,
         out_name,
+        *count_dialogue_turns(dialogue_files),
     )
 
 
@@ -534,7 +565,15 @@ def judge_paired_compare(
         print(f"\n=== Judging arm: {arm.name} ({len(sample)} turns, {model}) ===")
         scores = _judge_arm_on_sample(arm, sample, model, backend)
         arm_scores[arm.name] = _summarize(
-            arm, model, backend, scores, [], time.time() - started, f".judge_{arm.name}.tmp.json"
+            arm,
+            model,
+            backend,
+            scores,
+            [],
+            time.time() - started,
+            f".judge_{arm.name}.tmp.json",
+            n_dialogues_total=len({fname for fname, _i, _s in sample}),
+            n_turns_total=len(sample),
         )
         (arm / f".judge_{arm.name}.tmp.json").unlink(missing_ok=True)
 
@@ -665,7 +704,7 @@ def main():
 
     if args.backend == "claude-code":
         model = args.model or "claude-opus-4-8"
-        judge_results_dir(
+        summary = judge_results_dir(
             args.results_dir,
             None,
             model,
@@ -674,6 +713,9 @@ def main():
             max_turns=args.max_turns,
             out_name=args.out_name,
         )
+        # --max-turns is a deliberate partial (smoke) run; anything else must be complete.
+        if args.max_turns is None and not summary["complete"]:
+            sys.exit(INCOMPLETE_EXIT_CODE)
         return
 
     model = args.model or "claude-sonnet-4-6"
@@ -691,9 +733,11 @@ def main():
         sys.exit(1)
 
     client = openai.Client(api_key=api_key, base_url=args.base_url)
-    judge_results_dir(
+    summary = judge_results_dir(
         args.results_dir, client, model, args.workers, backend="api", out_name=args.out_name
     )
+    if not summary["complete"]:
+        sys.exit(INCOMPLETE_EXIT_CODE)
 
 
 if __name__ == "__main__":
