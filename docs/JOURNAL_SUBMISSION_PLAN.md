@@ -59,7 +59,7 @@ Change or drop:
 - [x] Merge #129 (Gemma 12B fine-tune, oracle mode, Claude Code judge backend); close #101.
 - [x] Merge #183: language-aware ROUGE and `scripts/unified_robustness.py`.
 - [x] Merge #184: gfx1201 probe work, logs and upstream status.
-- [ ] Merge the PR carrying this plan and the W&B export.
+- [x] Merge the PR carrying this plan and the W&B export.
 - [ ] Dependabot PRs: rebased onto the fixed lint job; merge the ones that pass, decide on the rest
       (see section 5).
 - [ ] Delete `feat/gfx1201-rdna4-qlora-fla-training` after #184 merges.
@@ -68,24 +68,72 @@ Change or drop:
 
 Run on `ollie-cachy` in a separate git worktree. Each test is short.
 
-- [ ] **T1. SocratTeachLLM in llama.cpp.** `scripts/convert_socratteachllm_to_gguf.sh`, then
+- [x] **T1. SocratTeachLLM in llama.cpp.** `scripts/convert_socratteachllm_to_gguf.sh`, then
       `make serve-socratteachllm-llamacpp`. The scripts record that an older llama.cpp could not
       load the result; the installed build is much newer. Pass = the server answers a chat request
       with sensible Chinese.
-- [ ] **T2. Same for the GLM-4-9B base.** Download the base weights, then
+- [x] **T2. Same for the GLM-4-9B base.** Download the base weights, then
       `scripts/convert_glm49b_chat_to_gguf.sh` and `scripts/serve_glm49b_chat_llamacpp.sh`.
-- [ ] **T3. vLLM, only if T1 or T2 fails.** Source build of vLLM main with `--enforce-eager`, then
+- [ ] **T3. vLLM, only if T1 or T2 fails.** *Not needed: T1 and T2 passed.* Source build of vLLM main with `--enforce-eager`, then
       `make test-vllm`. Upstream issue vllm#28649 is open, but the remaining complaints concern FP8.
-- [ ] **T4. Gemma 4 31B timing and reproduction check.** `make serve-gemma4-31b`, then a
+- [x] **T4. Gemma 4 31B timing and reproduction check.** `make serve-gemma4-31b`, then a
       50-dialogue run of the headline configuration with 4 workers. Record wall time. Compare with
       the archived 50-dialogue cell (51.58% state accuracy, ROUGE-1 38.76). The classifier is a
       different checkpoint, so expect a shift; a gap above about 5 points needs explaining before
       going on.
-- [ ] **T5. Local judge throughput.** Serve the candidate judge (Phase 2) and time 20 dialogues.
+- [x] **T5. Local judge throughput.** Serve the candidate judge (Phase 2) and time 20 dialogues.
 
 **Gate.** If T1 or T3 passes and T4 is under about 8 hours for 681 dialogues, everything runs on
 the R9700. If SocratTeachLLM cannot be served there, the fallback is `scripts/serve_teacher_local.sh`
 (HF Transformers, slower) or borrowed A6000 time for the SocratTeachLLM and GLM runs only.
+
+**Result (2026-11-17): the gate passes. Everything runs on the R9700.** Run on `ollie-cachy`,
+llama.cpp build 11429 (ROCm backend), main at `5f2f645`, transformers 5.23.
+
+| Test | Outcome |
+|---|---|
+| T1 SocratTeachLLM | Converts, loads and answers in Chinese. Q8_0, 10.0 GB file, 11.4 GB VRAM with 4 slots, about 50 tokens/s. |
+| T2 GLM-4-9B base | Same, after downloading the base weights (18 GB). |
+| T4 headline cell, 50 dialogues | 14 min with 4 workers. State accuracy 56.90%, ROUGE-1 38.93 (archived: 51.58%, 38.76). |
+| T5 judge, Qwen3.8-27B Q5_K_M | 117 turns (20 dialogues) in 224 s with 4 workers; complete; mean score 9.05/10. |
+
+Projected for 681 dialogues: about 3.2 hours for a Gemma 4 31B run and about 2.3 hours for a
+judge pass.
+
+What had to change, and what to watch:
+
+- **GGUF conversion needed a tokenizer fix.** glm-4-9b-chat and SocratTeachLLM ship a tiktoken
+  vocabulary with no `tokenizer.json`, so the converted file had no BPE merges and llama-server
+  refused it ("cannot find tokenizer merges in model file"). This is the earlier "not loadable"
+  failure, not an old-build problem. The convert scripts now take `tokenizer.json` from
+  `zai-org/glm-4-9b-chat-hf`, whose vocabulary is identical (all 151,329 ids and the 14 added
+  tokens match). Checked on 3,004 dataset strings (52,570 tokens): llama.cpp tokenizes every one
+  the same as the model's own tiktoken vocabulary, and the served prompt starts with
+  `[gMASK]<sop>` as the model's template requires.
+- **Gemma 4 thinks by default on this llama.cpp build.** The first T4 attempt ran at 30
+  dialogues/hour because the teacher wrote about 600 reasoning tokens per reply. It was stopped
+  after 16 dialogues and rerun with `--reasoning off` (213 dialogues/hour). The archived headline
+  run's wall time (681 dialogues in 32 minutes on a 5090) is only consistent with thinking off.
+  `scripts/serve_gemma4_31b.sh` now pins it off. On the 16 dialogues both attempts share, ROUGE-1
+  was 39.14 with thinking and 37.60 without, and state accuracy 54.26% and 53.76%; that sample is
+  too small to call a difference. `run_config.json` does not record the reasoning setting, the
+  git commit or the classifier revision; add them before Phase 4.
+- **T4's state accuracy is 5.3 points above the archived cell**, just past the 5-point line set
+  above. The classifier is the Hugging Face retrain, not the paper's checkpoint, and 297 turns
+  give a 95% sampling error of at least ±5.6 points, so this is in line with a changed classifier. It
+  confirms the headline number will move; the full run settles by how much.
+- **The local judge scores high.** 9.05/10 on 20 dialogues leaves little room at the top. Compare
+  with the archived Sonnet and Opus scores on the same configuration before fixing it as the
+  judge of record; a stricter rubric or a second judge model may be needed (Phase 6).
+- The judge script's `max_tokens=200` means a thinking judge model returns empty replies; the
+  judge server must also run with `--reasoning off`.
+- Port 8080 on `ollie-cachy` is held by `llama-swap`; the tests used 8085, 8086 and 8090.
+- VRAM with Gemma 4 31B Q5 and four slots is 30.5 of 32 GB. Nothing else fits beside it; the
+  classifier ran on the CPU.
+
+Artifacts: `results/p1-r9700-qwen35clf-gemma31b-fewshot10-n50/` and
+`results/p1-judge-throughput-n20/` (summaries in git; dialogues on `ollie-cachy` under
+`~/github/csen-346-main/results/` and in `~/p1-logs/p1_results.tgz`).
 
 ### Phase 2: preparation
 
@@ -93,11 +141,15 @@ the R9700. If SocratTeachLLM cannot be served there, the fallback is `scripts/se
       Re-evaluate it on the 4,304-turn Chinese test set and replace the classifier table in the
       paper. Confirm which split it was trained on: its `eval_results.json` covers 8,526 turns,
       which suggests Chinese plus English.
+      *Split confirmed 2026-11-17:* the model card and `scripts/train_state_classifier_34way.py`
+      show it was trained on the seed-42 train split, Chinese plus English (77,258 turns), and
+      its 8,526 test turns are the same test split in both languages. The Chinese-only
+      re-evaluation is still to do.
 - [ ] **BERT consultant.** Retrain with `scripts/train_stage_classifier.py` (minutes on any card);
       the weights are gone. Publish to Hugging Face this time.
 - [ ] **Synthetic set.** Pull the 75-dialogue version from `ulises-c/SocratDataset-SYNTHETIC`
       (`n75_extension/`); the local file has 37.
-- [ ] **Judge completeness check.** `scripts/llm_judge_eval.py` should exit non-zero, or mark the
+- [x] **Judge completeness check.** `scripts/llm_judge_eval.py` should exit non-zero, or mark the
       summary incomplete, when it judged fewer dialogues than the run contains. The archived Sonnet
       run was judged on 274 of 681 dialogues and nothing flagged it. Add a test.
 - [ ] **Local judge.** Pick one pinned open-weight model already on `ollie-cachy` (Qwen 27B class),
@@ -107,13 +159,18 @@ the R9700. If SocratTeachLLM cannot be served there, the fallback is `scripts/se
       Hugging Face dataset repo before starting the next run. `results/` is in `.gitignore`, so
       summaries reach git only when added with `git add -f`; that is how the Gemma 12B results were
       lost. Either un-ignore `results/*/*.json` or make the force-add part of the run script.
+      *Done in part 2026-11-17:* `.gitignore` now tracks `metrics_summary.json`,
+      `judge_summary.json`, `run_config.json` and `semantic_r1.json` under `results/`. The Hugging
+      Face dataset repo for dialogues is not created yet.
 - [ ] **Seeds.** Fix the list up front: 42 for everything, plus two more for the headline cell.
 
 ### Phase 3: analyses that need no GPU
 
-- [ ] **Block bootstrap on the Gemma 12B runs** from `results/wandb_export/`: state-accuracy
+- [x] **Block bootstrap on the Gemma 12B runs** from `results/wandb_export/`: state-accuracy
       intervals for base, fine-tune, no-consultant and oracle variants. Unpaired, blocks of 10
-      dialogues.
+      dialogues. *Done: `scripts/wandb_block_bootstrap.py`.* Intervals on the full 681-dialogue
+      runs are about ±1.5 points. The synthetic-set runs have only 8 blocks, so their
+      intervals are too narrow to rely on.
 - [ ] **Sample-size analysis, redone.** Rewrite `scripts/convergence_analysis.py` to resample with
       replacement and report standard errors. It can only be run on real outputs once Phase 4
       produces the first full run.
@@ -222,3 +279,6 @@ open PRs. Dependabot still opens PRs; they now wait for a manual merge. Re-enabl
 
 - 2026-11-17: plan written. #129 merged, #101 closed, #183 and #184 opened.
 - 2026-11-17: #183 and #184 merged. Dependabot auto-merge paused. transformers is at 5.23 on main.
+- 2026-11-17: #185 merged; six Dependabot PRs merged, three held (#126, #174, #176).
+- 2026-11-17: Phase 1 run on the R9700. T1, T2, T4 and T5 pass; T3 not needed. Judge completeness
+  check, result-summary tracking and the W&B block bootstrap added.

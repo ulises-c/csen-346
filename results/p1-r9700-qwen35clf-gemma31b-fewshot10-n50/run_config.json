@@ -1,0 +1,18 @@
+{
+  "experiment": "p1-r9700-qwen35clf-gemma31b-fewshot10-n50",
+  "teacher_model": "Gemma 4 31B",
+  "teacher_base_url": "http://localhost:8085/v1",
+  "consultant_model": "Gemma 4 31B",
+  "consultant_base_url": "http://localhost:8085/v1",
+  "bert_consultant": "results/state-clf-qwen3.5-0.8b-lora-wandb/final",
+  "oracle_consultant": false,
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": false,
+  "workers": 4,
+  "total_dialogues": 50,
+  "completed": 50,
+  "total_elapsed_seconds": 842.89,
+  "started_at": "2026-11-17T20:49:07-08:00",
+  "finished_at": "2026-11-17T21:03:09-08:00"
+}
