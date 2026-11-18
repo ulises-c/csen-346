@@ -5,6 +5,54 @@ from typing import Any
 
 import openai
 
+_DEFAULT_ACTION = "继续提问"
+
+# 状态到操作的映射表 — single source of truth shared with the SFT loader so
+# training records carry the exact action string inference sends (PR #101/#94).
+STATE_TO_ACTION = {
+    "a0": "引导学生提出问题",
+    "a1": "生成一个与解题相关的子问题",
+    "b2": "从不同角度生成问题",
+    "b3": "更改问题",
+    "b4": "从不同角度生成同一问题的相关子问题",
+    "b5": "提出可以检查学生概念的问题",
+    "b6": "复习学生已经学过的概念",
+    "b7": "复习这些概念并与错误进行比较",
+    "c8": "提供一个反例",
+    "c9": "帮助学生形成不完整规则并进一步研究它，或提出一个误导性的问题",
+    "c10": "询问原因",
+    "c11": "应指出并明确询问原因",
+    "c12": "帮助其形成不完整规则并进一步研究它，或提出一个误导性的问题，或提供一个反例",
+    "c13": "提供一个反例",
+    "c14": "鼓励学生做出预测并提出新原则",
+    "c15": "鼓励学生做出预测并提出新原则",
+    "c16": "鼓励学生做出预测并提出新原则",
+    "c17": "生成该子问题",
+    "c18": "要求学生重新考虑该点",
+    "c19": "生成具有诊断功能的问题",
+    "c20": "验证学生刚学习的概念",
+    "c21": "要求学生详细思考问题",
+    "c22": "问'为什么'",
+    "c23": "帮助学生重新形成完整假设",
+    "c24": "要求学生单独检验假设",
+    "c25": "提供一个验证方法",
+    "c26": "要求学生比较两个示例的差异",
+    "c27": "指导学生进行检验",
+    "c28": "告知学生错误情况并要求其提出其他可能的概念",
+    "c29": "提供正确概念并询问为什么之前没有想到",
+    "d30": "提出相关案例并要求预测，或问'为什么'",
+    "d31": "直接向学生展示正确概念和规则，并要求其重新思考这些概念和给出题目答案",
+    "d32": "提出相关案例并要求预测",
+    "d33": "建立一个普遍定义并要求学生给出题目答案",
+    "e34": "对题目进行总结",
+}
+
+
+def get_action_for_state(state: str) -> str:
+    """根据状态获取对应的提问操作 — module-level twin of the instance method,
+    importable by the SFT loader without constructing the full system."""
+    return STATE_TO_ACTION.get(state, _DEFAULT_ACTION)
+
 
 class SocraticTeachingSystem:
     def __init__(
@@ -50,43 +98,7 @@ class SocraticTeachingSystem:
         )
 
         # 状态到操作的映射表
-        self.state_to_action = {
-            "a0": "引导学生提出问题",
-            "a1": "生成一个与解题相关的子问题",
-            "b2": "从不同角度生成问题",
-            "b3": "更改问题",
-            "b4": "从不同角度生成同一问题的相关子问题",
-            "b5": "提出可以检查学生概念的问题",
-            "b6": "复习学生已经学过的概念",
-            "b7": "复习这些概念并与错误进行比较",
-            "c8": "提供一个反例",
-            "c9": "帮助学生形成不完整规则并进一步研究它，或提出一个误导性的问题",
-            "c10": "询问原因",
-            "c11": "应指出并明确询问原因",
-            "c12": "帮助其形成不完整规则并进一步研究它，或提出一个误导性的问题，或提供一个反例",
-            "c13": "提供一个反例",
-            "c14": "鼓励学生做出预测并提出新原则",
-            "c15": "鼓励学生做出预测并提出新原则",
-            "c16": "鼓励学生做出预测并提出新原则",
-            "c17": "生成该子问题",
-            "c18": "要求学生重新考虑该点",
-            "c19": "生成具有诊断功能的问题",
-            "c20": "验证学生刚学习的概念",
-            "c21": "要求学生详细思考问题",
-            "c22": "问'为什么'",
-            "c23": "帮助学生重新形成完整假设",
-            "c24": "要求学生单独检验假设",
-            "c25": "提供一个验证方法",
-            "c26": "要求学生比较两个示例的差异",
-            "c27": "指导学生进行检验",
-            "c28": "告知学生错误情况并要求其提出其他可能的概念",
-            "c29": "提供正确概念并询问为什么之前没有想到",
-            "d30": "提出相关案例并要求预测，或问'为什么'",
-            "d31": "直接向学生展示正确概念和规则，并要求其重新思考这些概念和给出题目答案",
-            "d32": "提出相关案例并要求预测",
-            "d33": "建立一个普遍定义并要求学生给出题目答案",
-            "e34": "对题目进行总结",
-        }
+        self.state_to_action = STATE_TO_ACTION
 
         # 初始化系统状态
         self.reset_session()
@@ -641,3 +653,64 @@ e34：学生正确给出题目答案
                 print(
                     f"\n[Max teaching rounds reached ({self.max_teaching_rounds}). Please give your final answer to move to the summary.]"
                 )
+
+
+_STAGE_NAMES = {
+    "a": "学生提问",
+    "b": "概念探查",
+    "c": "归纳推理",
+    "d": "规则建构",
+    "e": "教师总结",
+}
+
+
+class SocraticTeachingSystemOracle(SocraticTeachingSystem):
+    """Oracle consultant: instead of *predicting* the Socratic state, it is HANDED
+    the ground-truth state for each turn (primed by the eval loop via
+    ``prime_oracle_state``) and derives the action from the shared state→action
+    table. The teacher half is unchanged, so this isolates *pure teacher-turn
+    quality given the correct state* — removing classifier accuracy as a confound.
+    See docs/SFT_RESULTS_REPORT.md (consultant ablation, T1.1).
+
+    Because the state is authoritative, ``process_student_input`` is overridden to
+    a streamlined path that sets ``current_state`` to the GT value directly and
+    **bypasses the anti-regression + max-round correction guards** of the base
+    class (those exist to fix a *predicting* consultant's mistakes; an oracle has
+    none, and the max-round guard would otherwise force ``d33`` on any dialogue
+    with more than ``max_teaching_rounds`` teaching turns, corrupting the GT
+    state). ``state_accuracy`` is therefore ~perfect by construction — this run is
+    scored on ROUGE/BLEU only.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._oracle_state: str | None = None
+
+    def prime_oracle_state(self, state: str) -> None:
+        """Set the ground-truth state for the next ``process_student_input`` call."""
+        self._oracle_state = state
+
+    def process_student_input(self, student_input: str) -> str:
+        self.add_to_history("student", student_input)
+
+        previous_state = self.current_state
+        state = self._oracle_state or self.current_state
+        action = self.get_action_for_state(state)
+        stage = state[0] if state else "a"
+        evaluation = (
+            f"根据当前对话内容，学生处于 {stage}({_STAGE_NAMES.get(stage, '')}) 阶段的 "
+            f"{state} 状态（标准答案状态）。按照苏格拉底教学法，应采取的操作是：{action}。"
+            f"请基于该状态和操作，针对学生当前的表现，给出合适的教学回复。"
+        )
+
+        if previous_state == "a0" and state != "a0":
+            self.teaching_rounds = 1
+        elif previous_state != "a0" and state != "a0":
+            self.teaching_rounds += 1
+
+        self.add_to_consultant_history(evaluation, state, action)
+        self.current_state = state
+
+        socrates_response = self.socrates_teacher(student_input, evaluation, action)
+        self.add_to_history("teacher", socrates_response)
+        return socrates_response
