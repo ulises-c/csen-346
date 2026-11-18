@@ -29,6 +29,10 @@ set -euo pipefail
 if [[ -z "${LLAMA_SERVER:-}" ]]; then
   if [[ -x "$HOME/Github/llama.cpp/build/bin/llama-server" ]]; then
     LLAMA_SERVER="$HOME/Github/llama.cpp/build/bin/llama-server"
+  elif [[ -x "$HOME/Documents/models/llama.cpp/build/bin/llama-server" ]]; then
+    LLAMA_SERVER="$HOME/Documents/models/llama.cpp/build/bin/llama-server"
+  elif command -v llama-server >/dev/null 2>&1; then
+    LLAMA_SERVER="$(command -v llama-server)"   # e.g. a distro llama.cpp package
   else
     LLAMA_SERVER="$HOME/Documents/models/llama.cpp/build/bin/llama-server"
   fi
