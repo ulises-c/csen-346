@@ -7,9 +7,11 @@ This module wraps the KELE SocraticTeachingSystem with our config layer
 and adds batch evaluation for running against the SocratDataset.
 """
 
+import hashlib
 import json
 import os
 import random
+import subprocess
 import threading
 import time
 from collections.abc import Callable
@@ -89,6 +91,41 @@ def create_system(
         consultant_num_ctx=cfg.consultant.num_ctx,
         **extra_kwargs,
     )
+
+
+def _run_provenance(bert_consultant: str | None) -> dict:
+    """Facts needed to reproduce a run that the model config does not carry.
+
+    The git commit, every KELE_* setting (few-shot count, worker count, and
+    KELE_RUN_NOTES for anything the pipeline cannot see, such as the server's
+    reasoning flag), and a hash of the classifier weights.
+    """
+    repo = Path(__file__).resolve().parents[2]
+
+    def git(*args: str) -> str | None:
+        try:
+            out = subprocess.run(
+                ["git", *args], cwd=repo, capture_output=True, text=True, timeout=10, check=True
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return out.stdout.strip()
+
+    status = git("status", "--porcelain", "--untracked-files=no")
+    provenance: dict = {
+        "git_commit": git("rev-parse", "HEAD"),
+        "git_dirty": bool(status) if status is not None else None,
+        "env": {k: v for k, v in sorted(os.environ.items()) if k.startswith("KELE_")},
+    }
+    if bert_consultant:
+        weights = Path(bert_consultant) / "model.safetensors"
+        if weights.is_file():
+            digest = hashlib.sha256()
+            with open(weights, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    digest.update(chunk)
+            provenance["bert_consultant_sha256"] = digest.hexdigest()
+    return provenance
 
 
 def load_dataset(
@@ -578,6 +615,7 @@ def run_batch_evaluation(
         "total_elapsed_seconds": round(time.time() - start_time, 2),
         "started_at": started_at.isoformat(timespec="seconds"),
         "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        **_run_provenance(bert_consultant),
     }
     if unified and hasattr(system, "_unified_fallback_count"):
         run_config["unified_fallback_count"] = system._unified_fallback_count  # type: ignore[reportAttributeAccessIssue]

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 from types import SimpleNamespace
@@ -285,3 +286,19 @@ def test_run_batch_evaluation_writes_error_json_for_failed_dialogue(tmp_path, mo
 
     saved = json.loads((output_dir / "dialogues" / "0001.json").read_text())
     assert saved["error"] == "dialogue failed"
+
+
+def test_run_provenance_records_commit_env_and_classifier_hash(tmp_path, monkeypatch):
+    monkeypatch.setenv("KELE_FEW_SHOT_N", "10")
+    monkeypatch.setenv("KELE_RUN_NOTES", "reasoning off")
+    monkeypatch.setenv("UNRELATED_SECRET", "x")
+    (tmp_path / "model.safetensors").write_bytes(b"weights")
+
+    prov = kele._run_provenance(str(tmp_path))
+
+    assert prov["git_commit"] is None or len(prov["git_commit"]) == 40
+    assert prov["env"]["KELE_FEW_SHOT_N"] == "10"
+    assert prov["env"]["KELE_RUN_NOTES"] == "reasoning off"
+    assert "UNRELATED_SECRET" not in prov["env"]
+    assert prov["bert_consultant_sha256"] == hashlib.sha256(b"weights").hexdigest()
+    assert "bert_consultant_sha256" not in kele._run_provenance(None)
