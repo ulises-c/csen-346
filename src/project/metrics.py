@@ -34,16 +34,37 @@ class _ZhCharTokenizer:
         return [c for c in text if not c.isspace()]
 
 
+def _has_han(text: str) -> bool:
+    """True if the text contains at least one CJK unified ideograph."""
+    return any("\u4e00" <= c <= "\u9fff" or "\u3400" <= c <= "\u4dbf" for c in text)
+
+
+def count_language_mismatches(predictions: list[str], references: list[str]) -> int:
+    """Count pairs where exactly one side contains Chinese characters.
+
+    A non-zero count means the teacher answered in a different language from
+    the reference, so text-overlap scores for those turns are near zero for a
+    reason unrelated to quality.
+    """
+    return sum(_has_han(p) != _has_han(r) for p, r in zip(predictions, references))
+
+
 def compute_rouge(predictions: list[str], references: list[str]) -> dict[str, float]:
-    """Compute ROUGE-1, ROUGE-2, ROUGE-L F1 scores (character-level for Chinese)."""
-    scorer = rouge_scorer.RougeScorer(
-        ["rouge1", "rouge2", "rougeL"],
-        use_stemmer=False,
-        tokenizer=_ZhCharTokenizer(),
-    )
+    """Compute ROUGE-1, ROUGE-2, ROUGE-L F1 scores.
+
+    Pairs with Chinese on either side are scored character-level (unchanged
+    from the original behaviour, so Chinese results stay comparable to archived
+    runs). Pairs with no Chinese are scored word-level with rouge_score's
+    default tokenizer: character-level scoring of English gives two unrelated
+    sentences a ROUGE-1 near 68, because any English text shares most letters.
+    """
+    metrics = ["rouge1", "rouge2", "rougeL"]
+    char_scorer = rouge_scorer.RougeScorer(metrics, use_stemmer=False, tokenizer=_ZhCharTokenizer())
+    word_scorer = rouge_scorer.RougeScorer(metrics, use_stemmer=False)
     scores = {"rouge1": [], "rouge2": [], "rougeL": []}
 
     for pred, ref in zip(predictions, references):
+        scorer = char_scorer if _has_han(pred) or _has_han(ref) else word_scorer
         result = scorer.score(ref, pred)
         for key in scores:
             scores[key].append(result[key].fmeasure)
@@ -161,6 +182,7 @@ def compute_metrics_from_records(records: list[dict]) -> dict:
 
     return {
         "n_turns": len(predictions),
+        "language_mismatch_turns": count_language_mismatches(predictions, references),
         "rouge1": round(rouge["rouge1"], 2),
         "rouge2": round(rouge["rouge2"], 2),
         "rougeL": round(rouge["rougeL"], 2),
@@ -194,6 +216,14 @@ def format_metrics_table(metrics: dict) -> str:
     per_stage = metrics.get("state_accuracy", {}).get("per_stage", {})
     for stage, acc in sorted(per_stage.items()):
         lines.append(f"  Stage {stage}: {acc}%")
+
+    mismatches = metrics.get("language_mismatch_turns", 0)
+    if mismatches:
+        lines.append("")
+        lines.append(
+            f"WARNING: {mismatches} turn(s) where the response and the reference are in "
+            "different languages; text-overlap scores are not meaningful for them."
+        )
 
     lines.append("=" * 50)
     return "\n".join(lines)
