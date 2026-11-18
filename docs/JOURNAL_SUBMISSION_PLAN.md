@@ -184,7 +184,7 @@ rest can run at 400 dialogues.
 
 | # | Consultant | Teacher | Set | Purpose |
 |---|---|---|---|---|
-| 1 | Qwen3.5 classifier | Gemma 4 31B | 681 | Headline |
+| 1 | Qwen3.5 classifier | Gemma 4 31B | 681 | Headline. **Done 2026-11-18:** 54.50% state accuracy, ROUGE-1 36.98, local judge 9.11/10 |
 | 2 | BERT | Gemma 4 31B | 681 | Consultant ablation |
 | 3 | Gemma 4 31B (LLM as consultant) | Gemma 4 31B | 681 | Baseline: classifier against an LLM consultant, with outputs |
 | 4 | Qwen3.5 classifier | SocratTeachLLM | 681 | Fine-tuned teacher |
@@ -282,3 +282,6 @@ open PRs. Dependabot still opens PRs; they now wait for a manual merge. Re-enabl
 - 2026-11-17: #185 merged; six Dependabot PRs merged, three held (#126, #174, #176).
 - 2026-11-17: Phase 1 run on the R9700. T1, T2, T4 and T5 pass; T3 not needed. Judge completeness
   check, result-summary tracking and the W&B block bootstrap added.
+- 2026-11-18: Phase 4 run 1 finished on the R9700 (3 h 18 min evaluation, 2 h 5 min judge pass).
+  The local judge is lenient and flat across stages; the judge of record is undecided. Next steps
+  are in `docs/handoffs/HANDOFF_JOURNAL_RERUNS.md`.
