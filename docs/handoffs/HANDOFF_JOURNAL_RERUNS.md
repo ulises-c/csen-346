@@ -79,6 +79,28 @@ Options:
 4. **Pay for Sonnet on the headline comparison only** (about $30 for runs 1 and 3). Outside the
    current no-cost rule; the user's call.
 
+**Decided 2026-11-18 (user): validate the local judge, whichever model ends up as judge.**
+
+Another candidate, suggested by the user: **Qwen3.8-Flash-Next** (125B mixture-of-experts, about
+3B active per token). It is on ollie-cachy and already configured in llama-swap
+(`~/.config/llama-swap/config.yaml`, model ids `qwen3.8-flash-next` and
+`qwen3.8-flash-next-radiance`, port 8080); weights under `~/models/Qwen3.8-Flash-Next-Gyro/` and
+`~/models/ista/IQ3_S/`. Unknown and to be measured before relying on it: throughput (most experts
+sit in RAM, so probably one request at a time), whether replies are repeatable at temperature 0
+with its draft model on, and how to pin it for the paper, since it runs on a non-standard engine
+at a 3-bit-class quantization. A larger model is not automatically a stricter judge.
+
+Validation, cheapest first:
+
+1. **Controls on run 1's dialogues, no new evaluation needed.** Take about 100 dialogues and judge
+   three versions of each teacher turn: the system's reply, the ground-truth reply, and a wrong
+   reply (one taken from a different dialogue, and one that states the answer outright). A usable
+   judge scores the wrong replies clearly lower. Run each candidate judge on the same turns.
+   About 20 minutes of GPU per candidate with Qwen3.8-27B's throughput.
+2. **A second system.** Judge run 3 once it exists and compare with run 1.
+3. **Agreement with Claude** on about 100 dialogues through the subscription backend, and with
+   human scores (Phase 6).
+
 The Sonnet-judging-Sonnet objection no longer applies, because no Claude teacher run is being
 rerun. Recommended: option 1, falling back to 3 if the judge does not separate runs 1 and 3.
 
