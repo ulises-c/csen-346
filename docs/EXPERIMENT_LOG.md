@@ -4,6 +4,200 @@ Engineering decisions, what we've tried, and what's next. Each entry is dated an
 
 ---
 
+## 2026-07-13 — LLM-judge on absolute Socratic quality COMPLETE ✅ — confirms the oracle win's *direction*, shrinks its *magnitude*
+
+**Ran:** the LLM-judge analysis-plan item — scored both **oracle arms** with **Claude Opus 4.8** (subscription, `claude -p` headless, tools off) on an absolute 0–10 pedagogy rubric (socratic_validity 0–3, advancement 0–3, age_appropriateness 0–2, question_form 0–2). Paired stratified sample, 200 turns/arm on identical `(file, turn_idx)` keys, stages b–e, seed 42, `--per-stage 50` → **400 Opus calls, ~2 h wall, ~$29 subscription-equivalent, 0 errors**. `scripts/llm_judge_eval.py` → `results/llm_judge_oracle_compare.json`. The rubric deliberately shows the GT reference as "one valid move, do not penalize routing differences" so it rewards *quality*, not ROUGE-overlap — the whole point is independence from ROUGE.
+
+### Result (SFT-oracle vs base-oracle, judged /10)
+
+| | overall | socratic_validity /3 | advancement /3 | age_approp /2 | question_form /2 |
+|---|---:|---:|---:|---:|---:|
+| SFT-oracle | **8.13** | 2.56 | 2.43 | 1.93 | 1.21 |
+| base-oracle | 7.75 | 2.46 | 2.435 | 1.845 | 1.01 |
+| **Δ (SFT − base)** | **+0.38** | +0.10 | **−0.01 (tied)** | +0.09 | **+0.20** |
+
+Per-stage Δ: b +0.14, **c +0.64, d +0.76**, e −0.02. The win concentrates in the middle reasoning stages and vanishes at the endpoints.
+
+### Finding
+
+- **Confirms the direction, corrects the magnitude.** The judge independently agrees SFT > base on absolute quality given correct state (+0.38/10; wins or ties every axis and stage). But +0.38/10 (~5% rel.) is **far smaller** than the +22.7 ROUGE-1 (~78% rel.) it's confirming. Both arms are pedagogically solid (7.75 vs 8.13) — so **most of the ROUGE gap was reference-phrasing overlap, not teaching quality.** The SFT learned to phrase like the corpus; ROUGE loves that, absolute pedagogy only modestly.
+- **`advancement` is a dead tie** (2.43 vs 2.435) — given correct state, base advances the lesson as well as the SFT. The SFT's judge-visible edge is **question_form** (+0.20, largest axis) and **socratic_validity** (+0.10): *how* it asks, not *whether* it progresses.
+- **Base costs *more* to judge** ($15.02 vs $13.86) — it emits more tokens, consistent with the earlier "base rambles regardless" observation.
+- **Caveat:** single run, non-greedy headless subscription decoding — no error bars. The +0.38 headline is a point estimate; the internally-consistent per-axis/per-stage pattern is what earns it confidence.
+
+### Takeaway
+
+The oracle ROUGE result was real but *oversized* as a quality claim. A truer statement: **the SFT writes better-formed, more clearly Socratic questions than base and is never worse — but the two are neck-and-neck on actually advancing the dialogue once state is correct, and the corpus-phrasing overlap that drives the dramatic ROUGE numbers is largely cosmetic.** Written into `docs/SFT_RESULTS_REPORT.md` (new "LLM-judge (absolute pedagogical quality)" subsection) and issue #130. Remaining analysis-plan picks (both optional): multi-seed error bars, a strong-consultant (Claude-as-classifier) cell between the ~55–60% Qwen and 100% oracle state-quality points.
+
+---
+
+## 2026-07-09 — Oracle-consultant arm COMPLETE ✅ — SFT teacher-turn quality is *largest* with the state confound removed
+
+**Ran:** the third consultant mode for the ZH-test ablation — the ground-truth state is fed to the teacher each turn (`--oracle-consultant`, `ORACLE_CONSULTANT=1 make ... via oracle_chain_gemma4_12b.sh`), so `state_accuracy` is 100% by construction and the arms are compared on ROUGE/BLEU alone. This removes classifier accuracy as a confound entirely — the cleanest "does the SFT write better Socratic turns given correct state?" measure. Both arms **681/681 valid, 0 errors** (SFT ~1.5 h; base ~2 days across auto-resumed crashes at 85 W). Results in `results/gemma4-12b-{base,sft}-oracle/`. 1 teacher call/turn (as fast as the classifier path, unlike the 2-call self-consult arms).
+
+### Teacher-turn quality across all three consultant modes (ZH test, SFT − base gap)
+
+| metric | base: self / Qwen / oracle | SFT: self / Qwen / oracle | **SFT − base gap: self / Qwen / oracle** |
+|---|---:|---:|---:|
+| ROUGE-1 | 28.02 / 28.56 / 29.03 | 44.21 / 48.13 / 51.77 | **+16.19 / +19.57 / +22.74** |
+| ROUGE-L | 20.35 / 21.02 / 21.76 | 37.62 / 40.94 / 44.80 | **+17.27 / +19.92 / +23.04** |
+| BLEU-4  | 4.80 / 5.22 / 5.73    | 18.31 / 20.12 / 24.80 | **+13.51 / +14.90 / +19.07** |
+
+### Finding
+
+- **The SFT climbs monotonically with state quality; base is flat.** SFT ROUGE-1: 44.2 (self, ~27% state) → 48.1 (Qwen, ~55–60%) → **51.8 (oracle, 100%)**. Base: **28.0 → 28.6 → 29.0**. The SFT *learned to condition on state* — better state in → better turn out; base can't exploit better state (it rambles regardless). That conditioning is itself a learned skill.
+- **The gap is largest with the confound removed** — oracle gives the SFT its biggest edge (**+22.7 ROUGE-1, +23.0 ROUGE-L, +19.1 BLEU-4**), bigger than under the classifier or self-consult. "The SFT writes better Socratic turns" is unambiguous.
+- **Self-consult was an underestimate, not the ceiling** — it was smallest (+16.2) because the SFT was penalized there, conditioned on its own worse self-classification (27%). Oracle reveals the true ceiling, *strengthening* the 07-06 "survives removing the classifier" conclusion rather than merely upholding it.
+
+### Takeaway
+
+Confirms and sharpens 07-06: the SFT's own contribution is **teacher-turn quality** (real, intrinsic, biggest given correct state), not state-tracking. In deployment it wants an external state source and rewards a better one with proportionally better turns. Written into `docs/SFT_RESULTS_REPORT.md` (oracle column added to the consultant-ablation section). Next: LLM-judge on absolute Socratic quality (independent confirmation of the oracle result), multi-seed error bars, optional strong-consultant (Claude) cell between the Qwen and oracle state-quality points.
+
+---
+
+## 2026-07-06 — Consultant ablation (T1.1) COMPLETE ✅ — SFT internalized teacher-turn *quality*, not *state-tracking*
+
+**Ran:** ZH-test 2×2 with the external Qwen classifier **removed** — base and SFT each self-consult (dual-role: the served LLM produces the state assessment itself, then consumes it). All other settings pinned to the headline runs (Q8_0 GGUF, `-np 4`, q4_0 KV, MTP off, 8 rounds, stochastic sampling). Both arms **681/681 valid, 0 errors**. Chained SFT→base via `make noconsult-chain-gemma4-12b` (`NO_CONSULTANT=1` toggle, new this entry). SFT arm ~12 h; base arm **~7 days** (Jun 26 14:23 → Jul 3 19:44) — self-consult is 2 LLM calls/turn and the unstable box stepped power 130 W→85 W across auto-resumed crashes, but reached a full run. Results in `results/gemma4-12b-{base,sft}-noconsult/`.
+
+### The 2×2 (ZH test) — consultant is the only variable besides the model
+
+**State accuracy (overall %) — the classifier's job:**
+
+| | Qwen classifier | self-consult | Δ (self − Qwen) |
+|---|---:|---:|---:|
+| base | 49.62 | 34.45 | −15.17 |
+| SFT | 59.93 | **26.80** | **−33.13** |
+| **SFT − base** | **+10.31** | **−7.65** | *advantage inverts* |
+
+**Teacher-turn quality (SFT − base gap, Qwen → self-consult):**
+
+| metric | base Qwen→self | SFT Qwen→self | **SFT − base gap** |
+|---|---:|---:|---:|
+| ROUGE-1 | 28.56 → 28.02 | 48.13 → 44.21 | **+19.57 → +16.19** |
+| ROUGE-L | 21.02 → 20.35 | 40.94 → 37.62 | **+19.92 → +17.27** |
+| BLEU-4  | 5.22 → 4.80   | 20.12 → 18.31 | **+14.90 → +13.51** |
+
+### Finding — the two skills decouple cleanly
+
+- **Teacher-turn quality is intrinsic and survives.** With no external classifier, the SFT still writes far better Socratic turns than base: **+16.2 ROUGE-1, +17.3 ROUGE-L, +13.5 BLEU-4**. The SFT-vs-base text gap shrinks only ~3 pp of a ~20 pp gap when the crutch is removed. Strong evidence the SFT internalized Socratic *writing*.
+- **State-tracking was entirely the classifier and does not survive.** The SFT's +10.3 pp state advantage *inverts* to −7.65 pp: self-classifying, the SFT (26.80) is **worse than base** (34.45), losing on every hard stage (b 24.4 vs 41.7, c 5.9 vs 16.5, e 27.1 vs 36.0).
+- **Cause (predicted, `dataset.py:608–647`):** the SFT was trained to **consume** the consultant's assessment+action and emit a clean teacher turn — it never learned to *emit* state. So `state_accuracy` in self-consult measures a skill it never trained, and it appears to have regressed below base's zero-shot classification (it learned to expect state to be handed to it).
+
+### Takeaway
+
+The SFT's own contribution is **teacher-turn quality**, not state-tracking. In deployment it still wants the external classifier (or an equivalent state source) for the state label; on its own it brings the better Socratic turns. This reframes the headline table as "SFT + classifier vs base + classifier," not "SFT alone." Written up in `docs/SFT_RESULTS_REPORT.md` (new consultant-ablation section). Next: LLM-judge on absolute Socratic quality, oracle-consultant run (isolate teacher quality with the classifier confound removed), multi-seed error bars.
+
+---
+
+## 2026-06-10 — Gemma 4 12B BASE, MTP OFF complete ✅ — losslessness confirmed at n=681, run-to-run σ calibrated
+
+**Ran:** Full Chinese test set (n=681), identical to the 06-09 MTP-on baseline except the drafter: MTP OFF, f16 KV pinned via the new `GEMMA4_12B_KV=f16` (the engine default q4_0 would have been a second variable), 85 W pinned (`POWER_START_W=85`), **4 eval workers against `-np 4`** (the MTP-on run was sequential). Monitor crawl, 681/681 valid, **0 errors, 0 crashes in 17.4 h**. First run with `bert_consultant` recorded in `run_config.json`.
+
+### MTP on/off quality A/B (the 1:1 the drafter promised)
+
+| metric | MTP ON (n=3991 turns) | MTP OFF (n=4033 turns) | Δ |
+|---|---:|---:|---:|
+| state_accuracy | 50.30 | 49.62 | −0.68 pp |
+| rouge1 | 28.69 | 28.56 | −0.13 |
+| rougeL | 21.24 | 21.02 | −0.22 |
+| bleu4 | 5.28 | 5.22 | −0.06 |
+
+Every delta is within sampling noise — **MTP losslessness empirically confirmed at full n=681**. Per-stage shapes match (a=100 both; b/c/d/e within ~2 pp).
+
+### Bonus: run-to-run σ for the convergence budget
+
+These are two identical-config full runs differing only as seeds do — the cleanest variance estimate we have: **state accuracy run-to-run spread ≈ 0.7 pp at n=681**. Combined with the 06-09 convergence curve (±1 pp band entered at n≈200–300), a partial eval at n≈300 reads the state-acc headline to within ~1–1.5 pp total uncertainty.
+
+### Throughput: parallelism vs MTP at 85 W
+
+- MTP ON, 1 stream: 23.6 dlg/hr.
+- MTP OFF, 4 streams: **39.1 dlg/hr** (1.66× aggregate) — but per-stream only ~9.8 dlg/hr, i.e. batching at the 85 W cap costs ~58% per-stream speed.
+- **Winner for step 3 (SFT eval): MTP ON** on per-stream speed; MTP + 4 workers is untested and likely the true optimum if VRAM allows (drafter + f16 KV + 4 slots fit before, so it should).
+
+### Ops notes
+
+- W&B incident "Metric ingestion delayed" (Jun 9 16:47 PDT) made all charts render empty for hours despite the server acknowledging every row (`historyKeys` counted them) — backlog drained by Jun 10 afternoon, all runs fully queryable, no data loss. Lesson: check status.wandb.com before debugging the client.
+- One transient gh 401 dropped the 450-dialogue progress row on issue #130 — single occurrence, auth healthy before and after.
+- Artifacts: `results/gemma4-12b-base/`, W&B `gemma4-12b-base` (qitilwco, 69 live curve points logged through the incident).
+
+---
+
+## 2026-06-09 (PM) — Per-dialogue W&B metric curves + 12B-base leaderboard placement
+
+**Ran:** No new model eval. Built incremental metric logging for the eval pipeline, replayed the completed `gemma4-12b-base-mtp` run into a 69-point convergence curve, and placed the run on the master leaderboard with corrected consultant attribution.
+
+### Tooling (kele.py / metrics.py / wandb_tracking.py)
+
+- **Live per-N-dialogue W&B logging:** evals with `WANDB_EVAL=1` now keep the W&B run open and log the full metric set every `WANDB_EVAL_LOG_EVERY` completed dialogues (default 10, `0` disables), step = completed-dialogue count, in both sequential and parallel paths. Crash-resumes start a new same-named W&B run whose steps continue where the last stopped (curves overlay in the UI). Closes the "live per-checkpoint state_accuracy" item proposed in #130.
+- **`wandb-replay` subcommand:** `python -m src.project.kele wandb-replay --output results/<exp> [--every N] [--order completion|id]` recomputes metrics over growing prefixes of the saved per-dialogue JSONs and logs a metric-vs-n curve for an already-finished run — no re-eval.
+- `eval/n_turns` is logged alongside every point (metrics are computed per-turn, ~5.9 turns/dialogue) and can be used as the chart x-axis.
+
+### Convergence read (replay of `gemma4-12b-base-mtp`, W&B run `gemma4-12b-base-mtp-curve` / vcj442ce)
+
+Answers the open "is n≈400 enough?" question, per metric:
+
+- **state_accuracy:** within ~1 pp of the n=681 value (50.30) from **n≈200**, within ~0.5 pp from n≈450. Partial evals are fine for the state-acc headline.
+- **ROUGE/BLEU:** slow monotone downward drift the whole run (rouge1 30.83 @ n=50 → 29.28 @ n=400 → 28.69 @ n=681); only within ~0.5 pp of final around **n≈450–500**. Caveat: the replay used completion order (file mtime), which correlates with dialogue length/difficulty — part of the drift may be ordering bias, not sampling error. A `--order id` (or shuffled) replay would disambiguate before locking a text-overlap budget.
+- Implication for cross-run comparison: **n=50 cells read ~1–2 pp high on rouge1** relative to full runs.
+
+### Leaderboard placement (state accuracy, the metric that matters here)
+
+`gemma4-12b-base-mtp` ranks **#4 of the full n=681 runs** and #26/107 overall. Corrected attribution: its consultant is the **T4 Qwen3.5-0.8B LoRA classifier** (`state-clf-qwen3.5-0.8b-lora-wandb/final`, via `--bert-consultant`) — the **same classifier family as the `t4-bert-*` leaders** — with a bare (no `fewshot10`) Gemma4-12B-base teacher. Within the T4 full-run family: 55.39 (gemma+fewshot10) / 53.40 (a3b+fewshot10) / 53.04 (qwen27b-nothink+fewshot10) / **50.30 (this run, no fewshot)**. Same classifier ⇒ the 3–5 pp gap is a *context* effect (the classifier reads teacher responses in the dialogue history), so SFT-improving the teacher should pull state acc toward the 53–55 band via cleaner classifier inputs.
+
+### Gotchas logged
+
+- **`run_config.json` misstates the consultant.** It copies `CONSULTANT_MODEL_NAME` from the env config ("Gemma 4 12B") and does not record `--bert-consultant`; the actual consultant was the T4 classifier. Fixed same day: `run_batch_evaluation` now writes `bert_consultant` (ckpt path or null) into `run_config.json`; configs written before the fix lack the field.
+- **W&B history-ingestion lag:** freshly finished runs show "no data for the selected runs" in charts and 0 rows via the API even though the server's `historyKeys` metadata counts all uploaded rows (filestream accepted 69/69 with no errors). Runs ≥ ~18 h old query fine. Server-side indexing delay — wait before debugging the client. Curve run was still un-queryable ~30 min after finish.
+
+---
+
+## 2026-06-09 — Gemma 4 12B BASE teacher baseline COMPLETE ✅ (NVIDIA SFT-uplift PoC, phase 1)
+
+**Ran:** Full Chinese test set (`ulises-c/SocratDataset`, n=681) — base `gemma-4-12b-it` (Unsloth UD-Q8_K_XL GGUF) as teacher, Qwen3.5-0.8B-LoRA state classifier (`ulises-c/socrates-state-classifier-qwen3.5-lora`) as consultant, dual-role on llama.cpp port 8080. **MTP speculative drafter ON**, GPU power-capped at 85 W. Driven by `scripts/monitor_eval_gemma4_12b.sh` (crash-crawl). This is the **base baseline** for the 1-epoch Socratic QLoRA SFT-uplift question; uplift = SFT − base on state accuracy.
+
+### Final metrics (`results/gemma4-12b-base-mtp/metrics_summary.json`)
+
+| stage | state acc |
+|---|---:|
+| a | 100.0% |
+| b | 44.55% |
+| c | 32.85% |
+| d | 35.98% |
+| e | 60.21% |
+| **overall** | **50.3%** |
+
+Text-overlap (diagnostic, memorization-prone — weight lightly): ROUGE-1 28.69 · ROUGE-2 11.90 · ROUGE-L 21.24 · BLEU-4 5.28 (681 dialogues, 3991 turns).
+
+### Headlines
+
+- **Overall state accuracy 50.3%** is the number SFT must beat. Per-stage shape: perfect opener (a = 100%), collapse through the middle states (b/c/d ≈ 33–45%), partial recovery at the summary (e = 60%).
+- The noisy n=5 smoke read 56.25% — the full n=681 (50.3%) is the stable baseline; do not compare against the smoke.
+- Eval samples at the llama.cpp default (temp 0.8); MTP is distribution-lossless, so on-vs-off differ only as seeds do.
+
+### MTP on/off throughput A/B (see issue #130, comment 4653475343)
+
+- **Decode:** 21.6 → 48.8 tok/s = **2.3×**, ~50–55% draft acceptance (f16 KV avoids the q8_0 0%-acceptance failure mode).
+- **End-to-end** (same 5 dialogues, `elapsed_seconds`): 281 → 141 s/dlg = **~2.0×** (12.8 → 25.6 dlg/hr). MTP roughly halves wall-clock; an MTP-off full run would be ~52 h vs the ~29 h observed.
+
+### Run health
+
+681/681 valid, **0 errors, 0 crashes across ~29 h (1732 min) at 85 W**, 23.6 dlg/hr. The "fault every 30 min–2 h" risk did not materialize at this cap — 85 W is stable for inference on this card.
+
+### Artifact pointers
+
+- Results: `results/gemma4-12b-base-mtp/` (per-dialogue JSONs + `metrics_summary.json`)
+- W&B: `csen346-eval` run `gemma4-12b-base-mtp` → https://wandb.ai/uchavarria-santa-clara-university/csen346-eval/runs/537mjkk2
+- Live eval log: issue #130 (pinned table + MTP A/B comment 4653475343)
+- Eval restricted to Chinese-only via `kele.load_dataset` default (`ulises-c/SocratDataset`); the bilingual `+SocratDataset-EN` default added in `73adf12` was reverted for this PoC.
+
+### Next
+
+- **G5 SFT train** (`make train-gemma4-12b`, QLoRA 1 epoch → `ulises-c/SocratesLM-12B-QLoRA`) — compute-bound, so max power (`-pl 130`) is worth it there.
+- **G8 SFT eval** (MTP-on, same Chinese n=681) → **G9 compare** vs this 50.3% baseline.
+- Open (proposed in #130): live per-checkpoint `state_accuracy` in the eval log + an MTP-off run to test whether n≈400 suffices vs full 681.
+
+---
+
 ## 2026-06-02 — Canonical-baseline unified score landed (`GPT-4o + SocratTeachLLM · n=681` at unified 52.99) + n=681 STL leaderboard rows
 
 **Ran:** Three LLM-judge passes against previously un-judged n=681 cells, on branch `mk/unified-for-gpt4o-stl`. Sonnet 4.6 judge, 10 workers. Total wall-clock ≈ 33 min × 3 in parallel, total cost ≈ $66.

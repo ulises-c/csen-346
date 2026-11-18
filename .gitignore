@@ -69,6 +69,8 @@ references/KELE-EN/.cache/
 # Railguard
 .railguard/*
 
+# W&B local run artifacts
+wandb/
 # macOS
 .DS_Store
 **/.DS_Store
@@ -77,3 +79,8 @@ references/KELE-EN/.cache/
 # except en-US.json which we customize (e.g. the README header label).
 .chainlit/translations/*
 !.chainlit/translations/en-US.json
+
+# gfx1201 diagnostics: raw probe logs live compressed in docs/diagnostics/probe-logs/
+/probe_*.log
+/repro_*.log
+docs/diagnostics/diag-sync-probe-*.log
