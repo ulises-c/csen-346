@@ -45,11 +45,33 @@ compared the seed, not the list being shuffled.
 What run 1 is still good for: timing, the pipeline check, the judge validation (it scores teacher
 replies, not states), and ROUGE/BLEU only as an approximation, since the states steer the teacher.
 
-**Fix:** retrain the classifier on the Chinese-only seed-42 train split (36,659 training turns
-plus 1,929 held out, which is what `scripts/train_state_classifier_34way.py` does today), verify
-with the overlap script, publish it as a new revision, then rerun run 1. Also make the split
-explicit in code so this cannot recur: split by dialogue id, the same ids for every language.
-Check the BERT consultant and the Gemma 12B fine-tunes for the same problem before using them.
+**Fix, in order:**
+
+1. Done: `load_dataset()` now splits each repo separately, so loading a second language can no
+   longer change which dialogues are held out. The Chinese-only split is unchanged (checked
+   against run 1's 681 ids), and the two-repo train split now shares no id with the test set.
+2. **Retrain the classifier** on the Chinese-only seed-42 train split (36,659 training turns plus
+   1,929 held out; this is what `scripts/train_state_classifier_34way.py` does by default today).
+   Command from the model card:
+   `uv run python scripts/train_state_classifier_34way.py --model-id Qwen/Qwen3.5-0.8B-Base --lora --lora-r 8 --lora-alpha 16 --batch_size 8 --bf16-autocast`
+   **Where it can run is the open question.** It needs a CUDA or ROCm card:
+   - The M5 Max is out: with `--device mps` the run did not finish 40 steps in 10 minutes.
+   - The R9700 is the card whose training runs page-faulted on ROCm 7.2 (the gfx1201 issue).
+     ROCm 10.1 probably fixes it and a venv with a ROCm 10.1 torch exists (`~/rocm10-probe` on
+     ollie-cachy), but training there has not been tried. Time a 40-step probe first
+     (`--max-steps 40` prints a projection). The trainer checkpoints every epoch and resumes
+     with `--resume`. It is a multi-hour daytime job.
+   - A borrowed RTX card: the two-language version took 3.3 hours on an RTX 4000 Ada, so the
+     Chinese-only one should take about half that.
+   - ollie-game-server (GTX 1070, 8 GB) does not answer ssh.
+3. Verify the new checkpoint with `scripts/check_classifier_split_overlap.py` logic (its training
+   ids against the test ids), record its offline accuracy on the 4,304 test turns, publish it as
+   a new Hugging Face revision, and point `rerun_headline_r9700.sh` at it.
+4. Repeat run 1.
+5. Check the Gemma 12B fine-tunes for the same problem before using run 6: which split they were trained on
+   has not been checked. The loader default was two-language until 2026-06-09.
+
+The BERT consultant is not affected: it is retrained from the current loader (see below).
 
 ## State
 
@@ -161,14 +183,33 @@ Do not spend GPU time on further judge passes until this is settled. Evaluations
 
 ## Work to do, in order
 
-No GPU needed:
+Done on 2026-11-18 (all on the branch, PR #186):
 
-1. Open the PR for the branch (after the user's go-ahead to push) and merge it.
-2. Dialogue-level bootstrap interval for state accuracy on run 1. Per-dialogue outputs now exist;
-   add it next to `scripts/unified_robustness.py`.
-3. Rewrite `scripts/convergence_analysis.py` to resample with replacement and report standard
-   errors; run it on run 1 to decide whether later runs can use 400 dialogues.
-4. Explain the 160-turn difference from the archived run.
+- **Bootstrap intervals:** `scripts/state_accuracy_bootstrap.py` (resamples dialogues; `--paired`
+  for two runs). Run 1: 54.50% [52.89, 56.13], stage-balanced 59.50% [57.81, 61.16]. These are
+  from the run with the leaking classifier; the method stands, the numbers will be replaced.
+- **Sample size:** `scripts/convergence_analysis.py` rewritten to resample with replacement.
+  Standard error of state accuracy is 1.07 points at 400 dialogues and 0.82 at 681. Two
+  independent runs can detect a difference of about 4.2 points at 400 and 3.3 at 681 (rule of
+  thumb, 95% level, 80% power). Paired comparisons on the same dialogues should do better; one
+  run cannot say by how much. `README.md` and `docs/CONVERGENCE_ANALYSIS.md` still describe the
+  old method and its "400 is sufficient" conclusion and need rewriting.
+- **Turn counts:** `docs/RUN1_TURN_COUNT_NOTE.md`. A dialogue stops when the consultant predicts
+  `e34` (`src/project/kele.py`), so each system is scored on a different set of turns. Run 1
+  dropped 170 of 4,304 turns in 126 dialogues; the archived run dropped about 330. Report turn
+  counts beside every turn-level metric and compare by dialogue.
+- **Synthetic set:** nothing to pull. The default config of `ulises-c/SocratDataset-SYNTHETIC`
+  already has all 75 dialogues; use `--hf-repo ulises-c/SocratDataset-SYNTHETIC --split all`.
+
+No GPU needed, still to do:
+
+1. Merge PR #186.
+2. Rewrite the sample-size sections of `README.md` and `docs/CONVERGENCE_ANALYSIS.md`.
+3. Decide how to handle early-stopped dialogues in the paper (score all ground-truth turns, or
+   report per-dialogue metrics).
+4. Flash-Next as a judge: `llm_judge_eval.py` caps replies at 200 tokens and sends no reasoning
+   setting; Flash-Next thinks by default behind llama-swap (port 8080, needs the llama-swap key).
+   Add a token cap and reasoning-effort option, then run the validation against it.
 5. Create the Hugging Face dataset repo for run outputs and upload run 1 (the user decides public
    or private).
 6. Generalise `scripts/rerun_headline_r9700.sh` so the teacher and consultant are parameters. Keep

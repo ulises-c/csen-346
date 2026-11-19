@@ -149,7 +149,8 @@ Artifacts: `results/p1-r9700-qwen35clf-gemma31b-fewshot10-n50/` and
       `scripts/check_classifier_split_overlap.py`.
 - [ ] **BERT consultant.** Retrain with `scripts/train_stage_classifier.py` (minutes on any card);
       the weights are gone. Publish to Hugging Face this time.
-- [ ] **Synthetic set.** Pull the 75-dialogue version from `ulises-c/SocratDataset-SYNTHETIC`
+- [x] **Synthetic set.** (2026-11-18: the default config on Hugging Face already has all 75;
+      nothing to pull.) Pull the 75-dialogue version from `ulises-c/SocratDataset-SYNTHETIC`
       (`n75_extension/`); the local file has 37.
 - [x] **Judge completeness check.** `scripts/llm_judge_eval.py` should exit non-zero, or mark the
       summary incomplete, when it judged fewer dialogues than the run contains. The archived Sonnet
@@ -173,7 +174,7 @@ Artifacts: `results/p1-r9700-qwen35clf-gemma31b-fewshot10-n50/` and
       dialogues. *Done: `scripts/wandb_block_bootstrap.py`.* Intervals on the full 681-dialogue
       runs are about ±1.5 points. The synthetic-set runs have only 8 blocks, so their
       intervals are too narrow to rely on.
-- [ ] **Sample-size analysis, redone.** Rewrite `scripts/convergence_analysis.py` to resample with
+- [x] **Sample-size analysis, redone.** Rewrite `scripts/convergence_analysis.py` to resample with
       replacement and report standard errors. It can only be run on real outputs once Phase 4
       produces the first full run.
 - [ ] **Weight sweep and judge bootstrap** (`scripts/unified_robustness.py`) rerun on the new runs.
