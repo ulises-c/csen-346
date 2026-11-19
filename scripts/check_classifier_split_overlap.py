@@ -92,4 +92,6 @@ for f in glob.glob(f"{run}/dialogues/*.json"):
             stats[g][2] += len(d["dialogue"])
 print("run dialogue ids match the zh-only test split:", seen == set(zh_test_ids), len(seen))
 for g, (n_dlg, ok, n) in stats.items():
-    print(f"  {g:<28} dialogues {n_dlg:>4}  turns {n:>5}  state accuracy {100 * ok / max(n, 1):.2f}%")
+    print(
+        f"  {g:<28} dialogues {n_dlg:>4}  turns {n:>5}  state accuracy {100 * ok / max(n, 1):.2f}%"
+    )
