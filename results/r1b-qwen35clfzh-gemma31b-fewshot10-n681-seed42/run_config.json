@@ -1,0 +1,29 @@
+{
+  "experiment": "r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42",
+  "teacher_model": "Gemma 4 31B",
+  "teacher_base_url": "http://localhost:8085/v1",
+  "consultant_model": "Gemma 4 31B",
+  "consultant_base_url": "http://localhost:8085/v1",
+  "bert_consultant": "results/state-clf-qwen3.5-0.8b-lora-zh/final",
+  "oracle_consultant": false,
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": false,
+  "workers": 4,
+  "total_dialogues": 681,
+  "completed": 681,
+  "total_elapsed_seconds": 7938.47,
+  "started_at": "2026-11-18T18:43:29-08:00",
+  "finished_at": "2026-11-18T20:55:47-08:00",
+  "git_commit": "31949d330ce804126b45c62620ba48d04a583766",
+  "git_dirty": false,
+  "env": {
+    "KELE_BERT_DEVICE": "cpu",
+    "KELE_FEW_SHOT_N": "10",
+    "KELE_FEW_SHOT_TEACHER": "1",
+    "KELE_PARALLEL_WORKERS": "4",
+    "KELE_RUN_NOTES": "llama.cpp build 12138, CUDA0, --reasoning off; teacher gemma-4-31B-it-UD-Q5_K_XL.gguf; classifier on CPU; host lz-hw-0047",
+    "KELE_TEACHER_LANG": "auto"
+  },
+  "bert_consultant_sha256": "696e6e044c5222e2a3e2f9746c76c57c308764cce941fff66c453014235c2506"
+}

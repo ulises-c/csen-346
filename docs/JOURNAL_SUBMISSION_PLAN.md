@@ -193,7 +193,7 @@ rest can run at 400 dialogues.
 
 | # | Consultant | Teacher | Set | Purpose |
 |---|---|---|---|---|
-| 1 | Qwen3.5 classifier | Gemma 4 31B | 681 | Headline. Run 2026-11-18 (54.50% state accuracy, ROUGE-1 36.98) **with a classifier that had seen the test dialogues; to be rerun** |
+| 1 | Qwen3.5 classifier | Gemma 4 31B | 681 | Headline. Run 2026-11-18 (54.50% state accuracy, ROUGE-1 36.98) with a classifier that had seen the test dialogues. **Repeated clean 2026-11-18 (`r1b`): 52.14% state accuracy [50.56, 53.68], 49.91% over all ground-truth turns, ROUGE-1 36.86** |
 | 2 | BERT | Gemma 4 31B | 681 | Consultant ablation |
 | 3 | Gemma 4 31B (LLM as consultant) | Gemma 4 31B | 681 | Baseline: classifier against an LLM consultant, with outputs |
 | 4 | Qwen3.5 classifier | SocratTeachLLM | 681 | Fine-tuned teacher |

@@ -95,11 +95,33 @@ from `scripts/eval_stage_classifier_on_test.py`; the paper reports 86.55%. Weigh
 `~/csen346-archive/stage_classifier_v1-bert-zh-seed42-20261118.tgz`. Not yet on Hugging Face and
 not yet copied to ollie-cachy, which the BERT runs need.
 
-## Run 1 repeat on the A6000 (started 2026-11-18 18:43)
+## Run 1 repeat with the clean classifier (done 2026-11-18)
 
 `r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42`: the retrained classifier plus Gemma 4 31B Q5,
-same settings as run 1, on `hw-0047`. Measured 254 dialogues/hour at the start (R9700: 206), so
-the evaluation should end about 21:25; the judge pass (Qwen3.6-27B Q5_K_XL) follows.
+same settings as run 1, on the A6000 (`hw-0047`). Evaluation 2 h 12 min, judge 1 h 42 min.
+Summaries are in `results/r1b-…/`; the dialogues are in `~/csen346-archive/r1b-….tgz` on the Mac.
+
+| | Run 1 repeat (clean) | Run 1 (leaking classifier) | Archived paper run |
+|---|---|---|---|
+| State accuracy, scored turns | **52.14%** [50.56, 53.68] | 54.50% | 55.39% |
+| State accuracy, all 4,304 ground-truth turns | **49.91%** [48.27, 51.53] | 52.35% | n/a |
+| Stage-balanced | 57.50% [55.87, 59.09] | 59.50% | n/a |
+| Stages b / c / d / e | 47.17 / 32.46 / 36.71 / 71.16 | 50.59 / 35.41 / 41.07 / 70.45 | 46.39 / 35.42 / 46.36 / 78.45 |
+| ROUGE-1 / ROUGE-2 / BLEU-4 | 36.86 / 16.49 / 9.01 | 36.98 / 16.63 / 9.06 | 37.65 / 16.74 / 9.61 |
+| Turns scored; dialogues cut short | 4,120; 20.6% | 4,134; 18.5% | 3,974 |
+
+- **The leak was worth 2.36 points** of state accuracy (paired over the 681 dialogues, 95%
+  interval 0.68 to 4.05). Text-overlap metrics did not move.
+- The 74 dialogues the old classifier had not seen in Chinese score about 4 points lower with
+  the clean classifier too (48.67% against 52.56%), so that gap is those dialogues being harder,
+  not the leak.
+- The classifier scores 68.45% offline and 52.14% in the loop; the offline-to-live gap stands.
+- **Judge (Qwen3.6-27B Q5_K_XL): 8.64/10 on 4,119 of 4,120 turns, so the pass is marked
+  incomplete** (one stage-e turn was not scored). Per stage: a 9.59, b 9.35, c 8.92, d 7.58,
+  e 7.05, a spread of 2.5 points. Rerun the judge stage to fill the missing turn before quoting
+  the judge figure. This judge differs from run 1's (Qwen3.8-27B), so the two judge means are
+  not comparable.
+- Run settings on that machine: llama.cpp build 12138 (CUDA), the R9700 used 11429.
 
 - Code: `~/csen346-run/` (a clone from a git bundle, so `run_config.json` has the commit).
 - Launcher: `~/csen346-runs/run_r1b.sh` (smoke, evaluation, then judge); output in
@@ -115,6 +137,30 @@ the evaluation should end about 21:25; the judge pass (Qwen3.6-27B Q5_K_XL) foll
 - Stop: `pkill -f run_r1b.sh; pkill -f rerun_headline_r9700.sh` on that machine.
 - Afterwards: copy `~/csen346-runs/r1b-….tgz` back, commit the summaries, and delete
   `~/csen346-train`, `~/csen346-run`, `~/csen346-models` there when no more runs are planned.
+
+## Work machines and Slurm (2026-11-18)
+
+Reached with `ssh work-laptop`, then `ssh <host>`. Only the three Slurm nodes may be used:
+
+| Host | Slurm node | GPU | Partition for user `ulises` | Notes |
+|---|---|---|---|---|
+| hw-0304 | hw-0304 | RTX 4000 Ada 20 GB | `general`, 7 days | Login is `ulises`; submit jobs from here |
+| hw-0457 | lz-lazalab | RTX A2000 12 GB | `general`, 7 days | Login is `uchavarria`; jobs run as `ulises` |
+| hw-0047 | lz-hw-0047 | RTX A6000 48 GB | `hw-0047`, **1 hour** | The 7-day `inference` partition is for the `laza-llm` service account only |
+
+- Submit with `sbatch` (the user's instruction), so the scheduler knows the card is taken. The
+  run 1 repeat was started on hw-0047 directly, before this was known; nothing else should be.
+- Whether to chain 1-hour jobs on the A6000 is the user's decision (asked, not yet answered).
+  Without it, Gemma 31B runs and 27B judge passes go to the R9700 in the daytime.
+- Each node has: `~/csen346-run` (clone from a bundle), `~/csen346-models`, `~/csen346-llama`
+  (hw-0304, hw-0457: a copy of hw-0047's `/opt/laza-llm/llama.cpp/b12138`), `~/csen346-runs`
+  (STATUS, sbatch files, logs). No credentials on any of them.
+- **Running: Slurm job 11747 on hw-0304** (`~/csen346-runs/queue_0304.sbatch`): run 4
+  (classifier + SocratTeachLLM) then run 5 (classifier + GLM-4-9B base), no judge. Started
+  22:42 at about 165 dialogues/hour, so about 4 hours each. `squeue`, `scancel 11747`; resubmit
+  to resume. The 27B judge does not fit in 20 GB; judge these on the R9700 or the A6000.
+- `scripts/rerun_headline_r9700.sh` now takes `TEACHER_KIND` (gemma31b, socratteachllm, glm49b),
+  `CKPT=none` (teacher as its own consultant), `LLAMA_SERVER`, and works on NVIDIA.
 
 ## State
 
