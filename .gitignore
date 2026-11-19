@@ -10,6 +10,7 @@ results/**
 !results/**/judge_summary.json
 !results/**/run_config.json
 !results/**/semantic_r1.json
+!results/**/judge_validation_*.json
 logs/
 wandb/
 
