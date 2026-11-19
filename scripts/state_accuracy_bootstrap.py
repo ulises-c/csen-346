@@ -13,6 +13,16 @@ percentile interval:
 - accuracy per ground-truth stage a, b, c, d, e;
 - stage-balanced accuracy: the unweighted mean of the five per-stage accuracies.
 
+When the dialogue files record num_turns_ground_truth it also reports:
+
+- state accuracy over ALL ground-truth turns, where the turns after an early
+  e34 stop count as wrong. Every run then has the same denominator;
+- the share of dialogues that stopped before their last ground-truth turn;
+- the share of ground-truth turns that were never scored.
+
+The per-stage rows stay on scored turns: the files do not hold the states of
+the turns that were cut off.
+
 Turns are counted exactly as src/project/metrics.py counts them: dialogues with
 an "error" key are skipped, and so are turns without a ground-truth state. The
 point estimates therefore equal the run's metrics_summary.json before rounding.
@@ -28,6 +38,8 @@ Limits:
 - A dialogue ends early when the system predicts the final state e34, so two
   runs can contain different turns of the same dialogue. The paired difference
   compares the turns each run actually produced; it does not align turns.
+  To compare runs on one denominator, use the "all ground-truth turns" row
+  described below.
 - A resample in which a stage has no turns gives no value for that stage or for
   the stage-balanced mean. Such resamples are left out of that row's interval
   and counted in the output ("n_undefined"). This does not happen on the full
@@ -50,6 +62,14 @@ import numpy as np
 STAGES = "abcde"
 # Row order of every result: overall, the five stages, then the stage-balanced mean.
 ROWS = ["overall", *STAGES, "stage_balanced"]
+# Rows that need the ground-truth turn count of each dialogue.
+EARLY_STOP_ROWS = ["overall_all_turns", "dialogues_cut_short", "turns_not_scored"]
+LABELS = {
+    "stage_balanced": "stage-balanced",
+    "overall_all_turns": "all ground-truth turns",
+    "dialogues_cut_short": "dialogues cut short",
+    "turns_not_scored": "turns not scored",
+}
 
 
 def load_run(run_dir: Path) -> tuple[list[str], np.ndarray, np.ndarray]:
@@ -88,6 +108,22 @@ def load_run(run_dir: Path) -> tuple[list[str], np.ndarray, np.ndarray]:
     return names, np.array(correct, dtype=np.int64), np.array(total, dtype=np.int64)
 
 
+def load_ground_truth_turns(run_dir: Path) -> np.ndarray | None:
+    """Ground-truth turn count per dialogue, in the order load_run returns them.
+
+    None when a dialogue file does not record num_turns_ground_truth.
+    """
+    counts: list[int] = []
+    for path in sorted((run_dir / "dialogues").glob("*.json")):
+        data = json.loads(path.read_text())
+        if "error" in data:
+            continue
+        if "num_turns_ground_truth" not in data:
+            return None
+        counts.append(data["num_turns_ground_truth"])
+    return np.array(counts, dtype=np.int64)
+
+
 def accuracies(correct: np.ndarray, total: np.ndarray) -> np.ndarray:
     """Turn the summed counts (..., 6) into the seven ROWS values (..., 7), in percent.
 
@@ -112,10 +148,12 @@ def resample_counts(
     return rng.multinomial(size, np.full(n_dialogues, 1.0 / n_dialogues), size=n_boot)
 
 
-def _summarise(point: np.ndarray, draws: np.ndarray, ci: float) -> dict[str, dict]:
+def _summarise(
+    point: np.ndarray, draws: np.ndarray, ci: float, rows: list[str] = ROWS
+) -> dict[str, dict]:
     tail = (100.0 - ci) / 2.0
     out: dict[str, dict] = {}
-    for i, row in enumerate(ROWS):
+    for i, row in enumerate(rows):
         col = draws[:, i]
         ok = col[~np.isnan(col)]
         if ok.size:
@@ -141,6 +179,30 @@ def bootstrap_run(
     counts = resample_counts(len(correct), n_boot, rng)
     draws = accuracies(counts @ correct, counts @ total)
     return _summarise(accuracies(correct.sum(axis=0), total.sum(axis=0)), draws, ci)
+
+
+def bootstrap_early_stop(
+    correct: np.ndarray,
+    total: np.ndarray,
+    gt_turns: np.ndarray,
+    n_boot: int = 10_000,
+    seed: int = 0,
+    ci: float = 95.0,
+) -> dict[str, dict]:
+    """The EARLY_STOP_ROWS figures, in percent, with the same resampling as bootstrap_run.
+
+    overall_all_turns: correct turns / ground-truth turns (cut-off turns count as wrong).
+    dialogues_cut_short: dialogues with fewer scored than ground-truth turns / dialogues.
+    turns_not_scored: ground-truth turns never scored / ground-truth turns.
+    """
+    scored = total[:, 0]
+    num = np.column_stack([correct[:, 0], scored < gt_turns, gt_turns - scored])
+    den = np.column_stack([gt_turns, np.ones_like(gt_turns), gt_turns])
+    rng = np.random.default_rng(seed)
+    counts = resample_counts(len(correct), n_boot, rng)
+    draws = (counts @ num) / (counts @ den) * 100.0
+    point = num.sum(axis=0) / den.sum(axis=0) * 100.0
+    return _summarise(point, draws, ci, EARLY_STOP_ROWS)
 
 
 def bootstrap_paired(
@@ -180,23 +242,28 @@ def bootstrap_paired(
 def analyse_run(run_dir: Path, n_boot: int, seed: int, ci: float) -> dict:
     names, correct, total = load_run(run_dir)
     sums = total.sum(axis=0)
-    return {
+    run = {
         "run": run_dir.name,
         "n_dialogues": len(names),
         "n_turns": int(sums[0]),
         "n_turns_per_stage": {s: int(sums[i + 1]) for i, s in enumerate(STAGES)},
         "state_accuracy": bootstrap_run(correct, total, n_boot, seed, ci),
     }
+    gt_turns = load_ground_truth_turns(run_dir)
+    if gt_turns is not None:
+        run["n_turns_ground_truth"] = int(gt_turns.sum())
+        run["early_stop"] = bootstrap_early_stop(correct, total, gt_turns, n_boot, seed, ci)
+    return run
 
 
 def format_table(title: str, rows: dict[str, dict], turns: dict[str, int] | None = None) -> str:
-    lines = [title, f"  {'':<15}{'turns':>7}{'estimate':>10}{'lo':>9}{'hi':>9}{'SE':>7}"]
-    for row in ROWS:
-        r = rows[row]
+    """One line per entry of rows; the "turns" column holds each row's denominator."""
+    lines = [title, f"  {'':<24}{'turns':>7}{'estimate':>10}{'lo':>9}{'hi':>9}{'SE':>7}"]
+    for row, r in rows.items():
         n = "" if turns is None or row not in turns else str(turns[row])
-        label = "stage-balanced" if row == "stage_balanced" else row
         lines.append(
-            f"  {label:<15}{n:>7}{r['estimate']:>10.2f}{r['lo']:>9.2f}{r['hi']:>9.2f}{r['se']:>7.2f}"
+            f"  {LABELS.get(row, row):<24}{n:>7}{r['estimate']:>10.2f}{r['lo']:>9.2f}"
+            f"{r['hi']:>9.2f}{r['se']:>7.2f}"
         )
     return "\n".join(lines)
 
@@ -230,6 +297,23 @@ def main() -> None:
         turns = {"overall": run["n_turns"], **run["n_turns_per_stage"]}
         title = f"\n{run_dir.name}: {run['n_dialogues']} dialogues, {run['n_turns']} turns"
         print(format_table(title, run["state_accuracy"], turns))
+        if "early_stop" in run:
+            n_gt = run["n_turns_ground_truth"]
+            denominators = {
+                "overall_all_turns": n_gt,
+                "dialogues_cut_short": run["n_dialogues"],
+                "turns_not_scored": n_gt,
+            }
+            title = (
+                "  Early stop at e34 (cut-off turns count as wrong in the first row; "
+                "'turns' is each row's denominator)"
+            )
+            print(format_table(title, run["early_stop"], denominators))
+        else:
+            print(
+                "  No num_turns_ground_truth in the dialogue files: "
+                "the all-turn accuracy and the early-stop rate are not reported."
+            )
 
     if args.paired:
         a, b = args.run_dirs

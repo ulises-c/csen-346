@@ -174,3 +174,90 @@ def test_empty_run_directory_is_an_error(tmp_path):
     (tmp_path / "dialogues").mkdir()
     with pytest.raises(FileNotFoundError):
         sab.load_run(tmp_path)
+
+
+def _write_cut_run(root: Path, n_pairs: int = 30) -> Path:
+    """Dialogues with 6 ground-truth turns: half stop after 4 turns, half run all 6.
+
+    Every dialogue has 3 correct turns, so accuracy over all ground-truth turns
+    is 3/6 in each of them.
+    """
+    dialogues = root / "dialogues"
+    dialogues.mkdir(parents=True)
+    short = [("a1", "a1"), ("b4", "b4"), ("c16", "c16"), ("e34", "d33")]
+    full = [
+        ("a1", "a1"),
+        ("b4", "b4"),
+        ("c16", "c16"),
+        ("d30", "d33"),
+        ("d30", "d33"),
+        ("c9", "e34"),
+    ]
+    for d in range(2 * n_pairs):
+        turns = [{"state": p, "ground_truth_state": g} for p, g in (short if d % 2 else full)]
+        record = {"id": d, "num_turns_ground_truth": 6, "dialogue": turns}
+        (dialogues / f"{d:04d}.json").write_text(json.dumps(record))
+    return root
+
+
+def test_ground_truth_turns_align_with_load_run(tmp_path):
+    run = _write_cut_run(tmp_path / "run", n_pairs=2)
+    (run / "dialogues" / "9000.json").write_text(
+        json.dumps({"id": 9000, "num_turns_ground_truth": 9, "error": "boom"})
+    )
+
+    names, _correct, total = sab.load_run(run)
+    gt = sab.load_ground_truth_turns(run)
+
+    assert gt is not None and gt.tolist() == [6, 6, 6, 6]
+    assert len(gt) == len(names) and total[:, 0].tolist() == [6, 4, 6, 4]
+
+
+def test_ground_truth_turns_are_none_when_a_dialogue_lacks_the_count(tmp_path):
+    run = _mixed_run(tmp_path / "run", n=4)
+
+    assert sab.load_ground_truth_turns(run) is None
+
+
+def test_all_turn_accuracy_counts_cut_off_turns_as_wrong(tmp_path):
+    run = _write_cut_run(tmp_path / "run")
+    _names, correct, total = sab.load_run(run)
+    gt = sab.load_ground_truth_turns(run)
+
+    rows = sab.bootstrap_early_stop(correct, total, gt, n_boot=2000, seed=0)
+
+    assert list(rows) == sab.EARLY_STOP_ROWS
+    assert rows["overall_all_turns"]["estimate"] == pytest.approx(100 * 180 / 360)
+    assert rows["dialogues_cut_short"]["estimate"] == pytest.approx(50.0)
+    assert rows["turns_not_scored"]["estimate"] == pytest.approx(100 * 60 / 360)
+    # The scored-turn figure of the same run is higher: 180 of 300.
+    assert sab.bootstrap_run(correct, total, 200)["overall"]["estimate"] == pytest.approx(60.0)
+    # Every dialogue is 3 of 6, so resampling dialogues cannot move this figure.
+    assert rows["overall_all_turns"]["hi"] == pytest.approx(rows["overall_all_turns"]["lo"])
+    cut = rows["dialogues_cut_short"]
+    assert cut["lo"] < cut["estimate"] < cut["hi"] and cut["hi"] - cut["lo"] > 10
+
+
+def test_cli_reports_early_stop_rows_when_counts_exist(tmp_path, monkeypatch, capsys):
+    run = _write_cut_run(tmp_path / "run")
+    out = tmp_path / "ci.json"
+    monkeypatch.setattr(sys, "argv", ["x", str(run), "--n-boot", "200", "--out", str(out)])
+
+    sab.main()
+
+    printed = capsys.readouterr().out
+    saved = json.loads(out.read_text())["runs"][0]
+    assert "all ground-truth turns" in printed and "dialogues cut short" in printed
+    assert saved["n_turns_ground_truth"] == 360
+    assert set(saved["early_stop"]) == set(sab.EARLY_STOP_ROWS)
+
+
+def test_cli_says_so_when_ground_truth_counts_are_missing(tmp_path, monkeypatch, capsys):
+    run = _mixed_run(tmp_path / "run")
+    out = tmp_path / "ci.json"
+    monkeypatch.setattr(sys, "argv", ["x", str(run), "--n-boot", "200", "--out", str(out)])
+
+    sab.main()
+
+    assert "num_turns_ground_truth" in capsys.readouterr().out
+    assert "early_stop" not in json.loads(out.read_text())["runs"][0]
