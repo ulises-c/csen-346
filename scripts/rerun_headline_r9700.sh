@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Phase 4, run 1: the headline cell on the R9700, then the local judge pass.
+# Also runs on an NVIDIA card: set LLAMA_SERVER to a CUDA build of llama-server.
 #
 #   Qwen3.5-0.8B LoRA classifier (consultant) + Gemma 4 31B Q5 (teacher), 10-shot,
 #   681 Chinese test dialogues, seed 42, 4 workers; then Qwen3.8-27B Q5 as judge.
@@ -16,7 +17,8 @@
 # Progress:  cat ~/csen346-runs/STATUS ; tail results/<run>/progress.log
 #
 # Env: RUN_NAME, LIMIT (dialogues, default all), EVAL_CAP_S (18000), JUDGE_CAP_S (14400),
-#      JUDGE_MODEL (path to GGUF), SKIP_JUDGE=1.
+#      CKPT (classifier), TEACHER_GGUF, JUDGE_MODEL (path to GGUF), JUDGE_ALIAS, SKIP_JUDGE=1,
+#      LLAMA_SERVER (binary; default: the one on PATH), TEACHER_PORT, JUDGE_PORT.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,11 +33,13 @@ CKPT="${CKPT:-results/state-clf-qwen3.5-0.8b-lora-wandb/final}"
 TEACHER_GGUF="${TEACHER_GGUF:-$HOME/Documents/models/weights/gemma-4-31B-it-UD-Q5_K_XL.gguf}"
 JUDGE_MODEL="${JUDGE_MODEL:-$HOME/models/Qwen3.8-27B/Qwen3.8-27B-UD-Q5_K_M.gguf}"
 JUDGE_ALIAS="${JUDGE_ALIAS:-Qwen3.8-27B-Q5_K_M}"
-TEACHER_PORT=8085 # 8080 is held by llama-swap on ollie-cachy
-JUDGE_PORT=8086
+TEACHER_PORT="${TEACHER_PORT:-8085}" # 8080 is held by llama-swap on ollie-cachy
+JUDGE_PORT="${JUDGE_PORT:-8086}"
 OUT="results/$RUN_NAME"
 LOGS="$HOME/csen346-runs/$RUN_NAME"
 export LLAMA_SERVER="${LLAMA_SERVER:-$(command -v llama-server)}"
+# A llama.cpp build outside the system paths keeps its backend libraries next to the binary.
+export LD_LIBRARY_PATH="$(dirname "$LLAMA_SERVER")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 STATUS="$HOME/csen346-runs/STATUS"
 mkdir -p "$LOGS"
 
@@ -69,7 +73,14 @@ run_capped() { # seconds, logfile, command...
   return $rc
 }
 
-vram_gb() { cat /sys/class/drm/card*/device/mem_info_vram_used | sort -n | tail -1 | awk '{printf "%.1f", $1/1e9}'; }
+vram_gb() {
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1 | awk '{printf "%.1f", $1/1024}'
+  else
+    cat /sys/class/drm/card*/device/mem_info_vram_used | sort -n | tail -1 | awk '{printf "%.1f", $1/1e9}'
+  fi
+}
+gpu_backend() { "$LLAMA_SERVER" --list-devices 2>/dev/null | awk -F: '/^[[:space:]]+[A-Za-z]+[0-9]+:/ { gsub(/[[:space:]]/, "", $1); print $1; exit }'; }
 wait_ready() { # url pattern
   for _ in $(seq 1 150); do
     sleep 2
@@ -89,12 +100,12 @@ echo "Preflight ($(hostname), $(git rev-parse --short HEAD), $(date -Is))"
 check "teacher GGUF present" test -f "$TEACHER_GGUF"
 check "judge GGUF present" test -f "$JUDGE_MODEL"
 check "classifier weights present" test -f "$CKPT/model.safetensors"
-check "llama-server on PATH" command -v llama-server
+check "llama-server present ($LLAMA_SERVER)" test -x "$LLAMA_SERVER"
 check "uv environment" test -x .venv/bin/python
 check "tracked files unmodified" test -z "$(git status --porcelain --untracked-files=no)"
 check "port $TEACHER_PORT free" bash -c "! ss -ltn | grep -q ':$TEACHER_PORT '"
 check "port $JUDGE_PORT free" bash -c "! ss -ltn | grep -q ':$JUDGE_PORT '"
-# Gemma 4 31B with four slots needs 30.5 of 32 GB; anything else on the card breaks it.
+# Gemma 4 31B with four slots needs 30.5 GB (of the R9700's 32); anything else on the card breaks it.
 check "GPU idle (VRAM in use: $(vram_gb) GB, limit 2)" awk -v v="$(vram_gb)" 'BEGIN { exit !(v < 2.0) }'
 exec 9>"$HOME/csen346-runs/.lock"
 check "no other run of this script" flock -n 9
@@ -127,7 +138,7 @@ else
   export CONSULTANT_BASE_URL="http://localhost:$TEACHER_PORT/v1"
   export KELE_BERT_DEVICE=cpu KELE_FEW_SHOT_TEACHER=1 KELE_FEW_SHOT_N=10 KELE_PARALLEL_WORKERS=4
   export WANDB_MODE=disabled
-  KELE_RUN_NOTES="llama.cpp $(llama-server --version 2>&1 | grep -o 'build [0-9]*' | head -1), ROCm, --reasoning off; teacher $(basename "$TEACHER_GGUF"); classifier on CPU; host $(hostname)"
+  KELE_RUN_NOTES="llama.cpp $("$LLAMA_SERVER" --version 2>&1 | grep -o 'build [0-9]*' | head -1), $(gpu_backend), --reasoning off; teacher $(basename "$TEACHER_GGUF"); classifier on CPU; host $(hostname)"
   export KELE_RUN_NOTES
   run_capped "$EVAL_CAP_S" "$LOGS/eval.log" .venv/bin/python -m src.project.kele \
     --experiment gemma4-31b-local evaluate --bert-consultant "$CKPT" "${limit_args[@]}" --output "$OUT"
@@ -148,7 +159,7 @@ elif [[ -f "$OUT/judge_summary.json" ]] && grep -q '"complete": true' "$OUT/judg
   status "judge already complete, skipping"
 else
   # The judge script caps replies at 200 tokens, so a thinking model must have reasoning off.
-  LLAMA_ARG_REASONING=off llama-server -m "$JUDGE_MODEL" -a "$JUDGE_ALIAS" -ngl 99 -c 32768 -np 4 \
+  LLAMA_ARG_REASONING=off "$LLAMA_SERVER" -m "$JUDGE_MODEL" -a "$JUDGE_ALIAS" -ngl 99 -c 32768 -np 4 \
     --host 127.0.0.1 --port "$JUDGE_PORT" >"$LOGS/judge_server.log" 2>&1 9>&- &
   SERVER_PID=$!
   if ! wait_ready "http://127.0.0.1:$JUDGE_PORT/health" '"ok"'; then
