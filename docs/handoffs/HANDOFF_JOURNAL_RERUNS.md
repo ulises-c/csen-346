@@ -242,8 +242,16 @@ No GPU needed, still to do:
 
 1. Merge PR #186.
 2. Rewrite the sample-size sections of `README.md` and `docs/CONVERGENCE_ANALYSIS.md`.
-3. Decide how to handle early-stopped dialogues in the paper (score all ground-truth turns, or
-   report per-dialogue metrics).
+3. ~~Decide how to handle early-stopped dialogues in the paper.~~ **Decided 2026-11-18 (user):**
+   the primary state-accuracy figure is over all ground-truth turns, with the turns after an
+   early `e34` counted as wrong. Report accuracy over scored turns and the early-stop rate beside
+   it. `scripts/state_accuracy_bootstrap.py` now prints all three with intervals when the
+   dialogue files record `num_turns_ground_truth`. Run 1 (leaking classifier, numbers to be
+   replaced): 52.35% [50.68, 54.05] over all 4,304 turns; 18.50% [15.57, 21.44] of dialogues cut
+   short. Still open:
+   - Write the two figures into `metrics_summary.json` (`src/project/metrics.py`).
+   - Find which denominator the KELE paper used; it decides which figure compares with theirs.
+   - Per-stage accuracy stays on scored turns: the files do not hold the states of cut-off turns.
 4. Flash-Next as a judge: `llm_judge_eval.py` caps replies at 200 tokens and sends no reasoning
    setting; Flash-Next thinks by default behind llama-swap (port 8080, needs the llama-swap key).
    Add a token cap and reasoning-effort option, then run the validation against it.
@@ -312,6 +320,17 @@ there and check it out in the worktree `~/github/csen-346-main`. Leave the main 
 - `scripts/convert_socratteachllm_to_gguf.sh` was fixed, but the SocratTeachLLM file on disk was
   made with the same method by hand; rerun the script once to confirm it.
 - Port 8080 on ollie-cachy belongs to `llama-swap`. The run uses 8085 and 8086.
+- **Precision laptop only (a second machine used on 2026-11-18):**
+  - Its installed pre-commit hook was an old copy that ran an unpinned `uvx ruff`, and a leftover
+    `torchaudio` broke `tests/test_hf_callback.py`. Both are fixed (`make install-hooks`,
+    `uv pip uninstall torchaudio`); the full hook passes there now.
+  - Run 1's dialogues are also at `~/csen346-archive/` there (sent with Taildrop).
+  - Local branch `backup/precision-bootstrap-f3a0e8e` and three refs under `refs/recovery/` hold
+    superseded or already-merged work and can be deleted.
+- **Two sessions worked on this branch at once on 2026-11-18** and wrote the same bootstrap script
+  twice. `origin` has two push URLs (this repo and the SCU-CSEN346/KELE mirror); a push that this
+  repo rejected still created a stray `feat/journal-phase1-side-items` on the mirror at
+  `f3a0e8e`. `make sync-mirror` overwrites it. Fetch before starting an item and before pushing.
 
 ## Other open items
 

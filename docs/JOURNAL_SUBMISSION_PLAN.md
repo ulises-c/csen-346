@@ -51,6 +51,12 @@ Change or drop:
 - **Redo the clean-probe comparison** on the 75-dialogue synthetic set, same setup for every model.
 - **Report state accuracy and judge score separately as primary results.** The unified score is
   secondary.
+- **State accuracy uses one denominator for every run** (decided 2026-11-18). The evaluation stops
+  a dialogue when the consultant predicts `e34`, so each run scores a different number of the
+  4,304 ground-truth turns. Primary figure: accuracy over all 4,304 turns, with cut-off turns
+  counted as wrong. Also report accuracy over scored turns (the figure in the current draft) and
+  the early-stop rate. ROUGE, BLEU and the judge score cover generated turns only, so their
+  tables give the turn count of each run. Open: which convention the KELE paper used.
 
 ## 3. Phases
 
@@ -290,3 +296,5 @@ open PRs. Dependabot still opens PRs; they now wait for a manual merge. Re-enabl
   are in `docs/handoffs/HANDOFF_JOURNAL_RERUNS.md`.
 - 2026-11-18: found that the published classifier was trained on 607 of the 681 evaluation
   dialogues (split mismatch). Run 1 must be repeated with a retrained classifier.
+- 2026-11-18: state accuracy over all ground-truth turns becomes the primary figure;
+  `scripts/state_accuracy_bootstrap.py` reports it and the early-stop rate with intervals.
