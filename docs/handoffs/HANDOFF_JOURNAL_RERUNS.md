@@ -54,15 +54,23 @@ replies, not states), and ROUGE/BLEU only as an approximation, since the states 
    1,929 held out; this is what `scripts/train_state_classifier_34way.py` does by default today).
    Command from the model card:
    `uv run python scripts/train_state_classifier_34way.py --model-id Qwen/Qwen3.5-0.8B-Base --lora --lora-r 8 --lora-alpha 16 --batch_size 8 --bf16-autocast`
-   **Where it can run is the open question.** It needs a CUDA or ROCm card:
+   **Where it runs (settled 2026-11-18):**
+   - **In progress on a borrowed RTX A6000** (`hw-0047`, reached with `ssh work-laptop` then
+     `ssh hw-0047`). Started 17:14, 292 steps/min with the flash-linear-attention kernels,
+     projected 1.3 hours. Everything is in `~/csen346-train/` there: the source at the commit in
+     `SOURCE_COMMIT`, `status.log`, `train.log`, and the output in
+     `results/state-clf-qwen3.5-0.8b-lora-zh/` (`final/` is the merged model, `test_eval.json`
+     the offline accuracy). No credentials were put on that machine; the datasets and base model
+     are public. The system python there has no `Python.h`, which Triton needs, so the venv uses
+     a uv-managed python (`uv sync --extra cuda --no-dev --python-preference only-managed`).
+     Copy the result back with
+     `ssh work-laptop "ssh hw-0047 'tar czf - -C ~/csen346-train/results state-clf-qwen3.5-0.8b-lora-zh/final state-clf-qwen3.5-0.8b-lora-zh/test_eval.json'" > clf.tgz`.
+   - **The R9700 works too, as a fallback.** `scripts/train_classifier_r9700.sh --probe` under
+     the ROCm 10.1 torch (`~/rocm10-probe` on ollie-cachy, with the project's training libraries
+     added): 40 steps clean, 111 steps/min, 20 GB VRAM, projected 3.4 hours, no GPU fault in the
+     kernel log. Forty steps do not settle the old fault, which appeared around step 1230; a
+     full run there would.
    - The M5 Max is out: with `--device mps` the run did not finish 40 steps in 10 minutes.
-   - The R9700 is the card whose training runs page-faulted on ROCm 7.2 (the gfx1201 issue).
-     ROCm 10.1 probably fixes it and a venv with a ROCm 10.1 torch exists (`~/rocm10-probe` on
-     ollie-cachy), but training there has not been tried. Time a 40-step probe first
-     (`--max-steps 40` prints a projection). The trainer checkpoints every epoch and resumes
-     with `--resume`. It is a multi-hour daytime job.
-   - A borrowed RTX card: the two-language version took 3.3 hours on an RTX 4000 Ada, so the
-     Chinese-only one should take about half that.
    - ollie-game-server (GTX 1070, 8 GB) does not answer ssh.
 3. Verify the new checkpoint with `scripts/check_classifier_split_overlap.py` logic (its training
    ids against the test ids), record its offline accuracy on the 4,304 test turns, publish it as
@@ -149,7 +157,7 @@ at a 3-bit-class quantization. A larger model is not automatically a stricter ju
 Validation, cheapest first:
 
 1. **Controls on run 1's dialogues, no new evaluation needed: `scripts/judge_validation.py`**
-   (built 2026-11-18, not yet run against a real judge). It samples 30 turns per stage (120 turns,
+   (built and run 2026-11-18). It samples 30 turns per stage (120 turns,
    seed 42), keeps the conversation history, and has the judge score seven replies per turn: the
    system's, the reference, and five bad controls, each aimed at one rubric axis (a reply swapped
    in from another dialogue, the previous reply repeated, a flat statement with no question,
@@ -171,6 +179,29 @@ Validation, cheapest first:
    Run it for Qwen3.8-27B, Qwen3.6-27B and Qwen3.8-Flash-Next, then compare. The summary files
    are small; commit them. There is no wrapper yet that starts the judge server, runs this and
    stops the server; `scripts/rerun_headline_r9700.sh` stage 2 shows the server command.
+   **Result for the two Qwen 27B judges** (120 turns, 767 items each, 26 minutes each on the
+   R9700; files in `results/r1-…/judge_validation_*.json`):
+
+   | | Qwen3.8-27B Q5_K_M | Qwen3.6-27B Q5_K_XL |
+   |---|---|---|
+   | System reply, mean | 9.17 | 8.34 |
+   | Reference reply, mean | 9.34 | 9.57 |
+   | Drop for swapped / repeat / statement / jargon / early closure | 6.5 / 5.1 / 8.8 / 9.2 / 7.6 | 7.1 / 4.2 / 8.3 / 8.3 / 7.8 |
+   | Bad controls detected | 5 of 5 | 5 of 5 |
+   | System replies given 10/10 | 73 of 120 | 67 of 120 |
+   | System replies scored 6 or lower | 1 | 23 |
+   | Same total on a repeat | 97% | 98% |
+
+   Reading: neither judge is blind. Both put every kind of broken reply far below the real one,
+   on the intended axes, and both are repeatable. That is a floor test and they pass it. The
+   weakness is at the top: both give full marks to more than half of the real replies, although
+   the rubric says a 10 should be rare, so they have little room to separate two competent
+   systems. Qwen3.6-27B uses more of the scale and ranks the reference above the system reply
+   (by 1.2 points; Qwen3.8 does not separate them). On real replies the two agree only
+   moderately (rank correlation 0.60). The controls do not test fine distinctions; step 2 and
+   step 3 below do. Qwen3.6-27B looks like the better candidate so far; a rubric that makes 10
+   harder to earn is worth testing on these same items.
+
 2. **A second system.** Judge run 3 once it exists and compare with run 1.
 3. **Agreement with Claude** on about 100 dialogues through the subscription backend, and with
    human scores (Phase 6).
