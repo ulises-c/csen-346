@@ -18,7 +18,9 @@
 #
 # Env: RUN_NAME, LIMIT (dialogues, default all), EVAL_CAP_S (18000), JUDGE_CAP_S (14400),
 #      CKPT (classifier or BERT checkpoint; "none" = Gemma is its own consultant), TEACHER_GGUF, JUDGE_MODEL (path to GGUF), JUDGE_ALIAS, SKIP_JUDGE=1,
-#      LLAMA_SERVER (binary; default: the one on PATH), TEACHER_PORT, JUDGE_PORT.
+#      LLAMA_SERVER (binary; default: the one on PATH), TEACHER_PORT, JUDGE_PORT,
+#      TEACHER_KIND: gemma31b (default), socratteachllm or glm49b; the two 9B teachers are
+#      served with 4 slots and a 65536-token context and need TEACHER_GGUF set.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,6 +37,13 @@ JUDGE_MODEL="${JUDGE_MODEL:-$HOME/models/Qwen3.8-27B/Qwen3.8-27B-UD-Q5_K_M.gguf}
 JUDGE_ALIAS="${JUDGE_ALIAS:-Qwen3.8-27B-Q5_K_M}"
 TEACHER_PORT="${TEACHER_PORT:-8085}" # 8080 is held by llama-swap on ollie-cachy
 JUDGE_PORT="${JUDGE_PORT:-8086}"
+TEACHER_KIND="${TEACHER_KIND:-gemma31b}"
+case "$TEACHER_KIND" in
+  gemma31b) EXPERIMENT=gemma4-31b-local TEACHER_ALIAS="Gemma 4 31B" ;;
+  socratteachllm) EXPERIMENT=socratteachllm-local TEACHER_ALIAS="SocratTeachLLM" ;;
+  glm49b) EXPERIMENT=glm49b-chat-local TEACHER_ALIAS="GLM-4-9B-Chat-base" ;;
+  *) echo "unknown TEACHER_KIND: $TEACHER_KIND" >&2; exit 2 ;;
+esac
 OUT="results/$RUN_NAME"
 LOGS="$HOME/csen346-runs/$RUN_NAME"
 export LLAMA_SERVER="${LLAMA_SERVER:-$(command -v llama-server)}"
@@ -99,7 +108,7 @@ check() { # description, command...
 }
 echo "Preflight ($(hostname), $(git rev-parse --short HEAD), $(date -Is))"
 check "teacher GGUF present" test -f "$TEACHER_GGUF"
-check "judge GGUF present" test -f "$JUDGE_MODEL"
+[[ "${SKIP_JUDGE:-0}" == "1" ]] || check "judge GGUF present" test -f "$JUDGE_MODEL"
 [[ "$CKPT" == "none" ]] || check "classifier weights present" test -f "$CKPT/model.safetensors"
 check "llama-server present ($LLAMA_SERVER)" test -x "$LLAMA_SERVER"
 check "uv environment" test -x .venv/bin/python
@@ -125,10 +134,24 @@ status "preflight passed, commit $(git rev-parse --short HEAD)"
 if [[ -f "$OUT/metrics_summary.json" ]]; then
   status "evaluation already complete, skipping"
 else
-  LLAMA_ARG_REASONING=off bash scripts/serve_gemma4_31b_q5.sh -m "$TEACHER_GGUF" -p "$TEACHER_PORT" \
-    >"$LOGS/teacher_server.log" 2>&1 9>&- &
+  case "$TEACHER_KIND" in
+    gemma31b)
+      LLAMA_ARG_REASONING=off bash scripts/serve_gemma4_31b_q5.sh -m "$TEACHER_GGUF" -p "$TEACHER_PORT" \
+        >"$LOGS/teacher_server.log" 2>&1 9>&- &
+      ;;
+    socratteachllm)
+      SOCRATTEACHLLM_WEIGHTS_DIR="$(dirname "$TEACHER_GGUF")" SOCRATTEACHLLM_WEIGHT_FILE="$(basename "$TEACHER_GGUF")" \
+        SOCRATTEACHLLM_PORT="$TEACHER_PORT" SOCRATTEACHLLM_PARALLEL=4 SOCRATTEACHLLM_CTX=65536 \
+        bash scripts/serve_socratteachllm_llamacpp.sh >"$LOGS/teacher_server.log" 2>&1 9>&- &
+      ;;
+    glm49b)
+      GLM49B_WEIGHTS_DIR="$(dirname "$TEACHER_GGUF")" GLM49B_WEIGHT_FILE="$(basename "$TEACHER_GGUF")" \
+        GLM49B_PORT="$TEACHER_PORT" GLM49B_PARALLEL=4 GLM49B_CTX=65536 \
+        bash scripts/serve_glm49b_chat_llamacpp.sh >"$LOGS/teacher_server.log" 2>&1 9>&- &
+      ;;
+  esac
   SERVER_PID=$!
-  if ! wait_ready "http://localhost:$TEACHER_PORT/v1/models" '"Gemma 4 31B"'; then
+  if ! wait_ready "http://localhost:$TEACHER_PORT/v1/models" "\"$TEACHER_ALIAS\""; then
     status "teacher server did not come up; see $LOGS/teacher_server.log"
     exit 3
   fi
@@ -144,7 +167,7 @@ else
   KELE_RUN_NOTES="llama.cpp $("$LLAMA_SERVER" --version 2>&1 | grep -o 'build [0-9]*' | head -1), $(gpu_backend), --reasoning off; teacher $(basename "$TEACHER_GGUF"); classifier on CPU; host $(hostname)"
   export KELE_RUN_NOTES
   run_capped "$EVAL_CAP_S" "$LOGS/eval.log" .venv/bin/python -m src.project.kele \
-    --experiment gemma4-31b-local evaluate "${consultant_args[@]}" "${limit_args[@]}" --output "$OUT"
+    --experiment "$EXPERIMENT" evaluate "${consultant_args[@]}" "${limit_args[@]}" --output "$OUT"
   rc=$?
   stop_server
   done_n=$(find "$OUT/dialogues" -name '*.json' 2>/dev/null | wc -l)
