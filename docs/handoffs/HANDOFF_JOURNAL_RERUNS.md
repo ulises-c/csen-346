@@ -150,8 +150,23 @@ Reached with `ssh work-laptop`, then `ssh <host>`. Only the three Slurm nodes ma
 
 - Submit with `sbatch` (the user's instruction), so the scheduler knows the card is taken. The
   run 1 repeat was started on hw-0047 directly, before this was known; nothing else should be.
-- Whether to chain 1-hour jobs on the A6000 is the user's decision (asked, not yet answered).
-  Without it, Gemma 31B runs and 27B judge passes go to the R9700 in the daytime.
+- **A6000 queue (user approved chaining 1-hour jobs, 2026-11-18 23:05; the card is free until
+  about 11:00 on 2026-11-19).** Sixteen chained Slurm jobs named `csen346-a6000` (11750 to
+  11765, each `afterany` the previous) run `/home/uchavarria/csen346-runs2/slice.sh` on
+  hw-0047. A slice works through, in order: run 2 (bge-small + Gemma), run 3 (Gemma as its own
+  consultant), then judge passes for runs 4 and 5 and the run 1 repeat, each with the
+  Qwen3.6-27B judge. Every step resumes from disk; a slice with nothing to do exits at once.
+  - Status: `~/csen346-runs2/STATUS` on hw-0047 (as `uchavarria`); `squeue -n csen346-a6000`
+    on hw-0304. Stop: `scancel -n csen346-a6000` on hw-0304.
+  - The jobs run as `ulises` inside `uchavarria`'s tree (`~/csen346-run2`, `~/csen346-runs2`,
+    `~/csen346-models`), which `ulises` can reach through ACLs set on those paths and on
+    `~/.local/share/uv`. Remove them with `setfacl -R -x u:ulises` when done.
+  - The partition caps memory at 22 GB per group; the jobs ask for 20 GB and 12 CPUs.
+  - A relay on work-laptop (`~/csen346-relay/relay.sh`, log beside it) copies run 4 and run 5
+    results from hw-0304 to hw-0047 as they finish, so their judge passes can start.
+  - The user cannot raise the 1-hour limit (no Slurm admin level). An admin can, with
+    `scontrol update PartitionName=hw-0047 MaxTime=12:00:00` on `lz-svc-agent`.
+- The judge now saves per-dialogue scores in `results/<run>/judge_scores/` and resumes from them.
 - Each node has: `~/csen346-run` (clone from a bundle), `~/csen346-models`, `~/csen346-llama`
   (hw-0304, hw-0457: a copy of hw-0047's `/opt/laza-llm/llama.cpp/b12138`), `~/csen346-runs`
   (STATUS, sbatch files, logs). No credentials on any of them.
