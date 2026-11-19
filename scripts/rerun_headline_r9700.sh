@@ -39,7 +39,8 @@ OUT="results/$RUN_NAME"
 LOGS="$HOME/csen346-runs/$RUN_NAME"
 export LLAMA_SERVER="${LLAMA_SERVER:-$(command -v llama-server)}"
 # A llama.cpp build outside the system paths keeps its backend libraries next to the binary.
-export LD_LIBRARY_PATH="$(dirname "$LLAMA_SERVER")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+LD_LIBRARY_PATH="$(dirname "$LLAMA_SERVER")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH
 STATUS="$HOME/csen346-runs/STATUS"
 mkdir -p "$LOGS"
 
