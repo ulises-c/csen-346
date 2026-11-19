@@ -78,7 +78,16 @@ replies, not states), and ROUGE/BLEU only as an approximation, since the states 
 5. Check the Gemma 12B fine-tunes for the same problem before using run 6: which split they were trained on
    has not been checked. The loader default was two-language until 2026-06-09.
 
-**BERT consultant retrained 2026-11-18** on the Chinese-only train split, on the M5 Max
+**The consultant for run 2 is the 34-state bge-small classifier, not the 5-way stage classifier.**
+`--bert-consultant` loads a 34-state model (`src/project/socratic_teaching_bert_consultant.py`);
+the earlier logs call it "BERT" and record 61.64% state accuracy
+(`docs/CONSULTANT_UPGRADE_LOG.md`). Retrained 2026-11-18 on the Chinese-only train split with
+`scripts/train_state_classifier_34way.py --device cpu --out-dir results/state-clf-bge-small-zh`
+(all other defaults; MPS fails on attention dropout): **61.59%** on the 4,304 test turns, sha256
+`07d79532334d5178…`, on the Mac in `results/state-clf-bge-small-zh/` and archived at
+`~/csen346-archive/state-clf-bge-small-zh-20261118.tgz`. Use this checkpoint as `CKPT` for run 2.
+
+**Stage classifier (5-way BERT) retrained 2026-11-18** on the Chinese-only train split, on the M5 Max
 (`scripts/train_stage_classifier.py --epochs 3 --batch_size 32`, 87 minutes on the Apple GPU).
 Stage accuracy on the 4,304 test turns: **86.64%** (a 99.85, b 90.28, c 80.86, d 75.07, e 94.13),
 from `scripts/eval_stage_classifier_on_test.py`; the paper reports 86.55%. Weights are in
