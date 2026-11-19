@@ -55,16 +55,15 @@ replies, not states), and ROUGE/BLEU only as an approximation, since the states 
    Command from the model card:
    `uv run python scripts/train_state_classifier_34way.py --model-id Qwen/Qwen3.5-0.8B-Base --lora --lora-r 8 --lora-alpha 16 --batch_size 8 --bf16-autocast`
    **Where it runs (settled 2026-11-18):**
-   - **In progress on a borrowed RTX A6000** (`hw-0047`, reached with `ssh work-laptop` then
-     `ssh hw-0047`). Started 17:14, 292 steps/min with the flash-linear-attention kernels,
-     projected 1.3 hours. Everything is in `~/csen346-train/` there: the source at the commit in
-     `SOURCE_COMMIT`, `status.log`, `train.log`, and the output in
-     `results/state-clf-qwen3.5-0.8b-lora-zh/` (`final/` is the merged model, `test_eval.json`
-     the offline accuracy). No credentials were put on that machine; the datasets and base model
-     are public. The system python there has no `Python.h`, which Triton needs, so the venv uses
-     a uv-managed python (`uv sync --extra cuda --no-dev --python-preference only-managed`).
-     Copy the result back with
-     `ssh work-laptop "ssh hw-0047 'tar czf - -C ~/csen346-train/results state-clf-qwen3.5-0.8b-lora-zh/final state-clf-qwen3.5-0.8b-lora-zh/test_eval.json'" > clf.tgz`.
+   - **Done on a borrowed RTX A6000** (`hw-0047`, reached with `ssh work-laptop` then
+     `ssh hw-0047`): 5 epochs in 1 h 25 min. **State accuracy on the 4,304 test turns: 68.45%**
+     (the paper's lost classifier: 67.57%); implied stage accuracy a 100, b 92.4, c 85.0, d 75.7,
+     e 96.9. Merged model sha256 `696e6e044c5222e2…`, on that machine in
+     `~/csen346-train/results/state-clf-qwen3.5-0.8b-lora-zh/` and copied to the Mac
+     (`results/state-clf-qwen3.5-0.8b-lora-zh/`, archive in `~/csen346-archive/`). Not yet on
+     Hugging Face. No credentials were put on that machine. The system python there has no
+     `Python.h`, which Triton needs, so the venv uses a uv-managed python
+     (`uv sync --extra cuda --no-dev --python-preference only-managed`).
    - **The R9700 works too, as a fallback.** `scripts/train_classifier_r9700.sh --probe` under
      the ROCm 10.1 torch (`~/rocm10-probe` on ollie-cachy, with the project's training libraries
      added): 40 steps clean, 111 steps/min, 20 GB VRAM, projected 3.4 hours, no GPU fault in the
@@ -86,6 +85,27 @@ from `scripts/eval_stage_classifier_on_test.py`; the paper reports 86.55%. Weigh
 `results/stage_classifier_v1/final` on the Mac (sha256 `de40c97f9e334eac…`) and archived at
 `~/csen346-archive/stage_classifier_v1-bert-zh-seed42-20261118.tgz`. Not yet on Hugging Face and
 not yet copied to ollie-cachy, which the BERT runs need.
+
+## Run 1 repeat on the A6000 (started 2026-11-18 18:43)
+
+`r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42`: the retrained classifier plus Gemma 4 31B Q5,
+same settings as run 1, on `hw-0047`. Measured 254 dialogues/hour at the start (R9700: 206), so
+the evaluation should end about 21:25; the judge pass (Qwen3.6-27B Q5_K_XL) follows.
+
+- Code: `~/csen346-run/` (a clone from a git bundle, so `run_config.json` has the commit).
+- Launcher: `~/csen346-runs/run_r1b.sh` (smoke, evaluation, then judge); output in
+  `~/csen346-runs/run_r1b.out`, status in `~/csen346-runs/STATUS`. Rerun the launcher to resume.
+- llama.cpp: the machine's own CUDA build, `/opt/laza-llm/llama.cpp/current` (build 12138; the
+  R9700 used 11429).
+- Weights in `~/csen346-models/`: the Gemma GGUF is the 2026-07-09 revision of
+  `unsloth/gemma-4-31b-it-GGUF` (`12e99a2f`), which matches the R9700 copy by sha256
+  (`f46afb90…`); the current revision is a different file. Qwen3.6-27B matches as is.
+  `hf download` stalled there; `~/csen346-models/pdl.sh` fetches with parallel ranged curls.
+- Risk: that machine runs a shared model service (`laza-llm`, port 8080). If it loads a model
+  mid-run the card can run out of memory; the run then stops and resumes on relaunch.
+- Stop: `pkill -f run_r1b.sh; pkill -f rerun_headline_r9700.sh` on that machine.
+- Afterwards: copy `~/csen346-runs/r1b-….tgz` back, commit the summaries, and delete
+  `~/csen346-train`, `~/csen346-run`, `~/csen346-models` there when no more runs are planned.
 
 ## State
 
