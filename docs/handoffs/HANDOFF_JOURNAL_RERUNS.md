@@ -79,7 +79,13 @@ replies, not states), and ROUGE/BLEU only as an approximation, since the states 
 5. Check the Gemma 12B fine-tunes for the same problem before using run 6: which split they were trained on
    has not been checked. The loader default was two-language until 2026-06-09.
 
-The BERT consultant is not affected: it is retrained from the current loader (see below).
+**BERT consultant retrained 2026-11-18** on the Chinese-only train split, on the M5 Max
+(`scripts/train_stage_classifier.py --epochs 3 --batch_size 32`, 87 minutes on the Apple GPU).
+Stage accuracy on the 4,304 test turns: **86.64%** (a 99.85, b 90.28, c 80.86, d 75.07, e 94.13),
+from `scripts/eval_stage_classifier_on_test.py`; the paper reports 86.55%. Weights are in
+`results/stage_classifier_v1/final` on the Mac (sha256 `de40c97f9e334eac…`) and archived at
+`~/csen346-archive/stage_classifier_v1-bert-zh-seed42-20261118.tgz`. Not yet on Hugging Face and
+not yet copied to ollie-cachy, which the BERT runs need.
 
 ## State
 
