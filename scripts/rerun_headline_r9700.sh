@@ -19,6 +19,8 @@
 # Env: RUN_NAME, LIMIT (dialogues, default all), EVAL_CAP_S (18000), JUDGE_CAP_S (14400),
 #      CKPT (classifier or BERT checkpoint; "none" = Gemma is its own consultant), TEACHER_GGUF, JUDGE_MODEL (path to GGUF), JUDGE_ALIAS, SKIP_JUDGE=1,
 #      LLAMA_SERVER (binary; default: the one on PATH), TEACHER_PORT, JUDGE_PORT,
+#      VRAM_IDLE_LIMIT_GB (2; raise it for a judge-only pass, which needs 23 GB, when a desktop
+#      session holds a few GB),
 #      RUNS_DIR (status, lock, logs and archives; default ~/csen346-runs),
 #      TEACHER_KIND: gemma31b (default), socratteachllm or glm49b; the two 9B teachers are
 #      served with 4 slots and a 65536-token context and need TEACHER_GGUF set.
@@ -118,7 +120,8 @@ check "tracked files unmodified" test -z "$(git status --porcelain --untracked-f
 check "port $TEACHER_PORT free" bash -c "! ss -ltn | grep -q ':$TEACHER_PORT '"
 check "port $JUDGE_PORT free" bash -c "! ss -ltn | grep -q ':$JUDGE_PORT '"
 # Gemma 4 31B with four slots needs 30.5 GB (of the R9700's 32); anything else on the card breaks it.
-check "GPU idle (VRAM in use: $(vram_gb) GB, limit 2)" awk -v v="$(vram_gb)" 'BEGIN { exit !(v < 2.0) }'
+VRAM_IDLE_LIMIT_GB="${VRAM_IDLE_LIMIT_GB:-2}"
+check "GPU idle (VRAM in use: $(vram_gb) GB, limit $VRAM_IDLE_LIMIT_GB)" awk -v v="$(vram_gb)" -v lim="$VRAM_IDLE_LIMIT_GB" 'BEGIN { exit !(v < lim) }'
 exec 9>"$RUNS_DIR/.lock"
 check "no other run of this script" flock -n 9
 check "disk space (need 5 GB)" bash -c "[ \$(df --output=avail -BG . | tail -1 | tr -dc 0-9) -ge 5 ]"
