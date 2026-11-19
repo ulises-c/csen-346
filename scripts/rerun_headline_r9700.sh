@@ -17,7 +17,7 @@
 # Progress:  cat ~/csen346-runs/STATUS ; tail results/<run>/progress.log
 #
 # Env: RUN_NAME, LIMIT (dialogues, default all), EVAL_CAP_S (18000), JUDGE_CAP_S (14400),
-#      CKPT (classifier), TEACHER_GGUF, JUDGE_MODEL (path to GGUF), JUDGE_ALIAS, SKIP_JUDGE=1,
+#      CKPT (classifier or BERT checkpoint; "none" = Gemma is its own consultant), TEACHER_GGUF, JUDGE_MODEL (path to GGUF), JUDGE_ALIAS, SKIP_JUDGE=1,
 #      LLAMA_SERVER (binary; default: the one on PATH), TEACHER_PORT, JUDGE_PORT.
 set -uo pipefail
 
@@ -100,7 +100,7 @@ check() { # description, command...
 echo "Preflight ($(hostname), $(git rev-parse --short HEAD), $(date -Is))"
 check "teacher GGUF present" test -f "$TEACHER_GGUF"
 check "judge GGUF present" test -f "$JUDGE_MODEL"
-check "classifier weights present" test -f "$CKPT/model.safetensors"
+[[ "$CKPT" == "none" ]] || check "classifier weights present" test -f "$CKPT/model.safetensors"
 check "llama-server present ($LLAMA_SERVER)" test -x "$LLAMA_SERVER"
 check "uv environment" test -x .venv/bin/python
 check "tracked files unmodified" test -z "$(git status --porcelain --untracked-files=no)"
@@ -139,10 +139,12 @@ else
   export CONSULTANT_BASE_URL="http://localhost:$TEACHER_PORT/v1"
   export KELE_BERT_DEVICE=cpu KELE_FEW_SHOT_TEACHER=1 KELE_FEW_SHOT_N=10 KELE_PARALLEL_WORKERS=4
   export WANDB_MODE=disabled
+  consultant_args=(--bert-consultant "$CKPT")
+  [[ "$CKPT" == "none" ]] && consultant_args=()
   KELE_RUN_NOTES="llama.cpp $("$LLAMA_SERVER" --version 2>&1 | grep -o 'build [0-9]*' | head -1), $(gpu_backend), --reasoning off; teacher $(basename "$TEACHER_GGUF"); classifier on CPU; host $(hostname)"
   export KELE_RUN_NOTES
   run_capped "$EVAL_CAP_S" "$LOGS/eval.log" .venv/bin/python -m src.project.kele \
-    --experiment gemma4-31b-local evaluate --bert-consultant "$CKPT" "${limit_args[@]}" --output "$OUT"
+    --experiment gemma4-31b-local evaluate "${consultant_args[@]}" "${limit_args[@]}" --output "$OUT"
   rc=$?
   stop_server
   done_n=$(find "$OUT/dialogues" -name '*.json' 2>/dev/null | wc -l)
