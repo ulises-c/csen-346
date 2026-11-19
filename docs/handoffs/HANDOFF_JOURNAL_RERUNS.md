@@ -17,6 +17,40 @@ under the no-cost rule) become usable again. The new runs are still worth keepin
 reproducible from a recorded commit, and the exact classifier checkpoint behind the paper's
 headline is gone either way.
 
+## Blocker found 2026-11-18: the classifier was trained on the evaluation dialogues
+
+**Run 1's state accuracy cannot be reported.** The classifier used
+(`ulises-c/socrates-state-classifier-qwen3.5-lora`) was trained on a different 90/10 split from
+the one the evaluation uses.
+
+- `load_dataset()` shuffles the list it loads with seed 42. Between 2026-05-21 and 2026-06-09 it
+  loaded SocratDataset-EN plus SocratDataset (13,606 dialogues); now it loads SocratDataset alone
+  (6,803). Same seed, different list, different split.
+- The published classifier was trained in that window. Its card's 77,258 training turns and 8,526
+  test turns are reproduced exactly by the concatenated split.
+- Of run 1's 681 evaluation dialogues, **607 were in the classifier's training set in Chinese**,
+  611 in English, 678 in at least one language. Three are clean.
+- Measured effect in run 1: state accuracy 54.95% on the 607 seen dialogues against 50.88% on the
+  74 whose Chinese original was unseen (456 turns, so about plus or minus 5 points; 71 of those
+  74 were still seen in English). Small, and not separable from noise, but the number is not
+  publishable either way.
+- The paper's original classifier (lost) reported 4,304 test turns, which is the Chinese-only
+  test split, so it appears to have been trained on the matching split. The archived 55.39% is
+  probably clean; this cannot be confirmed without the checkpoint.
+- Reproduce with `scripts/check_classifier_split_overlap.py results/<run>`.
+
+An earlier note in the plan said the split was "confirmed" with no leakage. That was wrong: it
+compared the seed, not the list being shuffled.
+
+What run 1 is still good for: timing, the pipeline check, the judge validation (it scores teacher
+replies, not states), and ROUGE/BLEU only as an approximation, since the states steer the teacher.
+
+**Fix:** retrain the classifier on the Chinese-only seed-42 train split (36,659 training turns
+plus 1,929 held out, which is what `scripts/train_state_classifier_34way.py` does today), verify
+with the overlap script, publish it as a new revision, then rerun run 1. Also make the split
+explicit in code so this cannot recur: split by dialogue id, the same ids for every language.
+Check the BERT consultant and the Gemma 12B fine-tunes for the same problem before using them.
+
 ## State
 
 - **Branch:** `feat/journal-phase1-side-items`, on top of main `5f2f645`. 257 tests pass; ruff,

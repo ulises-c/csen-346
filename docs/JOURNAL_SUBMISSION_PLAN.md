@@ -141,10 +141,12 @@ Artifacts: `results/p1-r9700-qwen35clf-gemma31b-fewshot10-n50/` and
       Re-evaluate it on the 4,304-turn Chinese test set and replace the classifier table in the
       paper. Confirm which split it was trained on: its `eval_results.json` covers 8,526 turns,
       which suggests Chinese plus English.
-      *Split confirmed 2026-11-17:* the model card and `scripts/train_state_classifier_34way.py`
-      show it was trained on the seed-42 train split, Chinese plus English (77,258 turns), and
-      its 8,526 test turns are the same test split in both languages. The Chinese-only
-      re-evaluation is still to do.
+      **Corrected 2026-11-18: this checkpoint leaks.** It was trained on the seed-42 split of the
+      English-plus-Chinese list, which is a different split from the Chinese-only one used for
+      evaluation: 607 of the 681 evaluation dialogues are in its training set. It must be
+      retrained on the Chinese-only train split before any state accuracy is reported. Details in
+      `docs/handoffs/HANDOFF_JOURNAL_RERUNS.md`; check with
+      `scripts/check_classifier_split_overlap.py`.
 - [ ] **BERT consultant.** Retrain with `scripts/train_stage_classifier.py` (minutes on any card);
       the weights are gone. Publish to Hugging Face this time.
 - [ ] **Synthetic set.** Pull the 75-dialogue version from `ulises-c/SocratDataset-SYNTHETIC`
@@ -184,7 +186,7 @@ rest can run at 400 dialogues.
 
 | # | Consultant | Teacher | Set | Purpose |
 |---|---|---|---|---|
-| 1 | Qwen3.5 classifier | Gemma 4 31B | 681 | Headline. **Done 2026-11-18:** 54.50% state accuracy, ROUGE-1 36.98, local judge 9.11/10 |
+| 1 | Qwen3.5 classifier | Gemma 4 31B | 681 | Headline. Run 2026-11-18 (54.50% state accuracy, ROUGE-1 36.98) **with a classifier that had seen the test dialogues; to be rerun** |
 | 2 | BERT | Gemma 4 31B | 681 | Consultant ablation |
 | 3 | Gemma 4 31B (LLM as consultant) | Gemma 4 31B | 681 | Baseline: classifier against an LLM consultant, with outputs |
 | 4 | Qwen3.5 classifier | SocratTeachLLM | 681 | Fine-tuned teacher |
@@ -285,3 +287,5 @@ open PRs. Dependabot still opens PRs; they now wait for a manual merge. Re-enabl
 - 2026-11-18: Phase 4 run 1 finished on the R9700 (3 h 18 min evaluation, 2 h 5 min judge pass).
   The local judge is lenient and flat across stages; the judge of record is undecided. Next steps
   are in `docs/handoffs/HANDOFF_JOURNAL_RERUNS.md`.
+- 2026-11-18: found that the published classifier was trained on 607 of the 681 evaluation
+  dialogues (split mismatch). Run 1 must be repeated with a retrained classifier.
