@@ -154,18 +154,30 @@ def load_dataset(
         from datasets import load_dataset as hf_load
 
         repos = [hf_repo] if isinstance(hf_repo, str) else list(hf_repo)
-        data: list[dict] = []
-        for repo in repos:
-            data.extend(dict(r) for r in hf_load(repo, split="train"))
+        parts = [[dict(r) for r in hf_load(repo, split="train")] for repo in repos]
     else:
         if path is None:
             path = RESOURCES_DIR / "SocratDataset.json"
         with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+            parts = [json.load(f)]
 
     if split == "all":
-        return data
+        return [item for part in parts for item in part]
 
+    return [item for part in parts for item in _split_part(part, split, seed)]
+
+
+def _split_part(data: list[dict], split: str, seed: int) -> list[dict]:
+    """90/10 split of one dataset by position, seeded.
+
+    Each repo is split on its own and the pieces are concatenated. The split
+    used to be taken over the concatenated list, so loading SocratDataset-EN
+    next to SocratDataset held out different dialogues than loading
+    SocratDataset alone, and a classifier trained on the two-repo "train" split
+    had seen 607 of the 681 Chinese test dialogues. Translated repos are
+    aligned by position, so splitting each one the same way holds out the same
+    dialogues in every language.
+    """
     import random
 
     rng = random.Random(seed)
@@ -175,8 +187,7 @@ def load_dataset(
     split_point = int(len(data) * 0.9)
     if split == "train":
         return [data[i] for i in sorted(indices[:split_point])]
-    else:  # test
-        return [data[i] for i in sorted(indices[split_point:])]
+    return [data[i] for i in sorted(indices[split_point:])]
 
 
 def run_single_dialogue(system: SocraticTeachingSystem, item: dict) -> dict:
