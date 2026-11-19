@@ -160,3 +160,40 @@ def test_sequential_smoke_run_is_reported_incomplete(tmp_path, monkeypatch):
     assert summary["n_turns_judged"] == 3
     assert summary["n_turns_total"] == 6
     assert summary["complete"] is False
+
+
+def test_judge_pass_resumes_from_saved_scores(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score(fail_dialogue_ids={1}))
+    first = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+    assert first["complete"] is False
+
+    calls = []
+
+    def counting_score(client, model, dialogue, turn_idx, backend="api"):
+        calls.append(dialogue["id"])
+        return _fake_score()(client, model, dialogue, turn_idx)
+
+    monkeypatch.setattr(llm_judge_eval, "score_turn", counting_score)
+    second = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+
+    assert second["complete"] is True
+    assert set(calls) == {1}  # only the dialogue that was not fully scored is judged again
+    assert (second["n_dialogues_judged"], second["n_turns_judged"]) == (3, 6)
+
+
+def test_saved_scores_from_another_judge_are_not_reused(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+    llm_judge_eval.judge_results_dir(run, None, "judge-a", workers=2)
+
+    calls = []
+
+    def counting_score(client, model, dialogue, turn_idx, backend="api"):
+        calls.append(dialogue["id"])
+        return _fake_score()(client, model, dialogue, turn_idx)
+
+    monkeypatch.setattr(llm_judge_eval, "score_turn", counting_score)
+    llm_judge_eval.judge_results_dir(run, None, "judge-b", workers=2)
+
+    assert set(calls) == {0, 1, 2}

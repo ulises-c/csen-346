@@ -427,6 +427,20 @@ def judge_sequential(
     )
 
 
+def _load_cached_scores(path: Path, model: str, dialogue_file: Path) -> dict | None:
+    """Saved scores for one dialogue, if they are from this judge and cover every turn."""
+    if not path.is_file():
+        return None
+    try:
+        cached = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
+    n_turns = len(json.loads(dialogue_file.read_text()).get("dialogue", []))
+    if cached.get("judge_model") != model or len(cached.get("scores", [])) != n_turns:
+        return None
+    return cached
+
+
 def judge_results_dir(
     results_dir: Path,
     client: openai.Client | None,
@@ -436,7 +450,13 @@ def judge_results_dir(
     max_turns: int | None = None,
     out_name: str = "judge_summary.json",
 ) -> dict:
-    """Run judge over all dialogues in results_dir. Returns summary dict."""
+    """Run judge over all dialogues in results_dir. Returns summary dict.
+
+    Each dialogue's scores are saved under ``judge_scores/<summary name>/`` as
+    soon as every turn of it is scored, and a later call with the same judge
+    model reuses them. An interrupted pass therefore continues where it
+    stopped, and a pass that missed a few turns only repeats those dialogues.
+    """
     dialogues_dir = results_dir / "dialogues"
     if not dialogues_dir.is_dir():
         raise FileNotFoundError(f"No dialogues/ in {results_dir}")
@@ -452,14 +472,40 @@ def judge_results_dir(
     started = time.time()
     all_turn_scores = []
     per_dialogue_summaries = []
+    cache_dir = results_dir / "judge_scores" / Path(out_name).stem
+
+    todo = []
+    for dfile in dialogue_files:
+        cached = _load_cached_scores(cache_dir / dfile.name, model, dfile)
+        if cached is None:
+            todo.append(dfile)
+        else:
+            per_dialogue_summaries.append(
+                _dialogue_summary(dfile.name, cached["id"], cached["scores"])
+            )
+            all_turn_scores.extend(cached["scores"])
+    if len(todo) < len(dialogue_files):
+        print(
+            f"Reusing saved scores for {len(dialogue_files) - len(todo)} dialogues; {len(todo)} to judge"
+        )
 
     def _judge_one(dfile: Path):
         d = json.loads(dfile.read_text())
         scores = judge_dialogue(client, model, d, backend=backend)
+        if scores and len(scores) == len(d.get("dialogue", [])):
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            tmp = cache_dir / (dfile.name + ".tmp")
+            tmp.write_text(
+                json.dumps(
+                    {"judge_model": model, "id": d.get("id", -1), "scores": scores},
+                    ensure_ascii=False,
+                )
+            )
+            tmp.replace(cache_dir / dfile.name)
         return dfile.name, d.get("id", -1), scores
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futures = [ex.submit(_judge_one, f) for f in dialogue_files]
+        futures = [ex.submit(_judge_one, f) for f in todo]
         for i, fut in enumerate(as_completed(futures)):
             fname, did, scores = fut.result()
             if scores:
@@ -467,10 +513,10 @@ def judge_results_dir(
                 all_turn_scores.extend(scores)
             elapsed = time.time() - started
             rate = (i + 1) / elapsed if elapsed > 0 else 0
-            remaining = (len(dialogue_files) - i - 1) / rate if rate > 0 else 0
+            remaining = (len(todo) - i - 1) / rate if rate > 0 else 0
             avg = per_dialogue_summaries[-1]["avg_total"] if scores else 0
             print(
-                f"  {i + 1}/{len(dialogue_files)}  {fname}  "
+                f"  {i + 1}/{len(todo)}  {fname}  "
                 f"({len(scores) if scores else 0} turns, avg {avg:.2f}/10) "
                 f"{elapsed:.0f}s elapsed, {remaining:.0f}s remaining",
                 flush=True,

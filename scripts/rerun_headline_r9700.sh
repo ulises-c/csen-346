@@ -19,6 +19,7 @@
 # Env: RUN_NAME, LIMIT (dialogues, default all), EVAL_CAP_S (18000), JUDGE_CAP_S (14400),
 #      CKPT (classifier or BERT checkpoint; "none" = Gemma is its own consultant), TEACHER_GGUF, JUDGE_MODEL (path to GGUF), JUDGE_ALIAS, SKIP_JUDGE=1,
 #      LLAMA_SERVER (binary; default: the one on PATH), TEACHER_PORT, JUDGE_PORT,
+#      RUNS_DIR (status, lock, logs and archives; default ~/csen346-runs),
 #      TEACHER_KIND: gemma31b (default), socratteachllm or glm49b; the two 9B teachers are
 #      served with 4 slots and a 65536-token context and need TEACHER_GGUF set.
 set -uo pipefail
@@ -45,12 +46,13 @@ case "$TEACHER_KIND" in
   *) echo "unknown TEACHER_KIND: $TEACHER_KIND" >&2; exit 2 ;;
 esac
 OUT="results/$RUN_NAME"
-LOGS="$HOME/csen346-runs/$RUN_NAME"
+RUNS_DIR="${RUNS_DIR:-$HOME/csen346-runs}"
+LOGS="$RUNS_DIR/$RUN_NAME"
 export LLAMA_SERVER="${LLAMA_SERVER:-$(command -v llama-server)}"
 # A llama.cpp build outside the system paths keeps its backend libraries next to the binary.
 LD_LIBRARY_PATH="$(dirname "$LLAMA_SERVER")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export LD_LIBRARY_PATH
-STATUS="$HOME/csen346-runs/STATUS"
+STATUS="$RUNS_DIR/STATUS"
 mkdir -p "$LOGS"
 
 SERVER_PID=""
@@ -117,7 +119,7 @@ check "port $TEACHER_PORT free" bash -c "! ss -ltn | grep -q ':$TEACHER_PORT '"
 check "port $JUDGE_PORT free" bash -c "! ss -ltn | grep -q ':$JUDGE_PORT '"
 # Gemma 4 31B with four slots needs 30.5 GB (of the R9700's 32); anything else on the card breaks it.
 check "GPU idle (VRAM in use: $(vram_gb) GB, limit 2)" awk -v v="$(vram_gb)" 'BEGIN { exit !(v < 2.0) }'
-exec 9>"$HOME/csen346-runs/.lock"
+exec 9>"$RUNS_DIR/.lock"
 check "no other run of this script" flock -n 9
 check "disk space (need 5 GB)" bash -c "[ \$(df --output=avail -BG . | tail -1 | tr -dc 0-9) -ge 5 ]"
 if [[ $fail -ne 0 ]]; then
@@ -206,6 +208,6 @@ else
 fi
 
 # ── Stage 3: local archive (dialogues are not in git) ────────────────────────
-tar czf "$HOME/csen346-runs/$RUN_NAME.tgz" -C results "$RUN_NAME" &&
-  status "archived to ~/csen346-runs/$RUN_NAME.tgz ($(du -h "$HOME/csen346-runs/$RUN_NAME.tgz" | cut -f1)); VRAM now $(vram_gb) GB"
+tar czf "$RUNS_DIR/$RUN_NAME.tgz" -C results "$RUN_NAME" &&
+  status "archived to $RUNS_DIR/$RUN_NAME.tgz ($(du -h "$RUNS_DIR/$RUN_NAME.tgz" | cut -f1)); VRAM now $(vram_gb) GB"
 status "finished"
