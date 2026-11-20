@@ -213,6 +213,26 @@ clean Qwen3.5 classifier:
   earlier 12B runs used the UD-Q8_K_XL file.
 - If the chain runs out of slices, add more: `submit_chain.sh` on hw-0304, `bash -s -- <n>`.
 
+### Run 6 results (finished 2026-11-20 09:41; A6000 idle, nothing queued)
+
+| Teacher | Set | State acc., scored turns | All turns | Cut short | ROUGE-1 | BLEU-4 | Judge |
+|---|---|---|---|---|---|---|---|
+| Gemma 4 12B base | test 681 | 49.52 [47.99, 51.09] | 48.03 | 14.5% | 35.53 | 8.31 | 8.23 |
+| Gemma 4 12B fine-tune | test 681 (seen in training) | 54.93 [53.29, 56.57] | 51.28 | 29.2% | 45.93 | 18.14 | 7.90 |
+| Gemma 4 12B base | synthetic 75 | 28.74 | — | — | 29.04 | 4.83 | 7.80 |
+| Gemma 4 12B fine-tune | synthetic 75 | 29.72 | — | — | 33.30 | 8.31 | 7.33 |
+
+- Fine-tune minus base: ROUGE-1 +10.40 on the test split and +4.26 on the synthetic set; judge
+  -0.33 and -0.47. So the fine-tune raises overlap metrics and lowers the judge score on both
+  sets, and most of its overlap gain is on dialogues it trained on. Same pattern as
+  SocratTeachLLM against GLM-4-9B for ROUGE (+12.10 against +4.39), but there the judge favoured
+  the fine-tune (+1.68, +1.11).
+- State accuracy, fine-tune minus base on the test split: +5.41 [3.63, 7.19] on scored turns.
+  Contaminated, and the consultant is the same classifier in both, so the difference comes from
+  how the teacher's replies steer the dialogue.
+- No intervals on the judge or synthetic-set differences yet.
+- Summaries in `results/r6-…`; dialogues and judge scores in `~/csen346-archive/`.
+
 ### Claude as a second judge (m4-mini, user approved about 600 subscription calls)
 
 - `~/csen346-claude-judge.sh` on m4-mini (log `~/csen346-claude-judge.log`), in the worktree
