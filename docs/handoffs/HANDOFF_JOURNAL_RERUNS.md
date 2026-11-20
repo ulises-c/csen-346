@@ -169,6 +169,25 @@ Paired differences in state accuracy on scored turns: run 1 repeat minus run 3, 
 - Copying dialogues from the Mac with `tar` adds `._*` files; the judge now skips them, but use
   `COPYFILE_DISABLE=1 tar` anyway.
 
+## Batch 2, started 2026-11-19 16:23 (runs 7 and 8)
+
+- **A6000:** eleven chained 1-hour Slurm jobs `csen346-a6000` (12127 onward) run the rewritten
+  `~/csen346-runs2/slice.sh`: the synthetic 75 dialogues with the headline configuration
+  (`r7-synth75-qwen35clfzh-gemma31b-fewshot10`), then the headline configuration twice more
+  (`r8-…-rep2`, `r8-…-rep3`), each with the Qwen3.6-27B judge, then judge passes for the two 9B
+  synthetic cells. About 8.5 hours.
+- **hw-0304:** Slurm job 12126 (`queue_0304_synth.sbatch`): the synthetic 75 with SocratTeachLLM
+  and with GLM-4-9B base, no judge. The relay on work-laptop (`~/csen346-relay/relay2.sh`) copies
+  them to the A6000 for judging.
+- **"Seeds 2 and 3" are repeats, not seeded reruns.** The pipeline sets no temperature and the
+  llama.cpp server samples with a random seed by default, so every run already differs. The
+  repeats pass `--seed 2` and `--seed 3` to the server (`SERVER_SEED`), which labels them but
+  does not make them reproducible with four parallel workers. Runs 1 to 5 used a random seed.
+- The run script now takes `SERVER_SEED`, `HF_REPO` and `SPLIT`.
+- A first attempt at 16:22 started on old code, because `git pull` on both machines aborted on
+  untracked result summaries that the branch now tracks. Both jobs were cancelled within a
+  minute and left nothing behind. Check the commit in STATUS's "preflight passed" line.
+
 ## Work machines and Slurm (2026-11-18)
 
 Reached with `ssh work-laptop`, then `ssh <host>`. Only the three Slurm nodes may be used:
