@@ -224,6 +224,22 @@ clean Qwen3.5 classifier:
   reuses finished dialogues and stops by itself when calls keep failing (usage limit).
 - Compare with the judge of record:
   `uv run python scripts/compare_judges.py results/r1b-… results/r4-… results/r5-… --other judge_summary_claude-sonnet-4-6.json`
+- **Result (finished 02:59, 600 calls, no usage limit hit).** Mean score per dialogue over the
+  same turns:
+
+  | Run (teacher) | Dialogues | Claude Sonnet 4.6 | Qwen3.6-27B | Rank correlation over dialogues |
+  |---|---|---|---|---|
+  | Run 1 repeat (Gemma 4 31B) | 34 | 7.77 | 8.50 | 0.72 |
+  | Run 4 (SocratTeachLLM) | 35 | 7.31 | 7.31 | 0.80 |
+  | Run 5 (GLM-4-9B base) | 34 | 5.94 | 5.63 | 0.69 |
+
+  Both judges order the three teachers the same way. Over all 103 dialogues the rank correlation
+  is 0.90 (inflated by the differences between teachers; within a run it is 0.69 to 0.80) and the
+  mean absolute difference is 0.59 points. Claude is harder on Gemma 31B: its gap between Gemma
+  and SocratTeachLLM is 0.46 points against Qwen's 1.19, and no interval has been put on either.
+  Files: `results/<run>/judge_summary_claude-sonnet-4-6.json`,
+  `results/judge-agreement/`, and per-turn scores in
+  `~/csen346-archive/claude-sonnet-4-6-judge-check-20261120.tar` on the Mac.
 - Limits of this check: the sample is the first dialogues in file order, not a random draw, and
   it is one Claude model. It tests whether the two judges order the teachers and the dialogues
   the same way; it is not a human check.

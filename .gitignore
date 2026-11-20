@@ -11,6 +11,8 @@ results/**
 !results/**/run_config.json
 !results/**/semantic_r1.json
 !results/**/judge_validation_*.json
+!results/**/judge_summary_*.json
+!results/judge-agreement/*.json
 logs/
 wandb/
 
