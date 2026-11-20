@@ -850,8 +850,18 @@ def load_split_pair(
     _validate_sources(sources)
 
     def _load(src: str) -> tuple[str, list[dict], list[dict]]:
-        all_recs = _SOURCE_LOADERS[src](split="all", seed=seed)  # type: ignore[call-arg]
-        return src, _split(all_recs, "train", seed), _split(all_recs, "test", seed)
+        # Ask each loader for its own train and test splits. Splitting the "all"
+        # list here was wrong for the per-turn SFT sources: their records are
+        # turns, so a 90/10 cut over that list put about 90% of the turns of
+        # every held-out dialogue into training (the Gemma 4 12B fine-tune was
+        # trained that way). The loaders split by dialogue before expanding to
+        # turns. The second call reads the datasets cache, not the network.
+        loader = _SOURCE_LOADERS[src]
+        return (
+            src,
+            loader(split="train", seed=seed),  # type: ignore[call-arg]
+            loader(split="test", seed=seed),  # type: ignore[call-arg]
+        )
 
     train_by_src: dict[str, list[dict]] = {}
     eval_by_src: dict[str, list[dict]] = {}

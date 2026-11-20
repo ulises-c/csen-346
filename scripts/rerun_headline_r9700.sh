@@ -26,8 +26,9 @@
 #      HF_REPO and SPLIT (dataset repo and split, e.g. ulises-c/SocratDataset-SYNTHETIC and all;
 #      default: the Chinese test split),
 #      RUNS_DIR (status, lock, logs and archives; default ~/csen346-runs),
-#      TEACHER_KIND: gemma31b (default), socratteachllm or glm49b; the two 9B teachers are
-#      served with 4 slots and a 65536-token context and need TEACHER_GGUF set.
+#      TEACHER_KIND: gemma31b (default), socratteachllm, glm49b, gemma12b or gemma12b-sft; the
+#      two 9B teachers are served with 4 slots and a 65536-token context. Every kind except
+#      gemma31b needs TEACHER_GGUF set.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -49,6 +50,8 @@ case "$TEACHER_KIND" in
   gemma31b) EXPERIMENT=gemma4-31b-local TEACHER_ALIAS="Gemma 4 31B" ;;
   socratteachllm) EXPERIMENT=socratteachllm-local TEACHER_ALIAS="SocratTeachLLM" ;;
   glm49b) EXPERIMENT=glm49b-chat-local TEACHER_ALIAS="GLM-4-9B-Chat-base" ;;
+  gemma12b) EXPERIMENT=gemma4-12b-local TEACHER_ALIAS="Gemma 4 12B" ;;
+  gemma12b-sft) EXPERIMENT=gemma4-12b-sft-local TEACHER_ALIAS="Gemma 4 12B SFT" ;;
   *) echo "unknown TEACHER_KIND: $TEACHER_KIND" >&2; exit 2 ;;
 esac
 seed_args=()
@@ -157,6 +160,16 @@ else
       SOCRATTEACHLLM_WEIGHTS_DIR="$(dirname "$TEACHER_GGUF")" SOCRATTEACHLLM_WEIGHT_FILE="$(basename "$TEACHER_GGUF")" \
         SOCRATTEACHLLM_PORT="$TEACHER_PORT" SOCRATTEACHLLM_PARALLEL=4 SOCRATTEACHLLM_CTX=65536 \
         bash scripts/serve_socratteachllm_llamacpp.sh "${seed_args[@]}" >"$LOGS/teacher_server.log" 2>&1 9>&- &
+      ;;
+    gemma12b)
+      GEMMA4_12B_WEIGHTS_DIR="$(dirname "$TEACHER_GGUF")" GEMMA4_12B_WEIGHT_FILE="$(basename "$TEACHER_GGUF")" \
+        GEMMA4_12B_CTX="${GEMMA4_12B_CTX:-65536}" LLAMA_ARG_REASONING=off bash scripts/serve_gemma4_12b.sh -p "$TEACHER_PORT" "${seed_args[@]}" \
+        >"$LOGS/teacher_server.log" 2>&1 9>&- &
+      ;;
+    gemma12b-sft)
+      GEMMA4_12B_WEIGHTS_DIR="$(dirname "$TEACHER_GGUF")" GEMMA4_12B_SFT_WEIGHT_FILE="$(basename "$TEACHER_GGUF")" \
+        GEMMA4_12B_CTX="${GEMMA4_12B_CTX:-65536}" LLAMA_ARG_REASONING=off bash scripts/serve_gemma4_12b_sft.sh -p "$TEACHER_PORT" "${seed_args[@]}" \
+        >"$LOGS/teacher_server.log" 2>&1 9>&- &
       ;;
     glm49b)
       GLM49B_WEIGHTS_DIR="$(dirname "$TEACHER_GGUF")" GLM49B_WEIGHT_FILE="$(basename "$TEACHER_GGUF")" \
