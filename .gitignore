@@ -13,6 +13,7 @@ results/**
 !results/**/judge_validation_*.json
 !results/**/judge_summary_*.json
 !results/judge-agreement/*.json
+!results/judge_bootstrap/*.json
 logs/
 wandb/
 

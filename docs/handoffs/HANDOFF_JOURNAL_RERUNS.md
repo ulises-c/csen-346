@@ -233,6 +233,37 @@ clean Qwen3.5 classifier:
 - No intervals on the judge or synthetic-set differences yet.
 - Summaries in `results/r6-…`; dialogues and judge scores in `~/csen346-archive/`.
 
+### Paired intervals on judge score and ROUGE-1 (2026-11-20)
+
+`scripts/judge_bootstrap.py --paired A B --rouge` (10,000 dialogue resamples, 95% percentile
+interval). Outputs in `results/judge_bootstrap/pair1..8.json`. Judge is Qwen3.6-27B.
+
+| A minus B | Dialogues | Judge difference | ROUGE-1 difference |
+|---|---|---|---|
+| Gemma 31B minus SocratTeachLLM (run 1 repeat, run 4) | 681 | +1.43 [+1.34, +1.52] | -9.68 [-10.32, -9.02] |
+| SocratTeachLLM minus GLM-4-9B base (runs 4, 5) | 681 | +1.69 [+1.59, +1.78] | +12.10 [+11.49, +12.71] |
+| Qwen3.5 classifier minus bge-small (run 1 repeat, run 2) | 681 | +0.37 [+0.29, +0.45] | +0.93 [+0.60, +1.27] |
+| Qwen3.5 classifier minus Gemma as consultant (run 1 repeat, run 3) | 681 | +0.25 [+0.17, +0.33] | +1.42 [+1.10, +1.75] |
+| Gemma 12B fine-tune minus base, test split (contaminated) | 681 | -0.32 [-0.41, -0.23] | +10.40 [+9.88, +10.91] |
+| SocratTeachLLM minus GLM-4-9B base, synthetic | 75 | +1.12 [+0.85, +1.38] | +4.39 [+3.13, +5.63] |
+| Gemma 12B fine-tune minus base, synthetic | 75 | -0.48 [-0.79, -0.16] | +4.26 [+3.34, +5.19] |
+| Gemma 31B minus SocratTeachLLM, synthetic | 75 | +1.75 [+1.50, +2.00] | -2.14 [-3.65, -0.71] |
+
+No interval includes zero. The metric inversion (Gemma 31B has lower ROUGE-1 and a higher judge
+score than SocratTeachLLM) holds on both the test split and the synthetic set. These intervals
+cover dialogue sampling only, not the choice of judge; on the 600-turn sample Claude Sonnet gave
+a smaller Gemma lead than Qwen.
+
+### Why state accuracy is about 30% on the synthetic set
+
+See `docs/SYNTHETIC_STATE_ACCURACY_NOTE.md`. In short: the synthetic set's sub-state labels
+follow a different convention. Its generator was given only the code range per stage, so, for
+example, `d33` is 88% of stage-d turns in SocratDataset and 1 of 67 in the synthetic set. That
+accounts for about 14 of the 21.5 points; stage-level errors account for about 7; early stopping
+is not a cause. State accuracy on the synthetic set measures label convention, so do not report
+it; stage-level accuracy (68% against 79% on the test split) is the usable figure. The analysis
+scripts behind the note are in the Mac's scratch folder, not in the repo.
+
 ### Claude as a second judge (m4-mini, user approved about 600 subscription calls)
 
 - `~/csen346-claude-judge.sh` on m4-mini (log `~/csen346-claude-judge.log`), in the worktree
