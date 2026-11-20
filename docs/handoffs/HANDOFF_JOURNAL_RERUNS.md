@@ -169,7 +169,39 @@ Paired differences in state accuracy on scored turns: run 1 repeat minus run 3, 
 - Copying dialogues from the Mac with `tar` adds `._*` files; the judge now skips them, but use
   `COPYFILE_DISABLE=1 tar` anyway.
 
-## Batch 2, started 2026-11-19 16:23 (runs 7 and 8)
+## Batch 2 results (finished 2026-11-20 01:39; runs 7 and 8)
+
+**Run 8, the headline configuration three times** (Qwen3.5 classifier + Gemma 4 31B, 681 dialogues):
+
+| | State acc., scored turns | All 4,304 turns | ROUGE-1 | BLEU-4 | Judge |
+|---|---|---|---|---|---|
+| Run 1 repeat (random sampler seed) | 52.14 | 49.91 | 36.86 | 9.01 | 8.63 |
+| Repeat 2 (`--seed 2`) | 52.01 | 49.84 | 36.79 | 8.92 | 8.63 |
+| Repeat 3 (`--seed 3`) | 51.92 | 49.74 | 36.72 | 8.94 | 8.67 |
+
+Run-to-run spread is 0.22 points of state accuracy and 0.04 judge points, far inside the
+dialogue-sampling interval of about plus or minus 1.6. Paired differences from the first run:
++0.12 [-1.20, 1.47] and +0.22 [-1.16, 1.61].
+
+**Run 7, the 75 synthetic dialogues** (`ulises-c/SocratDataset-SYNTHETIC`, all 75, same classifier):
+
+| Teacher | Turns | State acc. | ROUGE-1 | BLEU-4 | Judge |
+|---|---|---|---|---|---|
+| Gemma 4 31B | 431 | 30.63 | 30.35 | 5.33 | 8.32 |
+| SocratTeachLLM | 432 | 31.48 | 32.49 | 8.00 | 6.57 |
+| GLM-4-9B base | 436 | 24.31 | 28.10 | 4.69 | 5.46 |
+
+- Fine-tuned minus base on the synthetic set: ROUGE-1 +4.39, judge +1.11. On the test split the
+  same pair differs by ROUGE-1 +12.10 and judge +1.68. So about two thirds of the fine-tune's
+  ROUGE advantage disappears on dialogues it cannot have seen, while most of the judge advantage
+  stays. No intervals yet: 75 dialogues, and the paired bootstrap has not been run on these.
+- State accuracy on the synthetic set is about 30% for every teacher (stages c and d under 8%).
+  The plan says not to report it there; whether that is the classifier failing off-distribution
+  or the synthetic state labels following a different convention has not been checked.
+- Summaries are in `results/r7-…` and `results/r8-…`; dialogues and judge scores in
+  `~/csen346-archive/`. Both work GPUs are idle and nothing is queued.
+
+## Batch 2, how it was run (started 2026-11-19 16:23)
 
 - **A6000:** eleven chained 1-hour Slurm jobs `csen346-a6000` (12127 onward) run the rewritten
   `~/csen346-runs2/slice.sh`: the synthetic 75 dialogues with the headline configuration
