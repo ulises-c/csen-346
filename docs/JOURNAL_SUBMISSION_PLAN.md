@@ -12,7 +12,10 @@ or a decision changes.
 
 ## 1. Constraints
 
-- **Budget is $0.** No paid API calls. Two Claude subscriptions are available for small checks.
+- **Budget is $0 out of pocket.** Two Claude subscriptions are available for small checks.
+  Since 2026-11-20 the user also allows Claude and other hosted models through Amazon Bedrock on
+  the work laptop (`ssh work-laptop`, AWS SSO already logged in); those calls are billed to that
+  AWS account, so state the expected cost before starting a batch.
 - **Main GPU is the R9700** (32 GB, ROCm 7.2.4, on `ollie-cachy`). A GTX 1070 is also on hand.
   An A6000 and smaller RTX cards are available occasionally.
 - **The per-dialogue outputs behind the current paper are gone.** They were never committed, and
@@ -205,6 +208,30 @@ rest can run at 400 dialogues.
 The archived GPT-4o + SocratTeachLLM reproduction (25.94% state accuracy) stays in the paper as a
 cited earlier figure without an interval. Run 3 is the baseline that has artifacts.
 
+**Run 9, proposed 2026-11-20, not started: a frontier-LLM consultant through Bedrock.** The
+GPT-4o row is the one number in the paper that cannot be backed or rerun.
+
+| Run | Consultant | Teacher | n | Purpose |
+|---|---|---|---|---|
+| 9 | A hosted frontier model through Bedrock | SocratTeachLLM | 681 | Replaces the archived GPT-4o row with a number that has dialogues and an interval; paired against run 4 (same teacher, classifier consultant) |
+
+- **GPT-4o itself is not on Bedrock.** Checked 2026-11-20 in us-east-1 and us-west-2: the OpenAI
+  models offered are GPT-5.4, GPT-5.5, the GPT-5.6 and GPT-6 families, and the open-weight
+  gpt-oss-20b and gpt-oss-120b. So the 25.94% figure cannot be reproduced there; run 9 would be a
+  new baseline with a current model, and the paper must say so.
+- **Candidates:** Claude Sonnet 4.6 (also a judge here, so a Claude consultant should be judged
+  by Qwen as well), or an OpenAI model on Bedrock, which is closest in spirit to the original
+  GPT-4o row. Pick one before running; running both doubles the cost.
+- **Cost:** one consultant call per turn, about 4,100 turns with the dialogue history and the
+  state definitions in the prompt. Roughly the size of a judge pass, so on the order of $15 to
+  $20 with Sonnet 4.6; not measured, so run 20 dialogues first and extrapolate.
+- **Needs:** a Bedrock consultant backend in the pipeline (the consultant client is
+  OpenAI-compatible today), and the teacher served where the pipeline can reach both: the
+  teacher on a GPU machine and the consultant calls from the work laptop, or the whole run on a
+  work machine with AWS credentials, which have not been put on any GPU machine.
+- **If the ex-partner's files turn up**, they give the GPT-4o row an interval and a rejudge, and
+  run 9 becomes optional. See section 4.
+
 ### Phase 5: ablations
 
 Run at the dialogue count Phase 3 justifies, on the headline configuration unless stated.
@@ -253,8 +280,15 @@ Run at the dialogue count Phase 3 justifies, on the headline configuration unles
   paper.
 - **Run 3 changes the baseline** from GPT-4o to an open model. The claim becomes "beats an LLM
   consultant of the same size class as the teacher", which is narrower than the current wording.
-- **Open:** does the ex-partner still have the `results/` directory from the 5090 machine? If it
-  turns up, the archived runs can be rescored and Phase 4 shrinks.
+- **Open:** does the ex-partner still have the `results/` directory from the 5090 machine? He
+  said on 2026-11-20 that he will look; do not count on it. Phase 4 was rerun without it, so what
+  it would still add is: (1) the GPT-4o + SocratTeachLLM dialogues, which would give that row an
+  interval, a rejudge with the current judges and a paired comparison with run 4; (2) the
+  original classifier checkpoint or its training split, which would settle whether the old 55.39%
+  headline was free of the train/test leak (the clean rerun gives 52.14%); (3) the original
+  Sonnet per-turn judge scores, now less needed because Sonnet 4.6 is run on the new dialogues
+  through Bedrock. It would not change the new result grid, and old and new numbers still must
+  not share a table.
 - **Open:** which venue, and whether it requires anonymisation.
 - **Not needed for the paper:** the ROCm training fault. Inference on the R9700 is unaffected.
   Status is in `docs/HANDOFF_GFX1201_UPSTREAM_AMD.md`.
