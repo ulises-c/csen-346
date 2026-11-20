@@ -21,6 +21,8 @@
 #      LLAMA_SERVER (binary; default: the one on PATH), TEACHER_PORT, JUDGE_PORT,
 #      VRAM_IDLE_LIMIT_GB (2; raise it for a judge-only pass, which needs 23 GB, when a desktop
 #      session holds a few GB),
+#      CONSULTANT_URL, CONSULTANT_MODEL, CONSULTANT_KEY (with CKPT=none: a hosted consultant behind
+#      an OpenAI-compatible endpoint such as scripts/bedrock_openai_proxy.py),
 #      SERVER_SEED (llama-server sampler seed; unset = random. The pipeline sets no
 #      temperature, so repeats differ either way; the seed only labels the repeat),
 #      HF_REPO and SPLIT (dataset repo and split, e.g. ulises-c/SocratDataset-SYNTHETIC and all;
@@ -191,7 +193,17 @@ else
   export WANDB_MODE=disabled
   consultant_args=(--bert-consultant "$CKPT")
   [[ "$CKPT" == "none" ]] && consultant_args=()
-  KELE_RUN_NOTES="llama.cpp $("$LLAMA_SERVER" --version 2>&1 | grep -o 'build [0-9]*' | head -1), $(gpu_backend), --reasoning off, sampler seed ${SERVER_SEED:-random}; teacher $(basename "$TEACHER_GGUF"); classifier on CPU; host $(hostname)"
+  consultant_note="classifier on CPU"
+  [[ "$CKPT" == "none" ]] && consultant_note="teacher as its own consultant"
+  if [[ -n "${CONSULTANT_URL:-}" ]]; then
+    # A hosted consultant behind an OpenAI-compatible endpoint (scripts/bedrock_openai_proxy.py).
+    [[ "$CKPT" == "none" ]] || { status "CONSULTANT_URL needs CKPT=none"; exit 2; }
+    export CONSULTANT_BASE_URL="$CONSULTANT_URL" CONSULTANT_MODEL_NAME="${CONSULTANT_MODEL:?set CONSULTANT_MODEL}"
+    export CONSULTANT_API_KEY="${CONSULTANT_KEY:-not-needed}"
+    consultant_note="consultant $CONSULTANT_MODEL through a hosted endpoint"
+    curl -s --max-time 5 "$CONSULTANT_URL/models" >/dev/null || { status "consultant endpoint $CONSULTANT_URL not reachable"; exit 3; }
+  fi
+  KELE_RUN_NOTES="llama.cpp $("$LLAMA_SERVER" --version 2>&1 | grep -o 'build [0-9]*' | head -1), $(gpu_backend), --reasoning off, sampler seed ${SERVER_SEED:-random}; teacher $(basename "$TEACHER_GGUF"); $consultant_note; host $(hostname)"
   export KELE_RUN_NOTES
   run_capped "$EVAL_CAP_S" "$LOGS/eval.log" .venv/bin/python -m src.project.kele \
     --experiment "$EXPERIMENT" evaluate "${consultant_args[@]}" "${limit_args[@]}" "${data_args[@]}" --output "$OUT"

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 import time
@@ -82,7 +83,7 @@ def from_converse(resp: dict, model: str) -> dict:
     }
 
 
-def make_handler(client, pass_temperature: bool, log_path: Path | None):
+def make_handler(client, pass_temperature: bool, log_path: Path | None, api_key: str | None = None):
     lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
@@ -106,6 +107,9 @@ def make_handler(client, pass_temperature: bool, log_path: Path | None):
                 self._send(404, {"error": {"message": "not found"}})
 
         def do_POST(self):
+            if api_key and self.headers.get("Authorization", "") != f"Bearer {api_key}":
+                self._send(401, {"error": {"message": "missing or wrong API key"}})
+                return
             if not self.path.rstrip("/").endswith("/chat/completions"):
                 self._send(404, {"error": {"message": "only /v1/chat/completions is served"}})
                 return
@@ -155,6 +159,13 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=8090)
     ap.add_argument("--region", default=None, help="AWS region; default: the profile's")
     ap.add_argument("--pass-temperature", action="store_true")
+    ap.add_argument(
+        "--api-key-env",
+        default=None,
+        metavar="NAME",
+        help="Require 'Authorization: Bearer <value of this environment variable>' on every call. "
+        "Use it whenever the port is reachable by other users, e.g. through an ssh tunnel to a shared node.",
+    )
     ap.add_argument("--log", type=Path, default=None, help="Append one JSON line per call")
     args = ap.parse_args()
 
@@ -166,8 +177,11 @@ def main() -> int:
         region_name=args.region,
         config=Config(read_timeout=300, retries={"max_attempts": 4, "mode": "adaptive"}),
     )
+    api_key = os.environ.get(args.api_key_env) if args.api_key_env else None
+    if args.api_key_env and not api_key:
+        ap.error(f"--api-key-env {args.api_key_env}: that variable is empty or unset")
     server = ThreadingHTTPServer(
-        (args.host, args.port), make_handler(client, args.pass_temperature, args.log)
+        (args.host, args.port), make_handler(client, args.pass_temperature, args.log, api_key)
     )
     print(f"Bedrock proxy on http://{args.host}:{args.port}/v1", flush=True)
     try:

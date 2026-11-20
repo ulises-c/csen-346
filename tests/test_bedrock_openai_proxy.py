@@ -119,3 +119,26 @@ def test_throttling_is_reported_as_429_so_the_pipeline_retries():
         server.shutdown()
 
     assert status == 429
+
+
+def test_calls_without_the_key_are_refused_when_a_key_is_required():
+    client = _FakeBedrock()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(client, False, None, "s3cret"))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/v1/chat/completions"
+    body = json.dumps({"model": "m", "messages": [{"role": "user", "content": "hi"}]}).encode()
+    try:
+        try:
+            urllib.request.urlopen(urllib.request.Request(url, body), timeout=10)
+            refused = None
+        except urllib.error.HTTPError as e:
+            refused = e.code
+        ok = urllib.request.urlopen(
+            urllib.request.Request(url, body, {"Authorization": "Bearer s3cret"}), timeout=10
+        ).status
+    finally:
+        server.shutdown()
+
+    assert refused == 401
+    assert ok == 200
+    assert len(client.calls) == 1
