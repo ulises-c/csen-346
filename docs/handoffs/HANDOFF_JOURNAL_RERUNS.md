@@ -138,6 +138,37 @@ Summaries are in `results/r1b-…/`; the dialogues are in `~/csen346-archive/r1b
 - Afterwards: copy `~/csen346-runs/r1b-….tgz` back, commit the summaries, and delete
   `~/csen346-train`, `~/csen346-run`, `~/csen346-models` there when no more runs are planned.
 
+## Result grid so far (2026-11-19, all on the clean split, 681 dialogues, seed 42, 10-shot)
+
+Judge: Qwen3.6-27B Q5_K_XL, every pass complete. Intervals are 95%, bootstrapped over dialogues.
+
+| Run | Consultant | Teacher | State acc., scored turns | All 4,304 turns | Cut short | ROUGE-1 | BLEU-4 | Judge |
+|---|---|---|---|---|---|---|---|---|
+| 1 repeat | Qwen3.5 classifier | Gemma 4 31B | 52.14 [50.56, 53.68] | 49.91 | 20.6% | 36.86 | 9.01 | 8.63 |
+| 2 | bge-small classifier | Gemma 4 31B | 48.36 [46.74, 49.97] | 42.75 | 47.0% | 35.92 | 8.34 | 8.26 |
+| 3 | Gemma 4 31B | Gemma 4 31B | 35.34 [34.08, 36.61] | 35.06 | 4.6% | 35.43 | 8.15 | 8.38 |
+| 4 | Qwen3.5 classifier | SocratTeachLLM | 55.92 [54.22, 57.63] | 52.70 | 26.3% | 46.54 | 20.18 | 7.20 |
+| 5 | Qwen3.5 classifier | GLM-4-9B base | 51.85 [50.41, 53.26] | 51.14 | 6.6% | 34.44 | 8.31 | 5.52 |
+
+Paired differences in state accuracy on scored turns: run 1 repeat minus run 3, +16.80
+[14.93, 18.66]; run 1 repeat minus run 2, +3.78 [1.84, 5.71]; run 4 minus run 5, +4.07
+[2.37, 5.78]; run 4 minus run 1 repeat, +3.78 [1.96, 5.63].
+
+- Summaries are in `results/<run>/`; dialogues and per-turn judge scores are in
+  `~/csen346-archive/<run>.tgz` on the Mac. Not on Hugging Face yet.
+- SocratTeachLLM has the highest ROUGE and BLEU by far but a lower judge score than Gemma: the
+  metric inversion, now on clean runs. Paired judge intervals are not computed yet (the per-turn
+  scores to do it are in `judge_scores/`).
+- Where they ran: run 1 repeat on the A6000 (judge pass redone on the R9700); runs 2 and 3 on the
+  A6000 in 1-hour Slurm slices, so their `run_config.json` elapsed time covers the last slice
+  only; runs 4 and 5 on hw-0304, judged on the R9700 except 611 of run 4's dialogues, judged on
+  the A6000. The A6000 used llama.cpp build 12138, the R9700 build 11429.
+- Not done: run 6 (Gemma 12B pair; check its training split first), run 7 (synthetic set; the
+  run script has no dataset option yet), run 8 (seeds 2 and 3; no seed option yet), ablations,
+  the judge check against Claude and a human, and the paper rewrite.
+- Copying dialogues from the Mac with `tar` adds `._*` files; the judge now skips them, but use
+  `COPYFILE_DISABLE=1 tar` anyway.
+
 ## Work machines and Slurm (2026-11-18)
 
 Reached with `ssh work-laptop`, then `ssh <host>`. Only the three Slurm nodes may be used:
@@ -150,8 +181,8 @@ Reached with `ssh work-laptop`, then `ssh <host>`. Only the three Slurm nodes ma
 
 - Submit with `sbatch` (the user's instruction), so the scheduler knows the card is taken. The
   run 1 repeat was started on hw-0047 directly, before this was known; nothing else should be.
-- **A6000 queue (user approved chaining 1-hour jobs, 2026-11-18 23:05; the card is free until
-  about 11:00 on 2026-11-19).** Sixteen chained Slurm jobs named `csen346-a6000` (11750 to
+- **A6000 queue (finished 2026-11-19 12:09; nothing queued now. The user approved chaining
+  1-hour jobs on 2026-11-18 and said the card is free again from about 18:00 on 2026-11-19).** Sixteen chained Slurm jobs named `csen346-a6000` (11750 to
   11765, each `afterany` the previous) run `/home/uchavarria/csen346-runs2/slice.sh` on
   hw-0047. A slice works through, in order: run 2 (bge-small + Gemma), run 3 (Gemma as its own
   consultant), then judge passes for runs 4 and 5 and the run 1 repeat, each with the
