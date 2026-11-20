@@ -208,3 +208,32 @@ def test_judge_pass_ignores_dotfiles_in_the_dialogue_folder(tmp_path, monkeypatc
 
     assert summary["complete"] is True
     assert summary["n_dialogues_total"] == 3
+
+
+def test_sequential_pass_resumes_and_stops_after_repeated_failures(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    calls = []
+
+    def flaky(client, model, dialogue, turn_idx, backend="api"):
+        calls.append((dialogue["id"], turn_idx))
+        if len(calls) > 2:  # the "usage limit" arrives after two good turns
+            return None
+        return {
+            "total": 8,
+            "socratic_validity": 3,
+            "advancement": 2,
+            "age_appropriateness": 2,
+            "question_form": 1,
+        }
+
+    monkeypatch.setattr(llm_judge_eval, "score_turn", flaky)
+    first = llm_judge_eval.judge_results_dir(run, None, "m", workers=1, backend="claude-code")
+    assert first["n_turns_judged"] == 2
+    assert len(calls) == 5  # two good turns, then three failures, then it stops
+
+    calls.clear()
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+    second = llm_judge_eval.judge_results_dir(run, None, "m", workers=1, backend="claude-code")
+    assert second["complete"] is True
+    saved = len(list((run / "judge_scores" / "judge_summary").glob("*.json")))
+    assert saved == second["n_dialogues_total"]

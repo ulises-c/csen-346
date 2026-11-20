@@ -385,22 +385,44 @@ def judge_sequential(
 ) -> dict:
     """Sequential judge — one call at a time. Used for the claude-code (subscription)
     backend, where parallel `claude -p` processes would race on the same account.
-    max_turns caps the total turns scored (for a cheap smoke run)."""
+    max_turns caps the total turns scored (for a cheap smoke run or a sample).
+
+    A fully scored dialogue is saved under ``judge_scores/<summary name>/`` and
+    reused by a later call, as in the parallel path. The pass stops after three
+    turns in a row fail, which on a subscription means the usage limit was hit;
+    run the same command again later to continue."""
     print(f"\n=== Judging {len(dialogue_files)} dialogues in {results_dir} (sequential) ===")
     print(f"Judge model: {model}, backend: {backend}, max_turns: {max_turns}")
     started = time.time()
     all_turn_scores: list[dict] = []
     per_dialogue_summaries: list[dict] = []
+    cache_dir = results_dir / "judge_scores" / Path(out_name).stem
+    failed_in_a_row = 0
     for dfile in dialogue_files:
         if max_turns is not None and len(all_turn_scores) >= max_turns:
             break
+        if failed_in_a_row >= 3:
+            print("  three turns in a row failed; stopping (usage limit?)", file=sys.stderr)
+            break
         d = json.loads(dfile.read_text())
         turns = d.get("dialogue", [])
+        cached = _load_cached_scores(cache_dir / dfile.name, model, dfile)
+        if cached is not None and (
+            max_turns is None or len(all_turn_scores) + len(cached["scores"]) <= max_turns
+        ):
+            all_turn_scores.extend(cached["scores"])
+            per_dialogue_summaries.append(
+                _dialogue_summary(dfile.name, cached["id"], cached["scores"])
+            )
+            continue
         dlg_scores = []
         for i in range(len(turns)):
             if max_turns is not None and len(all_turn_scores) >= max_turns:
                 break
+            if failed_in_a_row >= 3:
+                break
             score = score_turn(None, model, d, i, backend=backend)
+            failed_in_a_row = 0 if score is not None else failed_in_a_row + 1
             if score is not None:
                 score["turn_idx"] = i
                 score["ground_truth_state"] = turns[i].get("ground_truth_state", "?")
@@ -415,6 +437,8 @@ def judge_sequential(
             per_dialogue_summaries.append(
                 _dialogue_summary(dfile.name, d.get("id", -1), dlg_scores)
             )
+        if turns and len(dlg_scores) == len(turns):
+            _save_scores(cache_dir / dfile.name, model, d.get("id", -1), dlg_scores)
     return _summarize(
         results_dir,
         model,
@@ -425,6 +449,16 @@ def judge_sequential(
         out_name,
         *count_dialogue_turns(dialogue_files),
     )
+
+
+def _save_scores(path: Path, model: str, dialogue_id, scores: list[dict]) -> None:
+    """Save one fully scored dialogue; written to a temporary name first."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent / (path.name + ".tmp")
+    tmp.write_text(
+        json.dumps({"judge_model": model, "id": dialogue_id, "scores": scores}, ensure_ascii=False)
+    )
+    tmp.replace(path)
 
 
 def _load_cached_scores(path: Path, model: str, dialogue_file: Path) -> dict | None:
@@ -494,15 +528,7 @@ def judge_results_dir(
         d = json.loads(dfile.read_text())
         scores = judge_dialogue(client, model, d, backend=backend)
         if scores and len(scores) == len(d.get("dialogue", [])):
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            tmp = cache_dir / (dfile.name + ".tmp")
-            tmp.write_text(
-                json.dumps(
-                    {"judge_model": model, "id": d.get("id", -1), "scores": scores},
-                    ensure_ascii=False,
-                )
-            )
-            tmp.replace(cache_dir / dfile.name)
+            _save_scores(cache_dir / dfile.name, model, d.get("id", -1), scores)
         return dfile.name, d.get("id", -1), scores
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
