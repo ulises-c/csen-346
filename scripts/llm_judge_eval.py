@@ -461,7 +461,8 @@ def judge_results_dir(
     if not dialogues_dir.is_dir():
         raise FileNotFoundError(f"No dialogues/ in {results_dir}")
 
-    dialogue_files = sorted(dialogues_dir.glob("*.json"))
+    # Skip dotfiles: a tar made on macOS adds "._<name>.json" resource forks, which are not JSON.
+    dialogue_files = sorted(f for f in dialogues_dir.glob("*.json") if not f.name.startswith("."))
 
     if backend == "claude-code":
         return judge_sequential(results_dir, dialogue_files, model, backend, max_turns, out_name)

@@ -197,3 +197,14 @@ def test_saved_scores_from_another_judge_are_not_reused(tmp_path, monkeypatch):
     llm_judge_eval.judge_results_dir(run, None, "judge-b", workers=2)
 
     assert set(calls) == {0, 1, 2}
+
+
+def test_judge_pass_ignores_dotfiles_in_the_dialogue_folder(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    (run / "dialogues" / "._0000.json").write_bytes(b"\x00\x05\x16\x07\xa3 not json")
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+
+    summary = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+
+    assert summary["complete"] is True
+    assert summary["n_dialogues_total"] == 3
