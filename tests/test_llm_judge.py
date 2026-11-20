@@ -264,3 +264,55 @@ def test_bedrock_backend_sends_the_judge_prompt_and_parses_the_reply(tmp_path, m
     assert sent[0]["modelId"] == "us.some-model"
     assert sent[0]["system"][0]["text"] == llm_judge_eval.JUDGE_SYSTEM_PROMPT
     assert sent[0]["inferenceConfig"] == {"maxTokens": 200, "temperature": 0}
+
+
+def test_parse_rubric_reads_scores_after_prose_and_with_a_broken_comment():
+    prose_first = (
+        "Looking at this response:\n\nThe teacher contradicts the student.\n\n```json\n{\n"
+        '  "socratic_validity": 0,\n  "advancement": 0,\n  "age_appropriateness": 1,\n'
+        '  "question_form": 0,\n  "comment": "Overrides a correct answer"\n}\n```'
+    )
+    broken_quote = (
+        '```json\n{"socratic_validity": 3, "advancement": 3, "age_appropriateness": 2, '
+        '"question_form": 1, "comment": "phrasing (\'容易地"滚"下去\') is compound."}\n```'
+    )
+
+    a = _parse_rubric(prose_first)
+    b = _parse_rubric(broken_quote)
+
+    assert a is not None and a["total"] == 1 and a["comment"] == "Overrides a correct answer"
+    assert b is not None and b["total"] == 9 and b["comment"].endswith("is compound.")
+
+
+def test_parse_rubric_prose_that_never_reaches_the_scores_stays_unscored():
+    assert _parse_rubric('Looking at this:\n```json\n{\n  "socratic_validity": 0') is None
+    assert _parse_rubric("- **socratic_validity**: 2, advancement: 1") is None
+
+
+def test_bedrock_reply_cut_off_at_the_token_cap_is_asked_again_with_more_room(
+    tmp_path, monkeypatch
+):
+    run = _write_run(tmp_path)
+    caps = []
+
+    class FakeBedrock:
+        def converse(self, **kw):
+            cap = kw["inferenceConfig"]["maxTokens"]
+            caps.append(cap)
+            done = '{"socratic_validity": 0, "advancement": 0, "age_appropriateness": 1, "question_form": 0}'
+            cut = cap == llm_judge_eval.JUDGE_MAX_TOKENS
+            return {
+                "output": {"message": {"content": [{"text": "Looking at" if cut else done}]}},
+                "usage": {"inputTokens": 400, "outputTokens": cap if cut else 260},
+            }
+
+    monkeypatch.setattr(llm_judge_eval, "_bedrock_client", FakeBedrock())
+
+    summary = llm_judge_eval.judge_results_dir(
+        run, None, "us.some-model", workers=1, backend="bedrock"
+    )
+
+    assert summary["complete"] is True
+    assert summary["overall_avg"] == 1
+    assert set(caps) == {llm_judge_eval.JUDGE_MAX_TOKENS, llm_judge_eval.JUDGE_MAX_TOKENS_RETRY}
+    assert summary["tokens_in"] == 800 * summary["n_turns_judged"]

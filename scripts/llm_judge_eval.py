@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -125,11 +126,24 @@ def _parse_rubric(content: str) -> dict | None:
         if content.startswith("json"):
             content = content[4:]
         content = content.strip()
+    axes = ("socratic_validity", "advancement", "age_appropriateness", "question_form")
     try:
         scores = json.loads(content)
+        if not isinstance(scores, dict):
+            return None
     except json.JSONDecodeError:
-        return None
-    for k in ("socratic_validity", "advancement", "age_appropriateness", "question_form"):
+        # The reply is not clean JSON: the judge reasoned in prose before the JSON, or put an
+        # unescaped quote in its comment. Take the four numbers from the last place each is
+        # written as a JSON field; without all four the turn stays unscored.
+        scores = {}
+        for k in axes:
+            found = re.findall(rf'"{k}"\s*:\s*"?(\d+)', content)
+            if found:
+                scores[k] = found[-1]
+        comment = re.findall(r'"comment"\s*:\s*"(.*)', content, flags=re.S)
+        if comment:
+            scores["comment"] = re.sub(r'"?\s*}?\s*(```)?\s*$', "", comment[-1])
+    for k in axes:
         if k not in scores:
             return None
         scores[k] = int(scores[k])
@@ -208,7 +222,13 @@ def _claude_code_judge(model: str, prompt: str, max_retries: int = 5) -> dict | 
 _bedrock_client = None
 
 
-def _bedrock_judge(model: str, user_prompt: str, max_retries: int = 6) -> dict | None:
+JUDGE_MAX_TOKENS = 200
+JUDGE_MAX_TOKENS_RETRY = 1000
+
+
+def _bedrock_judge(
+    model: str, user_prompt: str, max_retries: int = 6, max_tokens: int = JUDGE_MAX_TOKENS
+) -> dict | None:
     """One judge call through Amazon Bedrock's Converse API. Same system prompt, token cap and
     temperature as the api backend."""
     global _bedrock_client
@@ -222,7 +242,7 @@ def _bedrock_judge(model: str, user_prompt: str, max_retries: int = 6) -> dict |
                 modelId=model,
                 system=[{"text": JUDGE_SYSTEM_PROMPT}],
                 messages=[{"role": "user", "content": [{"text": user_prompt}]}],
-                inferenceConfig={"maxTokens": 200, "temperature": 0},
+                inferenceConfig={"maxTokens": max_tokens, "temperature": 0},
             )
             text = "".join(b.get("text", "") for b in resp["output"]["message"]["content"])
             usage = resp.get("usage", {})
@@ -267,6 +287,19 @@ def score_turn(
         if r is None:
             return None
         scores = _parse_rubric(r["content"])
+        if scores is None and r["usage_out"] >= JUDGE_MAX_TOKENS:
+            # The reply ran into the token cap before reaching its scores (the judge sometimes
+            # reasons in prose first, mostly on replies it finds wrong). Dropping these turns
+            # would remove low scores from the average, so ask again with room to finish.
+            first = r
+            r = _bedrock_judge(model, user_prompt, max_retries, JUDGE_MAX_TOKENS_RETRY)
+            if r is None:
+                return None
+            r["usage_in"] += first["usage_in"]  # both calls were paid for
+            r["usage_out"] += first["usage_out"]
+            scores = _parse_rubric(r["content"])
+            if scores is not None:
+                scores["retried_with_max_tokens"] = JUDGE_MAX_TOKENS_RETRY
         if scores is None:
             return None
         scores["usage_in"] = r["usage_in"]
