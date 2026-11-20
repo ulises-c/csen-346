@@ -169,6 +169,44 @@ Paired differences in state accuracy on scored turns: run 1 repeat minus run 3, 
 - Copying dialogues from the Mac with `tar` adds `._*` files; the judge now skips them, but use
   `COPYFILE_DISABLE=1 tar` anyway.
 
+## State on 2026-11-20 13:10: user decisions and what is running
+
+The user is scoring the 150 human-scoring turns over the next couple of days (`make
+human-scoring`; worksheet fingerprint `ea4bb3e9fac1b0cd`, private copy in `~/csen346-archive/` on
+the Mac). Decisions given the same day: run 9 is a go, Sonnet passes on every run are approved,
+the Hugging Face release is public, Claude and other hosted calls go through Amazon Bedrock on
+work-laptop (not the subscription, not Codex: neither Bedrock nor Codex offers GPT-4o).
+
+- **Sonnet 4.6 judge passes through Bedrock (work-laptop).** `~/csen346-bedrock-full.sh` judged
+  the five main runs; `~/csen346-bedrock-chain2.sh` then refills their few unscored turns and
+  judges the other nine (two headline repeats, the 12B pair, five synthetic cells). Logs
+  `~/csen346-bedrock-full.log` and `-full2.log`; results under `~/csen346-judge/results/<run>/`
+  as `judge_summary_bedrock-claude-sonnet-4-6.json` and `judge_scores/<same stem>/`. About $16
+  per 681-dialogue run. First results: Gemma 31B 8.08, SocratTeachLLM 7.33. Not yet copied to the
+  Mac. After they land: rerun `scripts/judge_bootstrap.py` pairs on the Sonnet scores (the
+  script reads `judge_scores/judge_summary/`; it needs an option for another stem).
+- **Run 9, frontier consultant (pilot done, full run waiting for the user's cost go-ahead).**
+  `scripts/bedrock_openai_proxy.py` runs on work-laptop port 8090 with a private key
+  (`~/csen346-run9/key`, also `~/.csen346-proxy-key` on hw-0304), call log
+  `~/csen346-run9/proxy_calls.jsonl`; `~/csen346-run9/tunnel.sh` keeps a reverse ssh tunnel so
+  hw-0304's loopback port 8090 reaches it. `~/csen346-runs/r9.sbatch` on hw-0304 runs the usual
+  script with `CKPT=none CONSULTANT_URL=... CONSULTANT_MODEL=us.openai.gpt-5.4` and
+  SocratTeachLLM as teacher. Pilot `r9pilot-gpt54-socratteachllm-fewshot10-n20` (job 12736, 2
+  minutes): 116 consultant calls, 58,509 input and 22,148 output tokens, state accuracy 27.59% on
+  116 turns (the archived GPT-4o row was 25.94%; 20 dialogues is far too few to compare). Full run:
+  about 4,000 calls, 2.0M input and 0.8M output tokens; the Bedrock price for GPT-5.4 was not
+  found through the pricing API. Submit with
+  `sbatch --export=ALL,R9_MODEL=us.openai.gpt-5.4,R9_NAME=r9-gpt54-socratteachllm-fewshot10-n681-seed42 ~/csen346-runs/r9.sbatch`,
+  then judge it like the others. Stop the proxy and tunnel on work-laptop when run 9 is done.
+- **Hugging Face release, staged, not uploaded.** `scripts/build_hf_run_release.py` builds the
+  dataset folder (stage at `/Users/ulises/.hermes/cache/scratch/hf_stage/` on the Mac; cards
+  copied in `docs/hf_release/`). Rebuild with `--overlay` pointing at the Sonnet results once
+  they are on the Mac, then upload. Owner still has to confirm: the dataset repo name, the three
+  model repo names suggested in the cards, and the licence (source datasets are cc-by-4.0 on the
+  Hub; upstream KELE has no licence file).
+- **The A6000 is in use by another agent** (the user's 12B retrain, Slurm job `csen346-sftprobe`).
+  Do not queue there without checking `squeue`.
+
 ## In progress, started 2026-11-20 02:20: run 6 on the A6000 and the Claude judge check on m4-mini
 
 ### The Gemma 4 12B fine-tune was trained on the test dialogues
