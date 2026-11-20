@@ -215,6 +215,62 @@ work-laptop (not the subscription, not Codex: neither Bedrock nor Codex offers G
 - **The A6000 is in use by another agent** (the user's 12B retrain, Slurm job `csen346-sftprobe`).
   Do not queue there without checking `squeue`.
 
+## Sonnet 4.6 judge on every run, and run 9 (2026-11-20 14:45)
+
+**Sonnet 4.6 through Bedrock, full passes, all complete** (14 runs, $159.44; summaries in
+`results/<run>/judge_summary_bedrock-claude-sonnet-4-6.json`, per-turn scores in
+`~/csen346-archive/bedrock-claude-sonnet-4-6-full-judge-20261120.tar` on the Mac and in
+`~/csen346-judge/results/` on work-laptop). 39 turns had stayed unscored because Sonnet
+sometimes reasons in prose before its JSON, mostly on replies it finds wrong, and hit the
+200-token cap; `llm_judge_eval.py` now reads such replies and the Bedrock backend asks again
+with a 1,000-token cap (the local Qwen passes were complete and are unchanged).
+
+| Run | Sonnet 4.6 (95% interval) | Qwen3.6 |
+|---|---|---|
+| r1b classifier → Gemma 31B | 8.07 (8.02–8.13) | 8.63 |
+| r8 rep2 / rep3 | 8.06 / 8.08 | 8.63 / 8.67 |
+| r2 bge-small → Gemma 31B | 7.84 (7.78–7.90) | 8.26 |
+| r3 Gemma → Gemma | 8.07 (8.01–8.12) | 8.38 |
+| r4 classifier → SocratTeachLLM | 7.32 (7.25–7.38) | 7.20 |
+| r5 classifier → GLM-4-9B base | 5.98 (5.92–6.04) | 5.52 |
+| r6 Gemma 12B base / fine-tune (contaminated) | 7.58 / 7.69 | 8.23 / 7.90 |
+| synthetic: Gemma 31B / SocratTeachLLM / GLM | 7.96 / 7.14 / 6.05 | 8.32 / 6.57 / 5.46 |
+| synthetic: Gemma 12B base / fine-tune | 7.47 / 7.53 | 7.80 / 7.33 |
+
+Paired judge differences, first minus second (`results/judge_bootstrap/sonnet-4-6-bedrock/`,
+made with `scripts/judge_bootstrap.py --judge-stem judge_summary_bedrock-claude-sonnet-4-6`):
+
+| Comparison | Sonnet 4.6 | Qwen3.6 | Same conclusion? |
+|---|---|---|---|
+| Gemma 31B vs SocratTeachLLM | +0.76 (0.68 to 0.83) | +1.43 (1.34 to 1.52) | yes, half the size |
+| SocratTeachLLM vs GLM base | +1.34 (1.26 to 1.41) | +1.69 (1.59 to 1.78) | yes |
+| Qwen3.5 clf vs bge-small | +0.23 (0.17 to 0.29) | +0.37 (0.29 to 0.45) | yes |
+| Qwen3.5 clf vs Gemma self-consult | +0.01 (−0.06 to 0.07) | +0.25 (0.17 to 0.33) | **no**: no difference under Sonnet |
+| 12B fine-tune vs base, test (contaminated) | +0.11 (0.04 to 0.18) | −0.32 (−0.41 to −0.23) | **no**: opposite sign |
+| SocratTeachLLM vs GLM, synthetic | +1.09 (0.86 to 1.32) | +1.12 (0.85 to 1.38) | yes |
+| 12B fine-tune vs base, synthetic | +0.06 (−0.15 to 0.28) | −0.48 (−0.79 to −0.16) | **no**: no difference under Sonnet |
+| Gemma 31B vs SocratTeachLLM, synthetic | +0.82 (0.61 to 1.03) | +1.75 (1.50 to 2.00) | yes, half the size |
+
+What this means for the paper: the teacher ordering and the ROUGE-versus-judge inversion hold
+under both judges. Two claims do not: that the classifier consultant improves reply quality
+over Gemma consulting itself (state accuracy +16.8 points stands; judged quality does not
+differ under Sonnet), and that fine-tuning the 12B lowers judged quality (Qwen says lower,
+Sonnet says equal or slightly higher). The human scores decide which judge to trust there.
+
+**Run 9, `r9-gpt54-socratteachllm-fewshot10-n681-seed42`** (GPT-5.4 through Bedrock as
+consultant, SocratTeachLLM as teacher; hw-0304, Slurm job 12737, 55 minutes, 4,147 consultant
+calls, 2.00M input and 0.79M output tokens; dollar cost not known, see the Bedrock bill).
+State accuracy 25.34% (24.02–26.65) on 4,147 scored turns, 24.42% over all 4,304; ROUGE-1
+44.31, BLEU-4 19.28. The archived GPT-4o row was 25.94%. Paired against run 4 (classifier,
+same teacher): run 4 is higher by 30.57 points (28.56 to 32.60). GPT-5.4 gets the opening
+turn's state right only 33% of the time and stage d 2.7%. The proxy and tunnel are stopped and
+the key files removed. Judges: Sonnet pass running on work-laptop
+(`~/csen346-bedrock-r9.log`); Qwen3.6 pass on the A6000 as three chained 1-hour jobs
+(12738–12740, `~/csen346-runs2/judge_r9.sh`, which judges an existing run without
+re-evaluating it; the checkout there is at `e0aac05b`, the same judge code as the other Qwen
+passes). When both are done: copy the scores to the Mac, rebuild the dataset stage with
+`--overlay`, upload to `ulises-c/kele-journal-runs`.
+
 ## In progress, started 2026-11-20 02:20: run 6 on the A6000 and the Claude judge check on m4-mini
 
 ### The Gemma 4 12B fine-tune was trained on the test dialogues
