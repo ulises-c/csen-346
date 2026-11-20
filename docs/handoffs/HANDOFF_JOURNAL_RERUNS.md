@@ -198,7 +198,15 @@ work-laptop (not the subscription, not Codex: neither Bedrock nor Codex offers G
   found through the pricing API. Submit with
   `sbatch --export=ALL,R9_MODEL=us.openai.gpt-5.4,R9_NAME=r9-gpt54-socratteachllm-fewshot10-n681-seed42 ~/csen346-runs/r9.sbatch`,
   then judge it like the others. Stop the proxy and tunnel on work-laptop when run 9 is done.
-- **Hugging Face release, staged, not uploaded.** `scripts/build_hf_run_release.py` builds the
+- **Classifiers are on Hugging Face (2026-11-20, user approved names and licences).**
+  `ulises-c/socrates-state-classifier-qwen3.5-lora` `main` is now the clean retrain (commit
+  `daeaffa5`, weights sha256 `696e6e04…`, Apache-2.0); the leaking first version is at tag
+  `v1-leaky` (`9183119d…`). New public repo `ulises-c/socrates-bert-classifiers-zh` (MIT, commit
+  `4033252c`) holds the 34-state bge-small classifier in `state-34way/` and the stage classifier
+  in `stage-5way/`. Verified anonymously: hashes match, both bge models load with `subfolder=`
+  and predict. The dataset goes to `ulises-c/kele-journal-runs` (CC-BY-4.0) after the Sonnet
+  passes; not uploaded yet.
+- **Hugging Face release, staged (dataset part not uploaded).** `scripts/build_hf_run_release.py` builds the
   dataset folder (stage at `/Users/ulises/.hermes/cache/scratch/hf_stage/` on the Mac; cards
   copied in `docs/hf_release/`). Rebuild with `--overlay` pointing at the Sonnet results once
   they are on the Mac, then upload. Owner still has to confirm: the dataset repo name, the three
