@@ -169,6 +169,65 @@ Paired differences in state accuracy on scored turns: run 1 repeat minus run 3, 
 - Copying dialogues from the Mac with `tar` adds `._*` files; the judge now skips them, but use
   `COPYFILE_DISABLE=1 tar` anyway.
 
+## In progress, started 2026-11-20 02:20: run 6 on the A6000 and the Claude judge check on m4-mini
+
+### The Gemma 4 12B fine-tune was trained on the test dialogues
+
+`ulises-c/SocratesLM-12B` was trained on 77,202 records. `load_split_pair` in
+`src/project/dataset.py` cut the per-turn record list 90/10, so about 90% of the turns of every
+dialogue went into training: 3,858 Chinese turns and 3,858 English turns from all 681 held-out
+test dialogues. `scripts/check_sft_split_overlap.py` shows it, and the 77,202 count is reproduced
+only by that cut. The loader is fixed (it now uses each source's dialogue-level split; 77,172
+records, no test dialogue), with a test.
+
+Consequences:
+
+- The fine-tune's scores on the 681-dialogue test split are **not a clean measure**. Any earlier
+  "fine-tune beats base" number on that split (SFT_RESULTS_REPORT and the paper's 12B rows) has
+  this problem.
+- The 75 synthetic dialogues are its only clean comparison with the base model.
+- A clean fine-tune needs a retrain with the fixed loader (QLoRA on the 12B; hours on the R9700
+  or the A6000). Not started, not asked.
+- SocratTeachLLM (the upstream KELE model) has the same question: its training data is not known
+  to exclude this test split. Runs 4 and 7 already show its ROUGE advantage shrinking on unseen
+  dialogues.
+
+### Run 6 (A6000, ten chained 1-hour Slurm jobs `csen346-a6000`, about 8 hours)
+
+`~/csen346-runs2/slice.sh` on hw-0047, in this order, each with the Qwen3.6-27B judge and the
+clean Qwen3.5 classifier:
+
+1. `r6-synth75-qwen35clfzh-gemma12b-fewshot10` (base, synthetic 75)
+2. `r6-qwen35clfzh-gemma12b-fewshot10-n681-seed42` (base, test split)
+3. `r6-synth75-qwen35clfzh-gemma12bsft-fewshot10` (fine-tune, synthetic 75)
+4. `r6-qwen35clfzh-gemma12bsft-fewshot10-n681-seed42` (fine-tune, test split; contaminated)
+
+- Weights in `~/csen346-models/`: `gemma-4-12b-it-Q8_0.gguf` from `unsloth/gemma-4-12b-it-GGUF`
+  (sha256 `f20e7ff1be28c283…`) and `gemma-4-12B-kele-socratic-sft-Q8_0.gguf` from the private
+  `ulises-c/SocratesLM-12B-GGUF` (sha256 `2357fbfdb2a812c1…`). The private file was downloaded on
+  the Mac and piped over ssh; no Hugging Face login was put on the work machine. If the chain
+  reaches step 3 before that copy lands, the slice logs "missing or unreadable" and the remaining
+  slices do nothing; resubmit with `submit_chain.sh`.
+- Both served with 4 slots, a 65,536-token context, thinking off (`TEACHER_KIND=gemma12b` and
+  `gemma12b-sft` in the run script). The base is Q8_0 to match the fine-tune's quantisation;
+  earlier 12B runs used the UD-Q8_K_XL file.
+- If the chain runs out of slices, add more: `submit_chain.sh` on hw-0304, `bash -s -- <n>`.
+
+### Claude as a second judge (m4-mini, user approved about 600 subscription calls)
+
+- `~/csen346-claude-judge.sh` on m4-mini (log `~/csen346-claude-judge.log`), in the worktree
+  `~/github/csen-346-judge`. Claude Sonnet 4.6 through `claude -p` on the subscription logged in
+  there (plan "pro"; `ANTHROPIC_API_KEY` is unset) scores the first 200 turns of the run 1
+  repeat, run 4 and run 5: the same 30-odd dialogues under three teachers. About 3.6 s per call.
+- Output: `results/<run>/judge_summary_claude-sonnet-4-6.json` plus per-dialogue scores in
+  `judge_scores/judge_summary_claude-sonnet-4-6/`. The script can be run again at any time; it
+  reuses finished dialogues and stops by itself when calls keep failing (usage limit).
+- Compare with the judge of record:
+  `uv run python scripts/compare_judges.py results/r1b-… results/r4-… results/r5-… --other judge_summary_claude-sonnet-4-6.json`
+- Limits of this check: the sample is the first dialogues in file order, not a random draw, and
+  it is one Claude model. It tests whether the two judges order the teachers and the dialogues
+  the same way; it is not a human check.
+
 ## Batch 2 results (finished 2026-11-20 01:39; runs 7 and 8)
 
 **Run 8, the headline configuration three times** (Qwen3.5 classifier + Gemma 4 31B, 681 dialogues):
