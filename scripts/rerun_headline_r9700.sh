@@ -21,6 +21,10 @@
 #      LLAMA_SERVER (binary; default: the one on PATH), TEACHER_PORT, JUDGE_PORT,
 #      VRAM_IDLE_LIMIT_GB (2; raise it for a judge-only pass, which needs 23 GB, when a desktop
 #      session holds a few GB),
+#      SERVER_SEED (llama-server sampler seed; unset = random. The pipeline sets no
+#      temperature, so repeats differ either way; the seed only labels the repeat),
+#      HF_REPO and SPLIT (dataset repo and split, e.g. ulises-c/SocratDataset-SYNTHETIC and all;
+#      default: the Chinese test split),
 #      RUNS_DIR (status, lock, logs and archives; default ~/csen346-runs),
 #      TEACHER_KIND: gemma31b (default), socratteachllm or glm49b; the two 9B teachers are
 #      served with 4 slots and a 65536-token context and need TEACHER_GGUF set.
@@ -47,6 +51,11 @@ case "$TEACHER_KIND" in
   glm49b) EXPERIMENT=glm49b-chat-local TEACHER_ALIAS="GLM-4-9B-Chat-base" ;;
   *) echo "unknown TEACHER_KIND: $TEACHER_KIND" >&2; exit 2 ;;
 esac
+seed_args=()
+[[ -n "${SERVER_SEED:-}" ]] && seed_args=(--seed "$SERVER_SEED")
+data_args=()
+[[ -n "${HF_REPO:-}" ]] && data_args+=(--hf-repo "$HF_REPO")
+[[ -n "${SPLIT:-}" ]] && data_args+=(--split "$SPLIT")
 OUT="results/$RUN_NAME"
 RUNS_DIR="${RUNS_DIR:-$HOME/csen346-runs}"
 LOGS="$RUNS_DIR/$RUN_NAME"
@@ -141,18 +150,18 @@ if [[ -f "$OUT/metrics_summary.json" ]]; then
 else
   case "$TEACHER_KIND" in
     gemma31b)
-      LLAMA_ARG_REASONING=off bash scripts/serve_gemma4_31b_q5.sh -m "$TEACHER_GGUF" -p "$TEACHER_PORT" \
+      LLAMA_ARG_REASONING=off bash scripts/serve_gemma4_31b_q5.sh -m "$TEACHER_GGUF" -p "$TEACHER_PORT" "${seed_args[@]}" \
         >"$LOGS/teacher_server.log" 2>&1 9>&- &
       ;;
     socratteachllm)
       SOCRATTEACHLLM_WEIGHTS_DIR="$(dirname "$TEACHER_GGUF")" SOCRATTEACHLLM_WEIGHT_FILE="$(basename "$TEACHER_GGUF")" \
         SOCRATTEACHLLM_PORT="$TEACHER_PORT" SOCRATTEACHLLM_PARALLEL=4 SOCRATTEACHLLM_CTX=65536 \
-        bash scripts/serve_socratteachllm_llamacpp.sh >"$LOGS/teacher_server.log" 2>&1 9>&- &
+        bash scripts/serve_socratteachllm_llamacpp.sh "${seed_args[@]}" >"$LOGS/teacher_server.log" 2>&1 9>&- &
       ;;
     glm49b)
       GLM49B_WEIGHTS_DIR="$(dirname "$TEACHER_GGUF")" GLM49B_WEIGHT_FILE="$(basename "$TEACHER_GGUF")" \
         GLM49B_PORT="$TEACHER_PORT" GLM49B_PARALLEL=4 GLM49B_CTX=65536 \
-        bash scripts/serve_glm49b_chat_llamacpp.sh >"$LOGS/teacher_server.log" 2>&1 9>&- &
+        bash scripts/serve_glm49b_chat_llamacpp.sh "${seed_args[@]}" >"$LOGS/teacher_server.log" 2>&1 9>&- &
       ;;
   esac
   SERVER_PID=$!
@@ -169,10 +178,10 @@ else
   export WANDB_MODE=disabled
   consultant_args=(--bert-consultant "$CKPT")
   [[ "$CKPT" == "none" ]] && consultant_args=()
-  KELE_RUN_NOTES="llama.cpp $("$LLAMA_SERVER" --version 2>&1 | grep -o 'build [0-9]*' | head -1), $(gpu_backend), --reasoning off; teacher $(basename "$TEACHER_GGUF"); classifier on CPU; host $(hostname)"
+  KELE_RUN_NOTES="llama.cpp $("$LLAMA_SERVER" --version 2>&1 | grep -o 'build [0-9]*' | head -1), $(gpu_backend), --reasoning off, sampler seed ${SERVER_SEED:-random}; teacher $(basename "$TEACHER_GGUF"); classifier on CPU; host $(hostname)"
   export KELE_RUN_NOTES
   run_capped "$EVAL_CAP_S" "$LOGS/eval.log" .venv/bin/python -m src.project.kele \
-    --experiment "$EXPERIMENT" evaluate "${consultant_args[@]}" "${limit_args[@]}" --output "$OUT"
+    --experiment "$EXPERIMENT" evaluate "${consultant_args[@]}" "${limit_args[@]}" "${data_args[@]}" --output "$OUT"
   rc=$?
   stop_server
   done_n=$(find "$OUT/dialogues" -name '*.json' 2>/dev/null | wc -l)
