@@ -1,4 +1,5 @@
 .PHONY: help run install-hooks pre-commit sync-mirror setup setup-repo \
+		human-scoring human-scoring-score \
 		online-demo local-demo _demo-preflight \
 		nvidia-preflight _classifier-ckpt \
 		train-gemma4-12b train-gemma4-12b-dry-run monitor-train-gemma4-12b \
@@ -44,6 +45,8 @@ help:
 	@echo ""
 	@echo "  run                   Show how to launch the project via uv"
 	@echo "  install-hooks         Install git hooks from hooks/ into .git/hooks/"
+	@echo "  human-scoring         Build the blind human-scoring page and open it in the browser"
+	@echo "  human-scoring-score   Score an export against the judges  (EXPORT=<file>; default: newest in ~/Downloads)"
 	@echo ""
 	@echo "  GPU stack tests:"
 	@echo "  test-gpu-stack        Full ML stack: ROCm, torch, bitsandbytes 8/4-bit, transformers, PEFT, TRL, flash-attn"
@@ -707,3 +710,23 @@ tournament-download:
 
 slurm:
 	bash scripts/slurm/submit_wave.sh
+
+# ── Human scoring ─────────────────────────────────────────────────────────────
+# The page autosaves every answer in the browser (keyed by the worksheet), so
+# closing the tab and running `make human-scoring` again resumes where you
+# stopped. Use the same browser each time, and Export when done.
+HUMAN_WORKSHEET ?= results/human_scoring/worksheet.json
+HUMAN_PAGE      ?= results/human_scoring/human_scoring.html
+EXPORT          ?= $(shell ls -t $(HOME)/Downloads/human_scores.*.json 2>/dev/null | head -1)
+
+human-scoring:
+	@test -f $(HUMAN_WORKSHEET) || { echo "No worksheet at $(HUMAN_WORKSHEET). Build it with scripts/human_scoring_sample.py (see annotation/README.md)."; exit 1; }
+	uv run python scripts/human_scoring_page.py build --worksheet $(HUMAN_WORKSHEET) --out $(HUMAN_PAGE)
+	@echo "Opening $(HUMAN_PAGE)"
+	@if command -v open >/dev/null 2>&1; then open $(HUMAN_PAGE); \
+	elif command -v xdg-open >/dev/null 2>&1; then xdg-open $(HUMAN_PAGE); \
+	else echo "Open this file in a browser: $(abspath $(HUMAN_PAGE))"; fi
+
+human-scoring-score:
+	@test -n "$(EXPORT)" || { echo "No export found. Pass EXPORT=<human_scores.NAME.json>."; exit 1; }
+	uv run python scripts/human_scoring_page.py score --worksheet $(HUMAN_WORKSHEET) "$(EXPORT)" --out results/human_scoring/agreement.json

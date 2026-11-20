@@ -439,3 +439,11 @@ def test_score_command_prints_report_and_writes_json(tmp_path, capsys):
         assert heading in printed
     saved = json.loads(out.read_text(encoding="utf-8"))
     assert saved["n_complete"] == 6 and saved["fingerprint"] == FINGERPRINT
+
+
+def test_page_asks_for_the_scorers_name_on_first_launch(tmp_path):
+    html = (Path(__file__).parent.parent / "scripts" / "human_scoring_page.py").read_text()
+    # The name dialog is created at boot and cannot be dismissed with an empty name.
+    assert "function askName()" in html
+    assert "askName();" in html.split("function boot()")[1]
+    assert "dlg.addEventListener('cancel', e => e.preventDefault())" in html

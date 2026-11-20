@@ -925,6 +925,49 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
 });
 
+// First launch: ask for the scorer's name before anything else, so every autosave and the
+// export carry it. The dialog cannot be dismissed while the name is empty.
+function askName() {
+  if ((state.annotator || '').trim()) return;
+  const dlg = document.createElement('dialog');
+  dlg.id = 'name-dialog';
+  dlg.style.cssText = 'max-width:26rem;padding:1.4rem 1.6rem;border-radius:10px;border:1px solid #8884;font:inherit';
+  const h = document.createElement('h2');
+  h.textContent = 'Before you start';
+  h.style.cssText = 'margin:0 0 .5rem;font-size:1.15rem';
+  const p = document.createElement('p');
+  p.textContent = 'What is your name? It is saved with your answers in this browser and names the export file.';
+  p.style.cssText = 'margin:0 0 .9rem';
+  const form = document.createElement('form');
+  form.method = 'dialog';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.id = 'name-dialog-input';
+  input.placeholder = 'Your name';
+  input.autocomplete = 'off';
+  input.style.cssText = 'width:100%;box-sizing:border-box;padding:.5rem .6rem;font:inherit;margin-bottom:.9rem';
+  const btn = document.createElement('button');
+  btn.type = 'submit';
+  btn.textContent = 'Start scoring';
+  btn.style.cssText = 'padding:.5rem 1rem;font:inherit;cursor:pointer';
+  form.append(input, btn);
+  dlg.append(h, p, form);
+  document.body.append(dlg);
+  dlg.addEventListener('cancel', e => e.preventDefault());
+  // Keys typed in the dialog must not reach the page's scoring shortcuts.
+  dlg.addEventListener('keydown', e => e.stopPropagation());
+  form.addEventListener('submit', e => {
+    const name = input.value.trim();
+    if (!name) { e.preventDefault(); input.focus(); return; }
+    state.annotator = name;
+    document.getElementById('annotator').value = name;
+    save();
+    dlg.remove();
+  });
+  dlg.showModal();
+  input.focus();
+}
+
 function boot() {
   renderGuide();
   buildDots();
@@ -938,6 +981,7 @@ function boot() {
   document.getElementById('foot').textContent =
     'Generated ' + META.generated_utc + ' · ' + ITEMS.length + ' items · worksheet fingerprint ' +
     META.fingerprint + ' · answers stay in this browser until you export.';
+  askName();
 }
 boot();
 </script>

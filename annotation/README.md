@@ -96,3 +96,11 @@ items with all four axes set are used, and n is printed beside every number:
   agreement among humans.
 - The annotator reads translations. A translation error can change a score.
 - Blinding hides the system name, not the writing style of a system.
+
+## Shortcut
+
+`make human-scoring` builds the page from `results/human_scoring/worksheet.json` and opens it in
+the browser. The page asks for your name the first time and saves every answer in that browser
+as you go, so running the command again resumes where you stopped (use the same browser).
+`make human-scoring-score` scores the newest `human_scores.*.json` in `~/Downloads`, or the file
+given as `EXPORT=<file>`.
