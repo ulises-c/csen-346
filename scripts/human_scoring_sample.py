@@ -31,6 +31,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -146,7 +147,6 @@ def build_sample(
                     "_dialogue_file": fname,
                     "_dialogue_id": d["id"],
                     "_turn_idx": i,
-                    "_ground_truth_state": turns[i].get("ground_truth_state", "?"),
                     "_judge": {
                         j: sc
                         for j, stem in judges.items()
@@ -180,6 +180,24 @@ def pending_translations(items: list[dict]) -> list[str]:
     return list(todo)
 
 
+_HAN = re.compile("[\u3400-\u9fff]")
+
+
+def clean_translation(text: str) -> str | None:
+    """Drop an echoed Chinese original and a "Translation:" label; None if Chinese remains.
+
+    The translator sometimes repeats the source before the English. Everything up to the last
+    Chinese character is removed, which is only safe when what follows is the whole translation,
+    so a result much shorter than expected is rejected by the caller's retry instead.
+    """
+    last = max((m.end() for m in _HAN.finditer(text)), default=0)
+    tail = text[last:].lstrip("？。！，、；：”’）) \n\t")
+    tail = re.sub(r"^\s*(Translation|English)\s*[:：]\s*", "", tail, flags=re.IGNORECASE).strip()
+    if last and len(tail) < 8:
+        return None
+    return tail or None
+
+
 def apply_translations(items: list[dict], table: dict[str, str]) -> None:
     for it in items:
         if not it["reply_en"] and it["reply_zh"] in table:
@@ -195,11 +213,21 @@ def _translate_bedrock(client, model: str, text: str, max_retries: int = 6) -> s
             resp = client.converse(
                 modelId=model,
                 system=[{"text": TRANSLATE_SYSTEM}],
-                messages=[{"role": "user", "content": [{"text": text}]}],
+                # The tags stop the model from answering or echoing a short question.
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [{"text": f"Translate into English:\n<text>\n{text}\n</text>"}],
+                    }
+                ],
                 # No temperature: newer Claude models on Bedrock reject the parameter.
                 inferenceConfig={"maxTokens": 1500},
             )
-            return "".join(b.get("text", "") for b in resp["output"]["message"]["content"]).strip()
+            raw = "".join(b.get("text", "") for b in resp["output"]["message"]["content"]).strip()
+            cleaned = clean_translation(raw)
+            if cleaned:
+                return cleaned
+            print(f"  unusable translation (attempt {attempt + 1}): {raw[:80]!r}", file=sys.stderr)
         except Exception as e:
             print(f"  bedrock error (attempt {attempt + 1}): {str(e)[:200]}", file=sys.stderr)
             time.sleep(min(2**attempt, 30))
@@ -232,7 +260,30 @@ def main() -> int:
         "--runs-root", type=Path, action="append", required=True, help="Folder holding run dirs"
     )
     j.add_argument("--judge", action="append", required=True, metavar="NAME=SUMMARY_STEM")
+    c = sub.add_parser("clean", help="Re-clean stored translations and recompute the fingerprint")
+    c.add_argument("--worksheet", type=Path, required=True)
     args = ap.parse_args()
+
+    if args.cmd == "clean":
+        sheet = json.loads(args.worksheet.read_text())
+        changed = dropped = 0
+        for it in sheet["items"]:
+            slots = [(it, "reply_en")] + [
+                (h, "en") for h in it["history"] if h["role"] == "teacher"
+            ]
+            for holder, key in slots:
+                new = clean_translation(holder[key]) if holder[key] else ""
+                if new is None:
+                    holder[key], dropped = "", dropped + 1
+                elif new != holder[key]:
+                    holder[key], changed = new, changed + 1
+        left = len(pending_translations(sheet["items"]))
+        sheet["fingerprint"] = fingerprint(sheet["items"]) if left == 0 else None
+        args.worksheet.write_text(json.dumps(sheet, ensure_ascii=False, indent=1))
+        print(
+            f"{changed} cleaned, {dropped} dropped; {left} to translate; fingerprint {sheet['fingerprint']}"
+        )
+        return 0
 
     if args.cmd == "judges":
         sheet = json.loads(args.worksheet.read_text())
