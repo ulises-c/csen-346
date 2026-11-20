@@ -1,0 +1,38 @@
+{
+  "per_run": {
+    "r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42": {
+      "n_dialogues": 34,
+      "n_turns": 200,
+      "mean_other": 8.08374183006536,
+      "mean_record": 8.515651260504201,
+      "spearman": 0.7263876197006272
+    },
+    "r4-qwen35clfzh-socratteachllm-fewshot10-n681-seed42": {
+      "n_dialogues": 35,
+      "n_turns": 200,
+      "mean_other": 7.255260770975056,
+      "mean_record": 7.333639455782312,
+      "spearman": 0.679814763210886
+    },
+    "r5-qwen35clfzh-glm49b-fewshot10-n681-seed42": {
+      "n_dialogues": 34,
+      "n_turns": 200,
+      "mean_other": 5.958099906629319,
+      "mean_record": 5.6325746965452845,
+      "spearman": 0.603814557887296
+    }
+  },
+  "pooled_n_dialogues": 103,
+  "pooled_spearman": 0.8986254790624248,
+  "pooled_mean_abs_diff": 0.5680613345661889,
+  "order_other": [
+    "r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42",
+    "r4-qwen35clfzh-socratteachllm-fewshot10-n681-seed42",
+    "r5-qwen35clfzh-glm49b-fewshot10-n681-seed42"
+  ],
+  "order_record": [
+    "r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42",
+    "r4-qwen35clfzh-socratteachllm-fewshot10-n681-seed42",
+    "r5-qwen35clfzh-glm49b-fewshot10-n681-seed42"
+  ]
+}

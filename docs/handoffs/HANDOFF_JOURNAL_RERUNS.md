@@ -260,6 +260,31 @@ clean Qwen3.5 classifier:
   Files: `results/<run>/judge_summary_claude-sonnet-4-6.json`,
   `results/judge-agreement/`, and per-turn scores in
   `~/csen346-archive/claude-sonnet-4-6-judge-check-20261120.tar` on the Mac.
+- **Same check through Amazon Bedrock (2026-11-20 11:44, at the user's request: Claude calls go
+  through AWS on work-laptop from now on, not the subscription).** `llm_judge_eval.py --backend
+  bedrock --model us.anthropic.claude-sonnet-4-6`, run by `~/csen346-bedrock-judge.sh` in
+  `~/csen346-judge` on work-laptop (AWS SSO profile already logged in there, region us-east-1;
+  `uv run --no-project --with openai --with boto3`). This backend sends the judge's system prompt
+  and nothing else, at temperature 0; the subscription route goes through the Claude Code CLI.
+
+  | Run (teacher) | Bedrock Sonnet 4.6 | Subscription Sonnet 4.6 | Qwen3.6-27B |
+  |---|---|---|---|
+  | Run 1 repeat (Gemma 4 31B) | 8.08 | 7.77 | 8.52 |
+  | Run 4 (SocratTeachLLM) | 7.26 | 7.31 | 7.33 |
+  | Run 5 (GLM-4-9B base) | 5.96 | 5.94 | 5.63 |
+
+  Bedrock Sonnet against Qwen: same order of teachers, rank correlation over dialogues 0.60 to
+  0.73 within a run, mean absolute difference 0.57. Bedrock Sonnet against subscription Sonnet:
+  0.80 to 0.88 and 0.29, so the two routes to the same model are close but not identical, and the
+  Gemma mean moves by 0.3. Gemma minus SocratTeachLLM is 0.82 under Bedrock Sonnet, 0.46 under
+  subscription Sonnet and 1.19 under Qwen (no intervals).
+- **Bedrock cost and what the account offers.** 600 turns cost about $2.41 (about 850 input and
+  105 output tokens per turn, $0.004 per turn at Sonnet 4.6 rates), so a full 681-dialogue run is
+  about $16 to $17. The account has on-demand access through `us.` and `global.` inference
+  profiles to Sonnet 4.6, Sonnet 5 and 5.5, Opus 4.5 to 5.5, Haiku 4.5 and 5.5 and the Fable 5
+  models; quota 10,000 requests and 6,000,000 tokens per minute for Sonnet 4.6. Batch inference
+  exists (at least 100 records per job) and is cheaper, but needs an S3 bucket and an IAM service
+  role, which has not been set up or asked for. Nothing beyond the 600 turns has been run.
 - Limits of this check: the sample is the first dialogues in file order, not a random draw, and
   it is one Claude model. It tests whether the two judges order the teachers and the dialogues
   the same way; it is not a human check.

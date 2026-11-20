@@ -1,0 +1,390 @@
+{
+  "results_dir": "results/r5-qwen35clfzh-glm49b-fewshot10-n681-seed42",
+  "judge_model": "us.anthropic.claude-sonnet-4-6",
+  "backend": "bedrock",
+  "n_dialogues_judged": 34,
+  "n_turns_judged": 200,
+  "n_dialogues_total": 681,
+  "n_turns_total": 4245,
+  "complete": false,
+  "wall_clock_seconds": 364.8387989997864,
+  "overall_avg": 5.935,
+  "axis_avgs": {
+    "socratic_validity": 1.66,
+    "advancement": 1.47,
+    "age_appropriateness": 1.695,
+    "question_form": 1.11
+  },
+  "per_stage": {
+    "a": {
+      "n": 34,
+      "total": 285.0,
+      "avg": 8.382352941176471
+    },
+    "b": {
+      "n": 39,
+      "total": 254.0,
+      "avg": 6.512820512820513
+    },
+    "c": {
+      "n": 61,
+      "total": 344.0,
+      "avg": 5.639344262295082
+    },
+    "d": {
+      "n": 34,
+      "total": 154.0,
+      "avg": 4.529411764705882
+    },
+    "e": {
+      "n": 32,
+      "total": 150.0,
+      "avg": 4.6875
+    }
+  },
+  "tokens_in": 172312,
+  "tokens_out": 21051,
+  "cost_usd": 0.8327,
+  "per_dialogue": [
+    {
+      "file": "0004.json",
+      "id": 4,
+      "n_turns_judged": 5,
+      "avg_total": 5.8,
+      "avg_validity": 1.6,
+      "avg_advancement": 1.0,
+      "avg_age": 1.8,
+      "avg_qform": 1.4
+    },
+    {
+      "file": "0005.json",
+      "id": 5,
+      "n_turns_judged": 6,
+      "avg_total": 6.5,
+      "avg_validity": 2.0,
+      "avg_advancement": 1.6666666666666667,
+      "avg_age": 1.5,
+      "avg_qform": 1.3333333333333333
+    },
+    {
+      "file": "0014.json",
+      "id": 14,
+      "n_turns_judged": 5,
+      "avg_total": 6.4,
+      "avg_validity": 2.0,
+      "avg_advancement": 1.4,
+      "avg_age": 2.0,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0018.json",
+      "id": 18,
+      "n_turns_judged": 9,
+      "avg_total": 6.444444444444445,
+      "avg_validity": 1.7777777777777777,
+      "avg_advancement": 1.8888888888888888,
+      "avg_age": 1.6666666666666667,
+      "avg_qform": 1.1111111111111112
+    },
+    {
+      "file": "0027.json",
+      "id": 27,
+      "n_turns_judged": 8,
+      "avg_total": 4.875,
+      "avg_validity": 1.5,
+      "avg_advancement": 1.375,
+      "avg_age": 1.375,
+      "avg_qform": 0.625
+    },
+    {
+      "file": "0030.json",
+      "id": 30,
+      "n_turns_judged": 5,
+      "avg_total": 5.2,
+      "avg_validity": 1.2,
+      "avg_advancement": 1.4,
+      "avg_age": 1.8,
+      "avg_qform": 0.8
+    },
+    {
+      "file": "0046.json",
+      "id": 46,
+      "n_turns_judged": 6,
+      "avg_total": 5.666666666666667,
+      "avg_validity": 1.6666666666666667,
+      "avg_advancement": 1.3333333333333333,
+      "avg_age": 1.6666666666666667,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0054.json",
+      "id": 54,
+      "n_turns_judged": 5,
+      "avg_total": 6.0,
+      "avg_validity": 1.6,
+      "avg_advancement": 1.4,
+      "avg_age": 1.8,
+      "avg_qform": 1.2
+    },
+    {
+      "file": "0059.json",
+      "id": 59,
+      "n_turns_judged": 5,
+      "avg_total": 6.6,
+      "avg_validity": 1.8,
+      "avg_advancement": 1.6,
+      "avg_age": 1.8,
+      "avg_qform": 1.4
+    },
+    {
+      "file": "0065.json",
+      "id": 65,
+      "n_turns_judged": 6,
+      "avg_total": 8.333333333333334,
+      "avg_validity": 2.3333333333333335,
+      "avg_advancement": 2.5,
+      "avg_age": 2.0,
+      "avg_qform": 1.5
+    },
+    {
+      "file": "0077.json",
+      "id": 77,
+      "n_turns_judged": 6,
+      "avg_total": 6.333333333333333,
+      "avg_validity": 1.6666666666666667,
+      "avg_advancement": 1.8333333333333333,
+      "avg_age": 1.8333333333333333,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0080.json",
+      "id": 80,
+      "n_turns_judged": 6,
+      "avg_total": 6.166666666666667,
+      "avg_validity": 1.8333333333333333,
+      "avg_advancement": 1.8333333333333333,
+      "avg_age": 1.5,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0095.json",
+      "id": 95,
+      "n_turns_judged": 8,
+      "avg_total": 5.5,
+      "avg_validity": 1.625,
+      "avg_advancement": 1.375,
+      "avg_age": 1.625,
+      "avg_qform": 0.875
+    },
+    {
+      "file": "0121.json",
+      "id": 121,
+      "n_turns_judged": 5,
+      "avg_total": 5.2,
+      "avg_validity": 1.4,
+      "avg_advancement": 1.0,
+      "avg_age": 1.6,
+      "avg_qform": 1.2
+    },
+    {
+      "file": "0160.json",
+      "id": 160,
+      "n_turns_judged": 5,
+      "avg_total": 5.8,
+      "avg_validity": 1.6,
+      "avg_advancement": 1.4,
+      "avg_age": 1.6,
+      "avg_qform": 1.2
+    },
+    {
+      "file": "0173.json",
+      "id": 173,
+      "n_turns_judged": 5,
+      "avg_total": 5.8,
+      "avg_validity": 1.8,
+      "avg_advancement": 1.2,
+      "avg_age": 1.8,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0194.json",
+      "id": 194,
+      "n_turns_judged": 5,
+      "avg_total": 6.8,
+      "avg_validity": 1.6,
+      "avg_advancement": 1.6,
+      "avg_age": 2.0,
+      "avg_qform": 1.6
+    },
+    {
+      "file": "0201.json",
+      "id": 201,
+      "n_turns_judged": 5,
+      "avg_total": 5.4,
+      "avg_validity": 1.6,
+      "avg_advancement": 1.4,
+      "avg_age": 1.6,
+      "avg_qform": 0.8
+    },
+    {
+      "file": "0204.json",
+      "id": 204,
+      "n_turns_judged": 8,
+      "avg_total": 5.125,
+      "avg_validity": 1.625,
+      "avg_advancement": 1.125,
+      "avg_age": 1.375,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0205.json",
+      "id": 205,
+      "n_turns_judged": 6,
+      "avg_total": 5.833333333333333,
+      "avg_validity": 1.5,
+      "avg_advancement": 1.1666666666666667,
+      "avg_age": 1.8333333333333333,
+      "avg_qform": 1.3333333333333333
+    },
+    {
+      "file": "0218.json",
+      "id": 218,
+      "n_turns_judged": 6,
+      "avg_total": 5.166666666666667,
+      "avg_validity": 1.3333333333333333,
+      "avg_advancement": 1.6666666666666667,
+      "avg_age": 1.5,
+      "avg_qform": 0.6666666666666666
+    },
+    {
+      "file": "0227.json",
+      "id": 227,
+      "n_turns_judged": 6,
+      "avg_total": 5.833333333333333,
+      "avg_validity": 1.5,
+      "avg_advancement": 1.3333333333333333,
+      "avg_age": 1.5,
+      "avg_qform": 1.5
+    },
+    {
+      "file": "0245.json",
+      "id": 245,
+      "n_turns_judged": 7,
+      "avg_total": 6.428571428571429,
+      "avg_validity": 1.7142857142857142,
+      "avg_advancement": 1.2857142857142858,
+      "avg_age": 1.8571428571428572,
+      "avg_qform": 1.5714285714285714
+    },
+    {
+      "file": "0258.json",
+      "id": 258,
+      "n_turns_judged": 5,
+      "avg_total": 6.4,
+      "avg_validity": 1.8,
+      "avg_advancement": 1.6,
+      "avg_age": 1.8,
+      "avg_qform": 1.2
+    },
+    {
+      "file": "0261.json",
+      "id": 261,
+      "n_turns_judged": 6,
+      "avg_total": 7.333333333333333,
+      "avg_validity": 2.0,
+      "avg_advancement": 2.0,
+      "avg_age": 1.8333333333333333,
+      "avg_qform": 1.5
+    },
+    {
+      "file": "0263.json",
+      "id": 263,
+      "n_turns_judged": 7,
+      "avg_total": 5.857142857142857,
+      "avg_validity": 2.0,
+      "avg_advancement": 1.2857142857142858,
+      "avg_age": 1.5714285714285714,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0296.json",
+      "id": 296,
+      "n_turns_judged": 5,
+      "avg_total": 6.2,
+      "avg_validity": 1.6,
+      "avg_advancement": 1.6,
+      "avg_age": 1.8,
+      "avg_qform": 1.2
+    },
+    {
+      "file": "0314.json",
+      "id": 314,
+      "n_turns_judged": 6,
+      "avg_total": 5.333333333333333,
+      "avg_validity": 1.3333333333333333,
+      "avg_advancement": 1.1666666666666667,
+      "avg_age": 1.8333333333333333,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0318.json",
+      "id": 318,
+      "n_turns_judged": 7,
+      "avg_total": 5.428571428571429,
+      "avg_validity": 1.5714285714285714,
+      "avg_advancement": 1.4285714285714286,
+      "avg_age": 1.5714285714285714,
+      "avg_qform": 0.8571428571428571
+    },
+    {
+      "file": "0326.json",
+      "id": 326,
+      "n_turns_judged": 5,
+      "avg_total": 6.0,
+      "avg_validity": 1.4,
+      "avg_advancement": 1.6,
+      "avg_age": 1.8,
+      "avg_qform": 1.2
+    },
+    {
+      "file": "0327.json",
+      "id": 327,
+      "n_turns_judged": 5,
+      "avg_total": 4.8,
+      "avg_validity": 1.4,
+      "avg_advancement": 1.2,
+      "avg_age": 1.4,
+      "avg_qform": 0.8
+    },
+    {
+      "file": "0343.json",
+      "id": 343,
+      "n_turns_judged": 5,
+      "avg_total": 5.6,
+      "avg_validity": 1.6,
+      "avg_advancement": 1.4,
+      "avg_age": 1.6,
+      "avg_qform": 1.0
+    },
+    {
+      "file": "0356.json",
+      "id": 356,
+      "n_turns_judged": 8,
+      "avg_total": 5.75,
+      "avg_validity": 1.5,
+      "avg_advancement": 1.25,
+      "avg_age": 1.875,
+      "avg_qform": 1.125
+    },
+    {
+      "file": "0362.json",
+      "id": 362,
+      "n_turns_judged": 3,
+      "avg_total": 6.666666666666667,
+      "avg_validity": 2.0,
+      "avg_advancement": 1.6666666666666667,
+      "avg_age": 2.0,
+      "avg_qform": 1.0
+    }
+  ]
+}
