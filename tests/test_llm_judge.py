@@ -237,3 +237,30 @@ def test_sequential_pass_resumes_and_stops_after_repeated_failures(tmp_path, mon
     assert second["complete"] is True
     saved = len(list((run / "judge_scores" / "judge_summary").glob("*.json")))
     assert saved == second["n_dialogues_total"]
+
+
+def test_bedrock_backend_sends_the_judge_prompt_and_parses_the_reply(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    sent = []
+
+    class FakeBedrock:
+        def converse(self, **kw):
+            sent.append(kw)
+            reply = '{"socratic_validity": 3, "advancement": 2, "age_appropriateness": 2, "question_form": 1}'
+            return {
+                "output": {"message": {"content": [{"text": reply}]}},
+                "usage": {"inputTokens": 400, "outputTokens": 50},
+            }
+
+    monkeypatch.setattr(llm_judge_eval, "_bedrock_client", FakeBedrock())
+
+    summary = llm_judge_eval.judge_results_dir(
+        run, None, "us.some-model", workers=2, backend="bedrock"
+    )
+
+    assert summary["complete"] is True
+    assert summary["overall_avg"] == 8
+    assert summary["tokens_in"] == 400 * summary["n_turns_judged"]
+    assert sent[0]["modelId"] == "us.some-model"
+    assert sent[0]["system"][0]["text"] == llm_judge_eval.JUDGE_SYSTEM_PROMPT
+    assert sent[0]["inferenceConfig"] == {"maxTokens": 200, "temperature": 0}

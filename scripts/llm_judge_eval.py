@@ -17,6 +17,10 @@ Two backends:
   it can't silently fall back to API billing.
 - api: OpenAI-compat endpoint with ANTHROPIC_API_KEY (default model claude-sonnet-4-6),
   parallel via --workers.
+- bedrock: Amazon Bedrock (Converse API) with the AWS credentials of the machine it runs on,
+  parallel via --workers. --model is a Bedrock model or inference-profile id, for example
+  us.anthropic.claude-sonnet-4-6. Needs boto3 (uv run --with boto3 ...). Billed to that AWS
+  account at Bedrock's on-demand rates.
 
 Usage:
   # subscription smoke (5 turns) then full arm:
@@ -201,6 +205,38 @@ def _claude_code_judge(model: str, prompt: str, max_retries: int = 5) -> dict | 
     return None
 
 
+_bedrock_client = None
+
+
+def _bedrock_judge(model: str, user_prompt: str, max_retries: int = 6) -> dict | None:
+    """One judge call through Amazon Bedrock's Converse API. Same system prompt, token cap and
+    temperature as the api backend."""
+    global _bedrock_client
+    if _bedrock_client is None:
+        import boto3  # optional dependency: only this backend needs it
+
+        _bedrock_client = boto3.client("bedrock-runtime")
+    for attempt in range(max_retries):
+        try:
+            resp = _bedrock_client.converse(
+                modelId=model,
+                system=[{"text": JUDGE_SYSTEM_PROMPT}],
+                messages=[{"role": "user", "content": [{"text": user_prompt}]}],
+                inferenceConfig={"maxTokens": 200, "temperature": 0},
+            )
+            text = "".join(b.get("text", "") for b in resp["output"]["message"]["content"])
+            usage = resp.get("usage", {})
+            return {
+                "content": text,
+                "usage_in": usage.get("inputTokens", 0),
+                "usage_out": usage.get("outputTokens", 0),
+            }
+        except Exception as e:  # throttling, expired credentials, network
+            print(f"  bedrock error (attempt {attempt + 1}): {str(e)[:200]}", file=sys.stderr)
+            time.sleep(min(2**attempt, 30))
+    return None
+
+
 def score_turn(
     client: openai.Client | None,
     model: str,
@@ -224,6 +260,17 @@ def score_turn(
         scores["usage_in"] = r["usage_in"]
         scores["usage_out"] = r["usage_out"]
         scores["cost_usd"] = r["cost_usd"]
+        return scores
+
+    if backend == "bedrock":
+        r = _bedrock_judge(model, user_prompt, max_retries)
+        if r is None:
+            return None
+        scores = _parse_rubric(r["content"])
+        if scores is None:
+            return None
+        scores["usage_in"] = r["usage_in"]
+        scores["usage_out"] = r["usage_out"]
         return scores
 
     assert client is not None
@@ -498,7 +545,8 @@ def judge_results_dir(
     # Skip dotfiles: a tar made on macOS adds "._<name>.json" resource forks, which are not JSON.
     dialogue_files = sorted(f for f in dialogues_dir.glob("*.json") if not f.name.startswith("."))
 
-    if backend == "claude-code":
+    # The subscription backend must not run in parallel; a turn cap is only implemented there.
+    if backend == "claude-code" or max_turns is not None:
         return judge_sequential(results_dir, dialogue_files, model, backend, max_turns, out_name)
 
     print(f"\n=== Judging {len(dialogue_files)} dialogues in {results_dir} ===")
@@ -693,7 +741,7 @@ def main():
     parser.add_argument("results_dir", type=Path, help="Path to results dir containing dialogues/")
     parser.add_argument(
         "--backend",
-        choices=["api", "claude-code"],
+        choices=["api", "claude-code", "bedrock"],
         default="claude-code",
         help="'claude-code' judges via the Claude Code CLI on the logged-in "
         "SUBSCRIPTION (no API key, sequential); 'api' uses ANTHROPIC_API_KEY.",
@@ -775,14 +823,18 @@ def main():
         )
         return
 
-    if args.backend == "claude-code":
+    if args.backend in ("claude-code", "bedrock"):
+        if args.backend == "bedrock" and not args.model:
+            parser.error(
+                "--backend bedrock needs --model (a Bedrock model or inference-profile id)"
+            )
         model = args.model or "claude-opus-4-8"
         summary = judge_results_dir(
             args.results_dir,
             None,
             model,
             args.workers,
-            backend="claude-code",
+            backend=args.backend,
             max_turns=args.max_turns,
             out_name=args.out_name,
         )
