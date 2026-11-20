@@ -68,9 +68,10 @@ def _json_files(folder: Path) -> list[Path]:
     return sorted(p for p in folder.glob("*.json") if not p.name.startswith("."))
 
 
-def load_judge(run_dir: Path) -> Metric:
-    """Per-dialogue sum and count of the judge totals."""
-    folder = run_dir / "judge_scores" / "judge_summary"
+def load_judge(run_dir: Path, stem: str = "judge_summary") -> Metric:
+    """Per-dialogue sum and count of the judge totals. `stem` names the judge pass: the folder
+    under judge_scores/, which is the pass's summary file name without .json."""
+    folder = run_dir / "judge_scores" / stem
     files = _json_files(folder)
     if not files:
         raise FileNotFoundError(f"no judge score files in {folder}")
@@ -214,6 +215,12 @@ def main() -> None:
     p.add_argument("run_dirs", nargs="+", type=Path, help="run directories")
     p.add_argument("--paired", action="store_true", help="also report A minus B (two runs)")
     p.add_argument("--rouge", action="store_true", help="also bootstrap per-turn ROUGE-1")
+    p.add_argument(
+        "--judge-stem",
+        default="judge_summary",
+        help="which judge pass: folder under judge_scores/ (default: judge_summary, the local judge;\n"
+        "e.g. judge_summary_bedrock-claude-sonnet-4-6)",
+    )
     p.add_argument("--n-boot", type=int, default=10_000, help="number of resamples")
     p.add_argument("--seed", type=int, default=0, help="seed of the resampling")
     p.add_argument("--ci", type=float, default=95.0, help="interval level in percent")
@@ -229,6 +236,7 @@ def main() -> None:
         "n_boot": args.n_boot,
         "seed": args.seed,
         "ci_percent": args.ci,
+        "judge_stem": args.judge_stem,
         "runs": [],
     }
     print(
@@ -237,7 +245,10 @@ def main() -> None:
     )
     loaded: list[dict[str, Metric]] = []
     for run_dir in args.run_dirs:
-        data = {m: LOADERS[m](run_dir) for m in metrics}
+        data = {
+            m: load_judge(run_dir, args.judge_stem) if m == "judge" else LOADERS[m](run_dir)
+            for m in metrics
+        }
         loaded.append(data)
         run: dict = {"run": run_dir.name}
         print(f"\n{run_dir.name}\n{HEADER}")

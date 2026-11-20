@@ -229,3 +229,14 @@ def test_cli_rejects_paired_with_one_run(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["judge_bootstrap.py", str(tmp_path), "--paired"])
     with pytest.raises(SystemExit):
         jb.main()
+
+
+def test_another_judge_pass_is_read_from_its_own_folder(tmp_path):
+    run = _write_run(tmp_path / "run", {"0001.json": [9, 9]})
+    other = run / "judge_scores" / "judge_summary_other"
+    other.mkdir(parents=True)
+    (other / "0001.json").write_text(json.dumps({"scores": [{"turn_idx": 0, "total": 4}]}))
+
+    _, sums, counts = jb.load_judge(run, "judge_summary_other")
+
+    assert (sums.tolist(), counts.tolist()) == ([4.0], [1])

@@ -1,0 +1,27 @@
+{
+  "experiment": "r9-gpt54-socratteachllm-fewshot10-n681-seed42",
+  "teacher_model": "SocratTeachLLM",
+  "teacher_base_url": "http://localhost:8085/v1",
+  "consultant_model": "us.openai.gpt-5.4",
+  "consultant_base_url": "http://127.0.0.1:8090/v1",
+  "bert_consultant": null,
+  "oracle_consultant": false,
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": false,
+  "workers": 4,
+  "total_dialogues": 681,
+  "completed": 681,
+  "total_elapsed_seconds": 3301.05,
+  "started_at": "2026-11-20T13:32:08-08:00",
+  "finished_at": "2026-11-20T14:27:09-08:00",
+  "git_commit": "fc588065927abbab344397572c38c65fa5441caf",
+  "git_dirty": false,
+  "env": {
+    "KELE_BERT_DEVICE": "cpu",
+    "KELE_FEW_SHOT_N": "10",
+    "KELE_FEW_SHOT_TEACHER": "1",
+    "KELE_PARALLEL_WORKERS": "4",
+    "KELE_RUN_NOTES": "llama.cpp build 12138, CUDA0, --reasoning off, sampler seed random; teacher SocratTeachLLM-Q8_0.gguf; consultant us.openai.gpt-5.4 through a hosted endpoint; host hw-0304"
+  }
+}
