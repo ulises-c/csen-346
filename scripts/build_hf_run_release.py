@@ -792,7 +792,10 @@ The code is at {GITHUB_URL}; `git_commit` in `runs.csv` gives the commit of each
    `docs/SYNTHETIC_STATE_ACCURACY_NOTE.md` in the code repository.
 5. **The judge is a language model.** The judge of record is Qwen3.6-27B (Q5_K_XL
    quantisation, served locally with llama.cpp); where present, Claude Sonnet 4.6 through
-   Amazon Bedrock is a second judge. The judge has been checked only against deliberately
+   Amazon Bedrock is a second judge. Sonnet's replies are capped at 200 tokens like the
+   local judge's; where a reply ran into the cap before giving its scores (39 turns in the
+   first 14 runs, mostly replies it found wrong), the same prompt was sent again with a
+   1,000-token cap. The judge has been checked only against deliberately
    broken control replies and against a second judge. A check against human scores is in
    progress and is not part of this release. Judge scores from different judge models are
    not comparable with each other.
@@ -947,6 +950,34 @@ def tree_size(root: Path) -> int:
     return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
+LICENCE_TODO_FRONT = (
+    "# TODO(owner): add a `license:` field before publishing. It is left out on purpose;\n"
+    "# see the Licence section below. Both source datasets are cc-by-4.0 on the Hub.\n"
+)
+LICENCE_TODO_BODY = (
+    "**TODO (owner): choose the licence of this dataset before publishing.** It has not been\n"
+    "decided. This dataset copies"
+)
+REPO_TODO = "Replace `REPO_ID` with this repository's id. Every run"
+
+
+def finalise_card(card: str, repo_id: str | None, licence: str | None) -> str:
+    """Fill in the owner's decisions: the repository id and the licence."""
+    if licence:
+        for marker in (LICENCE_TODO_FRONT, LICENCE_TODO_BODY):
+            if card.count(marker) != 1:
+                raise BuildError("the card's licence placeholder was not found exactly once")
+        card = card.replace(LICENCE_TODO_FRONT, f"license: {licence}\n")
+        card = card.replace(
+            LICENCE_TODO_BODY, f"This dataset is released under `{licence}`. It copies"
+        )
+    if repo_id:
+        if card.count(REPO_TODO) != 1:
+            raise BuildError("the card's repository placeholder was not found exactly once")
+        card = card.replace(REPO_TODO, "Every run").replace("REPO_ID", repo_id)
+    return card
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--archive-dir", type=Path, required=True, help="folder of run tarballs")
@@ -962,6 +993,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--overwrite", action="store_true", help="replace --out when it is not empty"
     )
+    parser.add_argument("--repo-id", help="Hub id of the dataset, written into the card")
+    parser.add_argument("--license", help="licence id for the card, e.g. cc-by-4.0")
     args = parser.parse_args(argv)
 
     out: Path = args.out.expanduser()
@@ -974,6 +1007,9 @@ def main(argv: list[str] | None = None) -> int:
         results, problems, warnings = build(
             args.archive_dir.expanduser(), [p.expanduser() for p in args.overlay], out
         )
+        if args.repo_id or args.license:
+            card_path = out / "README.md"
+            card_path.write_text(finalise_card(card_path.read_text(), args.repo_id, args.license))
     except BuildError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

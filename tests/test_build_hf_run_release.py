@@ -554,3 +554,19 @@ def test_main_prints_a_summary_and_refuses_a_non_empty_folder(
     assert rel.main(["--archive-dir", str(archive), "--out", str(out), "--overwrite"]) == 0
     assert _tree_hash(out) == first
     assert rel.main(["--archive-dir", str(tmp_path / "empty"), "--out", str(tmp_path / "x")]) == 1
+
+
+def test_repo_id_and_licence_options_fill_the_card_placeholders(archive: Path, tmp_path: Path):
+    out = tmp_path / "stage"
+
+    code = rel.main(
+        ["--archive-dir", str(archive), "--out", str(out)]
+        + ["--repo-id", "someone/some-runs", "--license", "cc-by-4.0"]
+    )
+
+    card = (out / "README.md").read_text()
+    assert code == 0
+    assert "TODO" not in card and "REPO_ID" not in card
+    assert card.split("---\n")[1].startswith("license: cc-by-4.0\n")
+    assert 'load_dataset("someone/some-runs", "turns", split="train")' in card
+    assert "released under `cc-by-4.0`" in card

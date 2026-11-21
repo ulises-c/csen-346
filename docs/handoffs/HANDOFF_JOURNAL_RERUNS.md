@@ -271,6 +271,23 @@ re-evaluating it; the checkout there is at `e0aac05b`, the same judge code as th
 passes). When both are done: copy the scores to the Mac, rebuild the dataset stage with
 `--overlay`, upload to `ulises-c/kele-journal-runs`.
 
+**Run 9 judged (2026-11-20 16:10).** Qwen3.6 7.23 and Sonnet 4.6 7.43, both complete over
+4,147 turns. Paired against run 4 (classifier consultant, same teacher), run 4 minus run 9:
+state accuracy +30.57 (28.56 to 32.60); Qwen judge −0.03 (−0.12 to 0.06); Sonnet judge −0.12
+(−0.19 to −0.05); ROUGE-1 +2.23 (1.58 to 2.89). So a 30-point gain in state accuracy came
+with no gain in judged reply quality for this teacher. Files:
+`results/judge_bootstrap/pair9_r4_minus_r9.json` and the same name under
+`sonnet-4-6-bedrock/`. Run 9's archive on the Mac now includes the Qwen per-turn scores.
+
+**Dataset release is built and checked but NOT uploaded.** The stage is at
+`/Users/ulises/.hermes/cache/scratch/hf_stage/runs-dataset` on the Mac (16 runs, 47,385 turns,
+both judges, 77.7 MB; card filled in with `--repo-id ulises-c/kele-journal-runs --license
+cc-by-4.0`; loads with `datasets`, turn counts and both judges' means match the summaries).
+The upload command waited for the user's approval at the terminal and timed out, so it did
+not run. Do not upload without the user saying so again. To rebuild:
+`uv run python scripts/build_hf_run_release.py --archive-dir ~/csen346-archive --overlay <folder with the Sonnet scores> --out <stage> --repo-id ulises-c/kele-journal-runs --license cc-by-4.0`
+(the Sonnet scores are in `~/csen346-archive/bedrock-claude-sonnet-4-6-full-judge-20261120.tar`).
+
 ## In progress, started 2026-11-20 02:20: run 6 on the A6000 and the Claude judge check on m4-mini
 
 ### The Gemma 4 12B fine-tune was trained on the test dialogues
