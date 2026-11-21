@@ -1,6 +1,5 @@
 ---
-# TODO(owner): add a `license:` field before publishing. It is left out on purpose;
-# see the Licence section below. Both source datasets are cc-by-4.0 on the Hub.
+license: cc-by-4.0
 language:
 - zh
 - en
@@ -61,6 +60,18 @@ dataset_info:
     dtype: int64
   - name: judge_qwen36_comment
     dtype: string
+  - name: judge_sonnet46_bedrock_total
+    dtype: int64
+  - name: judge_sonnet46_bedrock_socratic_validity
+    dtype: int64
+  - name: judge_sonnet46_bedrock_advancement
+    dtype: int64
+  - name: judge_sonnet46_bedrock_age_appropriateness
+    dtype: int64
+  - name: judge_sonnet46_bedrock_question_form
+    dtype: int64
+  - name: judge_sonnet46_bedrock_comment
+    dtype: string
 - config_name: dialogues
   features:
   - name: run
@@ -83,13 +94,13 @@ dataset_info:
 
 # KELE reproduction: per-turn outputs of the November 2026 reruns
 
-This dataset holds the outputs of 15 evaluation runs of a Socratic-teaching
+This dataset holds the outputs of 16 evaluation runs of a Socratic-teaching
 pipeline, from the project "Reproducing and Extending KELE" ([code](https://github.com/ulises-c/csen-346)). In the
 pipeline a *consultant* picks one of 34 teaching states for each student turn and a *teacher*
 language model writes the reply to an elementary-school student. Each run pairs one consultant
 with one teacher and replays the student turns of a set of reference dialogues.
 
-It contains 43,238 generated turns from 7,185 dialogue replays: the
+It contains 47,385 generated turns from 7,866 dialogue replays: the
 student turn, the state the consultant predicted, the reference state, the teacher's reply,
 the reference reply, and the scores an LLM judge gave the reply. The run summaries and the
 run settings are included. The dialogue text is Chinese. The judge comments are English;
@@ -104,14 +115,14 @@ using any number.
 ```python
 from datasets import load_dataset
 
-turns = load_dataset("REPO_ID", "turns", split="train")          # one row per turn
-dialogues = load_dataset("REPO_ID", "dialogues", split="train")  # one row per dialogue
+turns = load_dataset("ulises-c/kele-journal-runs", "turns", split="train")          # one row per turn
+dialogues = load_dataset("ulises-c/kele-journal-runs", "dialogues", split="train")  # one row per dialogue
 one_run = turns.filter(lambda row: row["run"] == "r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42")
 ```
 
-Replace `REPO_ID` with this repository's id. Every run has the same columns. `runs.csv` is
+Every run has the same columns. `runs.csv` is
 a plain CSV file and is not a config: download it with
-`huggingface_hub.hf_hub_download("REPO_ID", "runs.csv", repo_type="dataset")` and read it
+`huggingface_hub.hf_hub_download("ulises-c/kele-journal-runs", "runs.csv", repo_type="dataset")` and read it
 with any CSV reader.
 
 The column types are declared in this card. If you read the JSONL files without the card
@@ -123,23 +134,24 @@ types cannot be inferred from it.
 
 The same table, with more columns, is in `runs.csv`.
 
-| Run | Status | Consultant | Teacher | Set | Dialogues | Turns | State acc. (scored turns) | ROUGE-1 | BLEU-4 | Judge `qwen36` mean (complete) |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `r1-qwen35clf-gemma31b-fewshot10-n681-seed42` | leak-documentation-only | Qwen3.5-0.8B LoRA 34-state classifier (earlier checkpoint, trained on test dialogues) | Gemma 4 31B | test-split-681 | 681 | 4134 | 54.50 | 36.98 | 9.06 | other judge (Qwen3.8-27B-Q5_K_M) |
-| `r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 31B | test-split-681 | 681 | 4120 | 52.14 | 36.86 | 9.01 | 8.63 (yes) |
-| `r2-bgeclf-gemma31b-fewshot10-n681-seed42` | reportable | bge-small-zh 34-state classifier (clean retrain) | Gemma 4 31B | test-split-681 | 681 | 3805 | 48.36 | 35.92 | 8.34 | 8.26 (yes) |
-| `r3-gemma31b-selfconsult-fewshot10-n681-seed42` | reportable | Gemma 4 31B (LLM consultant, same model as the teacher) | Gemma 4 31B | test-split-681 | 681 | 4270 | 35.34 | 35.43 | 8.15 | 8.38 (yes) |
-| `r4-qwen35clfzh-socratteachllm-fewshot10-n681-seed42` | reportable-teacher-training-overlap-unknown | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | SocratTeachLLM | test-split-681 | 681 | 4056 | 55.92 | 46.54 | 20.18 | 7.20 (yes) |
-| `r5-qwen35clfzh-glm49b-fewshot10-n681-seed42` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | GLM-4-9B-Chat (base) | test-split-681 | 681 | 4245 | 51.85 | 34.44 | 8.31 | 5.52 (yes) |
-| `r6-qwen35clfzh-gemma12b-fewshot10-n681-seed42` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 12B | test-split-681 | 681 | 4174 | 49.52 | 35.53 | 8.31 | 8.23 (yes) |
-| `r6-qwen35clfzh-gemma12bsft-fewshot10-n681-seed42` | contaminated-test-split | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 12B fine-tune (SocratesLM-12B) | test-split-681 | 681 | 4018 | 54.93 | 45.93 | 18.14 | 7.90 (yes) |
-| `r6-synth75-qwen35clfzh-gemma12b-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 12B | synthetic-75 | 75 | 435 | not reported | 29.04 | 4.83 | 7.80 (yes) |
-| `r6-synth75-qwen35clfzh-gemma12bsft-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 12B fine-tune (SocratesLM-12B) | synthetic-75 | 75 | 434 | not reported | 33.30 | 8.31 | 7.33 (yes) |
-| `r7-synth75-qwen35clfzh-gemma31b-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 31B | synthetic-75 | 75 | 431 | not reported | 30.35 | 5.33 | 8.32 (yes) |
-| `r7-synth75-qwen35clfzh-glm49b-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | GLM-4-9B-Chat (base) | synthetic-75 | 75 | 436 | not reported | 28.10 | 4.69 | 5.46 (yes) |
-| `r7-synth75-qwen35clfzh-socratteachllm-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | SocratTeachLLM | synthetic-75 | 75 | 432 | not reported | 32.49 | 8.00 | 6.57 (yes) |
-| `r8-qwen35clfzh-gemma31b-fewshot10-n681-rep2` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 31B | test-split-681 | 681 | 4124 | 52.01 | 36.79 | 8.92 | 8.63 (yes) |
-| `r8-qwen35clfzh-gemma31b-fewshot10-n681-rep3` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 31B | test-split-681 | 681 | 4124 | 51.92 | 36.72 | 8.94 | 8.67 (yes) |
+| Run | Status | Consultant | Teacher | Set | Dialogues | Turns | State acc. (scored turns) | ROUGE-1 | BLEU-4 | Judge `qwen36` mean (complete) | Judge `sonnet46_bedrock` mean (complete) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `r1-qwen35clf-gemma31b-fewshot10-n681-seed42` | leak-documentation-only | Qwen3.5-0.8B LoRA 34-state classifier (earlier checkpoint, trained on test dialogues) | Gemma 4 31B | test-split-681 | 681 | 4134 | 54.50 | 36.98 | 9.06 | other judge (Qwen3.8-27B-Q5_K_M) |  |
+| `r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 31B | test-split-681 | 681 | 4120 | 52.14 | 36.86 | 9.01 | 8.63 (yes) | 8.07 (yes) |
+| `r2-bgeclf-gemma31b-fewshot10-n681-seed42` | reportable | bge-small-zh 34-state classifier (clean retrain) | Gemma 4 31B | test-split-681 | 681 | 3805 | 48.36 | 35.92 | 8.34 | 8.26 (yes) | 7.84 (yes) |
+| `r3-gemma31b-selfconsult-fewshot10-n681-seed42` | reportable | Gemma 4 31B (LLM consultant, same model as the teacher) | Gemma 4 31B | test-split-681 | 681 | 4270 | 35.34 | 35.43 | 8.15 | 8.38 (yes) | 8.07 (yes) |
+| `r4-qwen35clfzh-socratteachllm-fewshot10-n681-seed42` | reportable-teacher-training-overlap-unknown | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | SocratTeachLLM | test-split-681 | 681 | 4056 | 55.92 | 46.54 | 20.18 | 7.20 (yes) | 7.32 (yes) |
+| `r5-qwen35clfzh-glm49b-fewshot10-n681-seed42` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | GLM-4-9B-Chat (base) | test-split-681 | 681 | 4245 | 51.85 | 34.44 | 8.31 | 5.52 (yes) | 5.98 (yes) |
+| `r6-qwen35clfzh-gemma12b-fewshot10-n681-seed42` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 12B | test-split-681 | 681 | 4174 | 49.52 | 35.53 | 8.31 | 8.23 (yes) | 7.58 (yes) |
+| `r6-qwen35clfzh-gemma12bsft-fewshot10-n681-seed42` | contaminated-test-split | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 12B fine-tune (SocratesLM-12B) | test-split-681 | 681 | 4018 | 54.93 | 45.93 | 18.14 | 7.90 (yes) | 7.69 (yes) |
+| `r6-synth75-qwen35clfzh-gemma12b-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 12B | synthetic-75 | 75 | 435 | not reported | 29.04 | 4.83 | 7.80 (yes) | 7.47 (yes) |
+| `r6-synth75-qwen35clfzh-gemma12bsft-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 12B fine-tune (SocratesLM-12B) | synthetic-75 | 75 | 434 | not reported | 33.30 | 8.31 | 7.33 (yes) | 7.53 (yes) |
+| `r7-synth75-qwen35clfzh-gemma31b-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 31B | synthetic-75 | 75 | 431 | not reported | 30.35 | 5.33 | 8.32 (yes) | 7.96 (yes) |
+| `r7-synth75-qwen35clfzh-glm49b-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | GLM-4-9B-Chat (base) | synthetic-75 | 75 | 436 | not reported | 28.10 | 4.69 | 5.46 (yes) | 6.05 (yes) |
+| `r7-synth75-qwen35clfzh-socratteachllm-fewshot10` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | SocratTeachLLM | synthetic-75 | 75 | 432 | not reported | 32.49 | 8.00 | 6.57 (yes) | 7.14 (yes) |
+| `r8-qwen35clfzh-gemma31b-fewshot10-n681-rep2` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 31B | test-split-681 | 681 | 4124 | 52.01 | 36.79 | 8.92 | 8.63 (yes) | 8.06 (yes) |
+| `r8-qwen35clfzh-gemma31b-fewshot10-n681-rep3` | reportable | Qwen3.5-0.8B LoRA 34-state classifier (clean retrain) | Gemma 4 31B | test-split-681 | 681 | 4124 | 51.92 | 36.72 | 8.94 | 8.67 (yes) | 8.08 (yes) |
+| `r9-gpt54-socratteachllm-fewshot10-n681-seed42` | reportable-teacher-training-overlap-unknown | us.openai.gpt-5.4 (LLM consultant) | SocratTeachLLM | test-split-681 | 681 | 4147 | 25.34 | 44.31 | 19.28 | 7.23 (yes) | 7.43 (yes) |
 
 Status values:
 
@@ -186,10 +198,15 @@ All runs use a 10-shot teacher prompt.
 | `judge_qwen36_socratic_validity`, `judge_qwen36_advancement` | Axis scores, 0 to 3. |
 | `judge_qwen36_age_appropriateness`, `judge_qwen36_question_form` | Axis scores, 0 to 2. |
 | `judge_qwen36_comment` | The judge's short reason, in English. |
+| `judge_sonnet46_bedrock_total` | Sum of the four axes for judge `sonnet46_bedrock`, 0 to 10. |
+| `judge_sonnet46_bedrock_socratic_validity`, `judge_sonnet46_bedrock_advancement` | Axis scores, 0 to 3. |
+| `judge_sonnet46_bedrock_age_appropriateness`, `judge_sonnet46_bedrock_question_form` | Axis scores, 0 to 2. |
+| `judge_sonnet46_bedrock_comment` | The judge's short reason, in English. |
 
 Judge columns are null where that judge did not score the turn. Judges present:
 
 - `qwen36`: summary file `judge_summary.json`, per-turn scores from `judge_scores/judge_summary/`, judge model `Qwen3.6-27B-Q5_K_XL`.
+- `sonnet46_bedrock`: summary file `judge_summary_bedrock-claude-sonnet-4-6.json`, per-turn scores from `judge_scores/judge_summary_bedrock-claude-sonnet-4-6/`, judge model `us.anthropic.claude-sonnet-4-6`.
 
 ### Columns of `dialogues`
 
@@ -251,7 +268,10 @@ The code is at https://github.com/ulises-c/csen-346; `git_commit` in `runs.csv` 
    `docs/SYNTHETIC_STATE_ACCURACY_NOTE.md` in the code repository.
 5. **The judge is a language model.** The judge of record is Qwen3.6-27B (Q5_K_XL
    quantisation, served locally with llama.cpp); where present, Claude Sonnet 4.6 through
-   Amazon Bedrock is a second judge. The judge has been checked only against deliberately
+   Amazon Bedrock is a second judge. Sonnet's replies are capped at 200 tokens like the
+   local judge's; where a reply ran into the cap before giving its scores (39 turns in the
+   first 14 runs, mostly replies it found wrong), the same prompt was sent again with a
+   1,000-token cap. The judge has been checked only against deliberately
    broken control replies and against a second judge. A check against human scores is in
    progress and is not part of this release. Judge scores from different judge models are
    not comparable with each other.
@@ -288,8 +308,7 @@ copied from those two datasets.
 
 ## Licence
 
-**TODO (owner): choose the licence of this dataset before publishing.** It has not been
-decided. This dataset copies text from the two source datasets above, both listed as
+This dataset is released under `cc-by-4.0`. It copies text from the two source datasets above, both listed as
 `cc-by-4.0` on the Hub, so their attribution terms apply to that text. SocratDataset was
 first distributed by the KELE authors in their GitHub repository
 (https://github.com/yuanpan1020/KELE), which had no licence file when checked on 2026-11-20;
