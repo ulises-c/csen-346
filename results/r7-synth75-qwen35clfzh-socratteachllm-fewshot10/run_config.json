@@ -1,0 +1,28 @@
+{
+  "experiment": "r7-synth75-qwen35clfzh-socratteachllm-fewshot10",
+  "teacher_model": "SocratTeachLLM",
+  "teacher_base_url": "http://localhost:8085/v1",
+  "consultant_model": "SocratTeachLLM",
+  "consultant_base_url": "http://localhost:8085/v1",
+  "bert_consultant": "results/state-clf-qwen3.5-0.8b-lora-zh/final",
+  "oracle_consultant": false,
+  "thinking_budget": 0,
+  "max_teaching_rounds": 8,
+  "unified": false,
+  "workers": 4,
+  "total_dialogues": 75,
+  "completed": 75,
+  "total_elapsed_seconds": 1251.09,
+  "started_at": "2026-11-19T16:24:05-08:00",
+  "finished_at": "2026-11-19T16:44:57-08:00",
+  "git_commit": "9f9dd440ddc8d9a83527360b3a2dccd0c5422cb1",
+  "git_dirty": false,
+  "env": {
+    "KELE_BERT_DEVICE": "cpu",
+    "KELE_FEW_SHOT_N": "10",
+    "KELE_FEW_SHOT_TEACHER": "1",
+    "KELE_PARALLEL_WORKERS": "4",
+    "KELE_RUN_NOTES": "llama.cpp build 12138, CUDA0, --reasoning off, sampler seed random; teacher SocratTeachLLM-Q8_0.gguf; classifier on CPU; host hw-0304"
+  },
+  "bert_consultant_sha256": "696e6e044c5222e2a3e2f9746c76c57c308764cce941fff66c453014235c2506"
+}

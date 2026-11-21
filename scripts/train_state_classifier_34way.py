@@ -235,6 +235,14 @@ def _init_wandb(args: argparse.Namespace, model_type: str, resume_id: str | None
     )
 
 
+def _sync(device: str) -> None:
+    """Wait for queued GPU work so wall-clock timings are honest."""
+    if device == "cuda":
+        torch.cuda.synchronize()
+    elif device == "mps":
+        torch.mps.synchronize()
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -294,6 +302,13 @@ def main() -> None:
         "1e-3 for --freeze-backbone linear-probe).",
     )
     p.add_argument("--max_length", type=int, default=512)
+    p.add_argument(
+        "--device",
+        choices=["auto", "cuda", "mps", "cpu"],
+        default="auto",
+        help="'auto' picks cuda when available, else cpu. 'mps' (Apple GPU) is opt-in: "
+        "set PYTORCH_ENABLE_MPS_FALLBACK=1 so unsupported ops fall back to the CPU.",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument(
         "--max-steps",
@@ -435,7 +450,10 @@ def main() -> None:
     else:
         print(f"  precision: pure fp32, no AMP (model dtype={next(model.parameters()).dtype})")
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = args.device
+    if device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"  device: {device}")
     model.to(device)
     collator = DataCollatorWithPadding(tokenizer, return_tensors="pt")
 
@@ -518,7 +536,7 @@ def main() -> None:
         for batch in train_loader:
             # Start the benchmark clock after the first step warms up CUDA/JIT kernels.
             if args.max_steps and global_step == 1:
-                torch.cuda.synchronize()
+                _sync(device)
                 bench_t0 = _time.perf_counter()
             batch = {k: v.to(device) for k, v in batch.items()}
             with amp_ctx():
@@ -547,11 +565,11 @@ def main() -> None:
             global_step += 1
 
             if args.max_steps and global_step >= args.max_steps:
-                torch.cuda.synchronize()
+                _sync(device)
                 measured = global_step - 1  # exclude the warmup step before bench_t0
                 dt = _time.perf_counter() - bench_t0
                 spm = measured / dt * 60
-                peak = torch.cuda.max_memory_allocated() / 1e9
+                peak = torch.cuda.max_memory_allocated() / 1e9 if device == "cuda" else 0.0
                 full_steps = len(train_loader) * args.epochs
                 print(
                     f"\n[bench] {measured} steps in {dt:.1f}s = {spm:.1f} steps/min  "

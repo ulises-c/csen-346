@@ -1,6 +1,19 @@
 # Training outputs — checkpoints, logs, and eval results can be multi-GB
 outputs/
-results/
+# Everything under results/ is ignored except the small per-run summary files,
+# which are tracked so a run's numbers do not depend on a manual `git add -f`.
+# Per-dialogue outputs (results/<run>/dialogues/) stay ignored: archive them to
+# the Hugging Face dataset repo instead.
+results/**
+!results/**/
+!results/**/metrics_summary.json
+!results/**/judge_summary.json
+!results/**/run_config.json
+!results/**/semantic_r1.json
+!results/**/judge_validation_*.json
+!results/**/judge_summary_*.json
+!results/judge-agreement/*.json
+!results/judge_bootstrap/*.json
 logs/
 wandb/
 

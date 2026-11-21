@@ -139,3 +139,25 @@ def test_interactive_forwards_args_to_create_system(monkeypatch):
 
     assert captured == {"experiment": "exp1", "bert_consultant": "/ckpt", "unified": False}
     assert fake.started is True
+
+
+def test_load_dataset_holds_out_the_same_dialogues_in_every_repo(monkeypatch):
+    """A second language must not move dialogues between train and test."""
+    import datasets
+
+    zh = [{"id": i, "lang": "zh"} for i in range(200)]
+    en = [{"id": i, "lang": "en"} for i in range(200)]
+    monkeypatch.setattr(
+        datasets, "load_dataset", lambda repo, split: {"zh-repo": zh, "en-repo": en}[repo]
+    )
+
+    zh_test = kele.load_dataset(split="test", hf_repo="zh-repo")
+    both_train = kele.load_dataset(split="train", hf_repo=["en-repo", "zh-repo"])
+    both_test = kele.load_dataset(split="test", hf_repo=["en-repo", "zh-repo"])
+
+    test_ids = {d["id"] for d in zh_test}
+    assert len(zh_test) == 20
+    assert {d["id"] for d in both_test} == test_ids
+    assert len(both_test) == 40
+    assert test_ids.isdisjoint({d["id"] for d in both_train})
+    assert len(kele.load_dataset(split="all", hf_repo=["en-repo", "zh-repo"])) == 400

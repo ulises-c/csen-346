@@ -1,0 +1,86 @@
+{
+  "method": "percentile bootstrap, whole dialogues resampled with replacement; turn-weighted mean",
+  "n_boot": 10000,
+  "seed": 0,
+  "ci_percent": 95.0,
+  "runs": [
+    {
+      "run": "r6-qwen35clfzh-gemma12bsft-fewshot10-n681-seed42",
+      "judge": {
+        "n_dialogues": 681,
+        "n_turns": 4018,
+        "estimate": 7.903932304629169,
+        "lo": 7.823519196812935,
+        "hi": 7.98368191248992,
+        "se": 0.040756021255155116,
+        "n_undefined": 0
+      },
+      "rouge1": {
+        "n_dialogues": 681,
+        "n_turns": 4018,
+        "estimate": 45.933962780524084,
+        "lo": 45.41779061775555,
+        "hi": 46.460508207606516,
+        "se": 0.26891391562558575,
+        "n_undefined": 0
+      }
+    },
+    {
+      "run": "r6-qwen35clfzh-gemma12b-fewshot10-n681-seed42",
+      "judge": {
+        "n_dialogues": 681,
+        "n_turns": 4174,
+        "estimate": 8.2252036415908,
+        "lo": 8.1543246347102,
+        "hi": 8.29376645537806,
+        "se": 0.035621791323010084,
+        "n_undefined": 0
+      },
+      "rouge1": {
+        "n_dialogues": 681,
+        "n_turns": 4174,
+        "estimate": 35.53439131381331,
+        "lo": 35.130808955668705,
+        "hi": 35.9478091501651,
+        "se": 0.2078357381498446,
+        "n_undefined": 0
+      }
+    }
+  ],
+  "paired": {
+    "a": "r6-qwen35clfzh-gemma12bsft-fewshot10-n681-seed42",
+    "b": "r6-qwen35clfzh-gemma12b-fewshot10-n681-seed42",
+    "judge": {
+      "n_shared_dialogues": 681,
+      "n_only_a": 0,
+      "n_only_b": 0,
+      "n_turns_a": 4018,
+      "n_turns_b": 4174,
+      "mean_a": 7.903932304629169,
+      "mean_b": 8.2252036415908,
+      "difference": {
+        "estimate": -0.32127133696163135,
+        "lo": -0.4084041992188907,
+        "hi": -0.23079101093494012,
+        "se": 0.04530384362429479,
+        "n_undefined": 0
+      }
+    },
+    "rouge1": {
+      "n_shared_dialogues": 681,
+      "n_only_a": 0,
+      "n_only_b": 0,
+      "n_turns_a": 4018,
+      "n_turns_b": 4174,
+      "mean_a": 45.933962780524084,
+      "mean_b": 35.53439131381331,
+      "difference": {
+        "estimate": 10.399571466710775,
+        "lo": 9.883336346307482,
+        "hi": 10.910786732074907,
+        "se": 0.2600988168702747,
+        "n_undefined": 0
+      }
+    }
+  }
+}

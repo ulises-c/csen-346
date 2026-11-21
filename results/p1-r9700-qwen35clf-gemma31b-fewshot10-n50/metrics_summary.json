@@ -1,0 +1,19 @@
+{
+  "n_turns": 297,
+  "language_mismatch_turns": 0,
+  "rouge1": 38.93,
+  "rouge2": 17.22,
+  "rougeL": 29.1,
+  "bleu4": 9.52,
+  "state_accuracy": {
+    "overall": 56.9,
+    "per_stage": {
+      "a": 100.0,
+      "b": 62.71,
+      "c": 33.33,
+      "d": 42.0,
+      "e": 69.05
+    },
+    "total_turns": 297
+  }
+}

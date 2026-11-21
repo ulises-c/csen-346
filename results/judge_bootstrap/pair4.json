@@ -1,0 +1,86 @@
+{
+  "method": "percentile bootstrap, whole dialogues resampled with replacement; turn-weighted mean",
+  "n_boot": 10000,
+  "seed": 0,
+  "ci_percent": 95.0,
+  "runs": [
+    {
+      "run": "r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42",
+      "judge": {
+        "n_dialogues": 681,
+        "n_turns": 4120,
+        "estimate": 8.630339805825242,
+        "lo": 8.565245214262328,
+        "hi": 8.69526346599863,
+        "se": 0.03293771070657599,
+        "n_undefined": 0
+      },
+      "rouge1": {
+        "n_dialogues": 681,
+        "n_turns": 4120,
+        "estimate": 36.85718929268798,
+        "lo": 36.45587442598547,
+        "hi": 37.27205950002771,
+        "se": 0.2091927410280047,
+        "n_undefined": 0
+      }
+    },
+    {
+      "run": "r3-gemma31b-selfconsult-fewshot10-n681-seed42",
+      "judge": {
+        "n_dialogues": 681,
+        "n_turns": 4270,
+        "estimate": 8.3807962529274,
+        "lo": 8.315208293386169,
+        "hi": 8.446092561578757,
+        "se": 0.03339965911305434,
+        "n_undefined": 0
+      },
+      "rouge1": {
+        "n_dialogues": 681,
+        "n_turns": 4270,
+        "estimate": 35.43310594468213,
+        "lo": 35.0431104159879,
+        "hi": 35.82619417052408,
+        "se": 0.20110962090660406,
+        "n_undefined": 0
+      }
+    }
+  ],
+  "paired": {
+    "a": "r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42",
+    "b": "r3-gemma31b-selfconsult-fewshot10-n681-seed42",
+    "judge": {
+      "n_shared_dialogues": 681,
+      "n_only_a": 0,
+      "n_only_b": 0,
+      "n_turns_a": 4120,
+      "n_turns_b": 4270,
+      "mean_a": 8.630339805825242,
+      "mean_b": 8.3807962529274,
+      "difference": {
+        "estimate": 0.24954355289784225,
+        "lo": 0.16703749275273827,
+        "hi": 0.334088504926225,
+        "se": 0.0427064007831461,
+        "n_undefined": 0
+      }
+    },
+    "rouge1": {
+      "n_shared_dialogues": 681,
+      "n_only_a": 0,
+      "n_only_b": 0,
+      "n_turns_a": 4120,
+      "n_turns_b": 4270,
+      "mean_a": 36.85718929268798,
+      "mean_b": 35.43310594468213,
+      "difference": {
+        "estimate": 1.4240833480058441,
+        "lo": 1.0958176766716219,
+        "hi": 1.7524141995579896,
+        "se": 0.16959296345953406,
+        "n_undefined": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "method": "percentile bootstrap, whole dialogues resampled with replacement; turn-weighted mean",
+  "n_boot": 10000,
+  "seed": 0,
+  "ci_percent": 95.0,
+  "runs": [
+    {
+      "run": "r6-synth75-qwen35clfzh-gemma12bsft-fewshot10",
+      "judge": {
+        "n_dialogues": 75,
+        "n_turns": 434,
+        "estimate": 7.3271889400921655,
+        "lo": 7.079357696566999,
+        "hi": 7.571428571428571,
+        "se": 0.12495132332773756,
+        "n_undefined": 0
+      },
+      "rouge1": {
+        "n_dialogues": 75,
+        "n_turns": 434,
+        "estimate": 33.303580929300075,
+        "lo": 31.78070611575897,
+        "hi": 34.90209829361548,
+        "se": 0.7979887656207442,
+        "n_undefined": 0
+      }
+    },
+    {
+      "run": "r6-synth75-qwen35clfzh-gemma12b-fewshot10",
+      "judge": {
+        "n_dialogues": 75,
+        "n_turns": 435,
+        "estimate": 7.802298850574712,
+        "lo": 7.597700481154771,
+        "hi": 8.004587419592957,
+        "se": 0.10375382812497151,
+        "n_undefined": 0
+      },
+      "rouge1": {
+        "n_dialogues": 75,
+        "n_turns": 435,
+        "estimate": 29.040240370677466,
+        "lo": 27.61173326343583,
+        "hi": 30.491120639394797,
+        "se": 0.7261552126819425,
+        "n_undefined": 0
+      }
+    }
+  ],
+  "paired": {
+    "a": "r6-synth75-qwen35clfzh-gemma12bsft-fewshot10",
+    "b": "r6-synth75-qwen35clfzh-gemma12b-fewshot10",
+    "judge": {
+      "n_shared_dialogues": 75,
+      "n_only_a": 0,
+      "n_only_b": 0,
+      "n_turns_a": 434,
+      "n_turns_b": 435,
+      "mean_a": 7.3271889400921655,
+      "mean_b": 7.802298850574712,
+      "difference": {
+        "estimate": -0.4751099104825469,
+        "lo": -0.7883703808422498,
+        "hi": -0.1632965211576765,
+        "se": 0.15931045531283966,
+        "n_undefined": 0
+      }
+    },
+    "rouge1": {
+      "n_shared_dialogues": 75,
+      "n_only_a": 0,
+      "n_only_b": 0,
+      "n_turns_a": 434,
+      "n_turns_b": 435,
+      "mean_a": 33.303580929300075,
+      "mean_b": 29.040240370677466,
+      "difference": {
+        "estimate": 4.263340558622609,
+        "lo": 3.3357273016826006,
+        "hi": 5.185301938118276,
+        "se": 0.4747232845161186,
+        "n_undefined": 0
+      }
+    }
+  }
+}

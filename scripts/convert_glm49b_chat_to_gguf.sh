@@ -28,7 +28,13 @@ QUANT="${QUANT:-Q8_0}"
 
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-$HOME/Documents/models/llama.cpp}"
 CONVERT="$LLAMA_CPP_DIR/convert_hf_to_gguf.py"
-QUANTIZE="$LLAMA_CPP_DIR/build/bin/llama-quantize"
+QUANTIZE="${QUANTIZE:-$LLAMA_CPP_DIR/build/bin/llama-quantize}"
+if [[ ! -x "$QUANTIZE" ]] && command -v llama-quantize >/dev/null 2>&1; then
+  QUANTIZE="$(command -v llama-quantize)"   # e.g. a distro llama.cpp package
+fi
+# Official tokenizer.json for this vocabulary (see the overlay step below).
+TOKENIZER_REPO="${TOKENIZER_REPO:-zai-org/glm-4-9b-chat-hf}"
+TOKENIZER_DIR="${TOKENIZER_DIR:-$(dirname "$HF_DIR")/glm-4-9b-chat-hf-tokenizer}"
 
 F16_GGUF="$GGUF_DIR/glm-4-9b-chat-f16.gguf"
 OUT_GGUF="$GGUF_DIR/glm-4-9b-chat-${QUANT}.gguf"
@@ -113,8 +119,11 @@ sys.argv = sys.argv[1:]
 exec(compile(open(script).read(), script, "exec"))
 PY
 
+OVERLAY_DIR=""
 restore_state() {
   rm -f "$WRAPPER"
+  [[ -n "$OVERLAY_DIR" ]] && rm -rf "$OVERLAY_DIR"
+  return 0
 }
 trap restore_state EXIT INT TERM
 
@@ -132,10 +141,49 @@ if [[ ! -f "$F16_GGUF" ]]; then
     echo "Set PYTHON=/path/to/python or run 'uv sync' in the repo first" >&2
     exit 1
   fi
+  # ── Tokenizer overlay ───────────────────────────────────────────────────────
+  # glm-4-9b-chat and its fine-tunes ship a tiktoken vocabulary (tokenizer.model
+  # plus custom tokenizer code), not a tokenizer.json. With that layout the
+  # converter writes raw token bytes and no BPE merges, and llama-server rejects
+  # the file: "cannot find tokenizer merges in model file". The -hf repo of the
+  # same model has a tokenizer.json with the identical vocabulary (all 151,329
+  # ids and the 14 added tokens match) and the merge list. Convert from a
+  # scratch directory that links the weights and uses those tokenizer files.
+  SRC_DIR="$HF_DIR"
+  if [[ ! -f "$HF_DIR/tokenizer.json" ]]; then
+    if [[ ! -f "$TOKENIZER_DIR/tokenizer.json" ]]; then
+      echo "Fetching tokenizer files from $TOKENIZER_REPO → $TOKENIZER_DIR"
+      "$(dirname "$PYTHON")/hf" download "$TOKENIZER_REPO" \
+        tokenizer.json tokenizer_config.json --local-dir "$TOKENIZER_DIR"
+    fi
+    OVERLAY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/glm4_overlay_XXXXXX")"
+    SRC_DIR="$OVERLAY_DIR"
+    for f in "$HF_DIR"/*.safetensors "$HF_DIR"/model.safetensors.index.json \
+             "$HF_DIR"/generation_config.json \
+             "$HF_DIR"/configuration_chatglm.py "$HF_DIR"/modeling_chatglm.py; do
+      [[ -e "$f" ]] && ln -s "$f" "$SRC_DIR/"
+    done
+    # The converter reads hparams["vocab_size"] even when padded_vocab_size is
+    # present; the base glm-4-9b-chat config has only the padded key.
+    "$PYTHON" - "$HF_DIR/config.json" "$SRC_DIR/config.json" <<'CFG'
+import json
+import sys
+
+cfg = json.load(open(sys.argv[1]))
+cfg.setdefault("vocab_size", cfg.get("padded_vocab_size"))
+json.dump(cfg, open(sys.argv[2], "w"), indent=2)
+CFG
+    cp "$TOKENIZER_DIR/tokenizer.json" "$TOKENIZER_DIR/tokenizer_config.json" "$SRC_DIR/"
+    echo "Tokenizer overlay: $SRC_DIR"
+  fi
   cd "$LLAMA_CPP_DIR"
-  "$PYTHON" "$WRAPPER" "$CONVERT" "$HF_DIR" \
+  # PYTHONPATH: the wrapper exec()s the converter, so the converter's own
+  # "add ./gguf-py to sys.path" logic resolves against the wrapper's location.
+  PYTHONPATH="$LLAMA_CPP_DIR/gguf-py${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PYTHON" "$WRAPPER" "$CONVERT" "$SRC_DIR" \
     --outfile "$F16_GGUF" \
-    --outtype f16
+    --outtype f16 \
+    --model-name "glm-4-9b-chat"
   cd - >/dev/null
 fi
 

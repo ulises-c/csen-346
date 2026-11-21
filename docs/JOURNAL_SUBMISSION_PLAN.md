@@ -12,7 +12,10 @@ or a decision changes.
 
 ## 1. Constraints
 
-- **Budget is $0.** No paid API calls. Two Claude subscriptions are available for small checks.
+- **Budget is $0 out of pocket.** Two Claude subscriptions are available for small checks.
+  Since 2026-11-20 the user also allows Claude and other hosted models through Amazon Bedrock on
+  the work laptop (`ssh work-laptop`, AWS SSO already logged in); those calls are billed to that
+  AWS account, so state the expected cost before starting a batch.
 - **Main GPU is the R9700** (32 GB, ROCm 7.2.4, on `ollie-cachy`). A GTX 1070 is also on hand.
   An A6000 and smaller RTX cards are available occasionally.
 - **The per-dialogue outputs behind the current paper are gone.** They were never committed, and
@@ -51,6 +54,12 @@ Change or drop:
 - **Redo the clean-probe comparison** on the 75-dialogue synthetic set, same setup for every model.
 - **Report state accuracy and judge score separately as primary results.** The unified score is
   secondary.
+- **State accuracy uses one denominator for every run** (decided 2026-11-18). The evaluation stops
+  a dialogue when the consultant predicts `e34`, so each run scores a different number of the
+  4,304 ground-truth turns. Primary figure: accuracy over all 4,304 turns, with cut-off turns
+  counted as wrong. Also report accuracy over scored turns (the figure in the current draft) and
+  the early-stop rate. ROUGE, BLEU and the judge score cover generated turns only, so their
+  tables give the turn count of each run. Open: which convention the KELE paper used.
 
 ## 3. Phases
 
@@ -59,7 +68,7 @@ Change or drop:
 - [x] Merge #129 (Gemma 12B fine-tune, oracle mode, Claude Code judge backend); close #101.
 - [x] Merge #183: language-aware ROUGE and `scripts/unified_robustness.py`.
 - [x] Merge #184: gfx1201 probe work, logs and upstream status.
-- [ ] Merge the PR carrying this plan and the W&B export.
+- [x] Merge the PR carrying this plan and the W&B export.
 - [ ] Dependabot PRs: rebased onto the fixed lint job; merge the ones that pass, decide on the rest
       (see section 5).
 - [ ] Delete `feat/gfx1201-rdna4-qlora-fla-training` after #184 merges.
@@ -68,24 +77,72 @@ Change or drop:
 
 Run on `ollie-cachy` in a separate git worktree. Each test is short.
 
-- [ ] **T1. SocratTeachLLM in llama.cpp.** `scripts/convert_socratteachllm_to_gguf.sh`, then
+- [x] **T1. SocratTeachLLM in llama.cpp.** `scripts/convert_socratteachllm_to_gguf.sh`, then
       `make serve-socratteachllm-llamacpp`. The scripts record that an older llama.cpp could not
       load the result; the installed build is much newer. Pass = the server answers a chat request
       with sensible Chinese.
-- [ ] **T2. Same for the GLM-4-9B base.** Download the base weights, then
+- [x] **T2. Same for the GLM-4-9B base.** Download the base weights, then
       `scripts/convert_glm49b_chat_to_gguf.sh` and `scripts/serve_glm49b_chat_llamacpp.sh`.
-- [ ] **T3. vLLM, only if T1 or T2 fails.** Source build of vLLM main with `--enforce-eager`, then
+- [ ] **T3. vLLM, only if T1 or T2 fails.** *Not needed: T1 and T2 passed.* Source build of vLLM main with `--enforce-eager`, then
       `make test-vllm`. Upstream issue vllm#28649 is open, but the remaining complaints concern FP8.
-- [ ] **T4. Gemma 4 31B timing and reproduction check.** `make serve-gemma4-31b`, then a
+- [x] **T4. Gemma 4 31B timing and reproduction check.** `make serve-gemma4-31b`, then a
       50-dialogue run of the headline configuration with 4 workers. Record wall time. Compare with
       the archived 50-dialogue cell (51.58% state accuracy, ROUGE-1 38.76). The classifier is a
       different checkpoint, so expect a shift; a gap above about 5 points needs explaining before
       going on.
-- [ ] **T5. Local judge throughput.** Serve the candidate judge (Phase 2) and time 20 dialogues.
+- [x] **T5. Local judge throughput.** Serve the candidate judge (Phase 2) and time 20 dialogues.
 
 **Gate.** If T1 or T3 passes and T4 is under about 8 hours for 681 dialogues, everything runs on
 the R9700. If SocratTeachLLM cannot be served there, the fallback is `scripts/serve_teacher_local.sh`
 (HF Transformers, slower) or borrowed A6000 time for the SocratTeachLLM and GLM runs only.
+
+**Result (2026-11-17): the gate passes. Everything runs on the R9700.** Run on `ollie-cachy`,
+llama.cpp build 11429 (ROCm backend), main at `5f2f645`, transformers 5.23.
+
+| Test | Outcome |
+|---|---|
+| T1 SocratTeachLLM | Converts, loads and answers in Chinese. Q8_0, 10.0 GB file, 11.4 GB VRAM with 4 slots, about 50 tokens/s. |
+| T2 GLM-4-9B base | Same, after downloading the base weights (18 GB). |
+| T4 headline cell, 50 dialogues | 14 min with 4 workers. State accuracy 56.90%, ROUGE-1 38.93 (archived: 51.58%, 38.76). |
+| T5 judge, Qwen3.8-27B Q5_K_M | 117 turns (20 dialogues) in 224 s with 4 workers; complete; mean score 9.05/10. |
+
+Projected for 681 dialogues: about 3.2 hours for a Gemma 4 31B run and about 2.3 hours for a
+judge pass.
+
+What had to change, and what to watch:
+
+- **GGUF conversion needed a tokenizer fix.** glm-4-9b-chat and SocratTeachLLM ship a tiktoken
+  vocabulary with no `tokenizer.json`, so the converted file had no BPE merges and llama-server
+  refused it ("cannot find tokenizer merges in model file"). This is the earlier "not loadable"
+  failure, not an old-build problem. The convert scripts now take `tokenizer.json` from
+  `zai-org/glm-4-9b-chat-hf`, whose vocabulary is identical (all 151,329 ids and the 14 added
+  tokens match). Checked on 3,004 dataset strings (52,570 tokens): llama.cpp tokenizes every one
+  the same as the model's own tiktoken vocabulary, and the served prompt starts with
+  `[gMASK]<sop>` as the model's template requires.
+- **Gemma 4 thinks by default on this llama.cpp build.** The first T4 attempt ran at 30
+  dialogues/hour because the teacher wrote about 600 reasoning tokens per reply. It was stopped
+  after 16 dialogues and rerun with `--reasoning off` (213 dialogues/hour). The archived headline
+  run's wall time (681 dialogues in 32 minutes on a 5090) is only consistent with thinking off.
+  `scripts/serve_gemma4_31b.sh` now pins it off. On the 16 dialogues both attempts share, ROUGE-1
+  was 39.14 with thinking and 37.60 without, and state accuracy 54.26% and 53.76%; that sample is
+  too small to call a difference. `run_config.json` does not record the reasoning setting, the
+  git commit or the classifier revision; add them before Phase 4.
+- **T4's state accuracy is 5.3 points above the archived cell**, just past the 5-point line set
+  above. The classifier is the Hugging Face retrain, not the paper's checkpoint, and 297 turns
+  give a 95% sampling error of at least ±5.6 points, so this is in line with a changed classifier. It
+  confirms the headline number will move; the full run settles by how much.
+- **The local judge scores high.** 9.05/10 on 20 dialogues leaves little room at the top. Compare
+  with the archived Sonnet and Opus scores on the same configuration before fixing it as the
+  judge of record; a stricter rubric or a second judge model may be needed (Phase 6).
+- The judge script's `max_tokens=200` means a thinking judge model returns empty replies; the
+  judge server must also run with `--reasoning off`.
+- Port 8080 on `ollie-cachy` is held by `llama-swap`; the tests used 8085, 8086 and 8090.
+- VRAM with Gemma 4 31B Q5 and four slots is 30.5 of 32 GB. Nothing else fits beside it; the
+  classifier ran on the CPU.
+
+Artifacts: `results/p1-r9700-qwen35clf-gemma31b-fewshot10-n50/` and
+`results/p1-judge-throughput-n20/` (summaries in git; dialogues on `ollie-cachy` under
+`~/github/csen-346-main/results/` and in `~/p1-logs/p1_results.tgz`).
 
 ### Phase 2: preparation
 
@@ -93,11 +150,18 @@ the R9700. If SocratTeachLLM cannot be served there, the fallback is `scripts/se
       Re-evaluate it on the 4,304-turn Chinese test set and replace the classifier table in the
       paper. Confirm which split it was trained on: its `eval_results.json` covers 8,526 turns,
       which suggests Chinese plus English.
+      **Corrected 2026-11-18: this checkpoint leaks.** It was trained on the seed-42 split of the
+      English-plus-Chinese list, which is a different split from the Chinese-only one used for
+      evaluation: 607 of the 681 evaluation dialogues are in its training set. It must be
+      retrained on the Chinese-only train split before any state accuracy is reported. Details in
+      `docs/handoffs/HANDOFF_JOURNAL_RERUNS.md`; check with
+      `scripts/check_classifier_split_overlap.py`.
 - [ ] **BERT consultant.** Retrain with `scripts/train_stage_classifier.py` (minutes on any card);
       the weights are gone. Publish to Hugging Face this time.
-- [ ] **Synthetic set.** Pull the 75-dialogue version from `ulises-c/SocratDataset-SYNTHETIC`
+- [x] **Synthetic set.** (2026-11-18: the default config on Hugging Face already has all 75;
+      nothing to pull.) Pull the 75-dialogue version from `ulises-c/SocratDataset-SYNTHETIC`
       (`n75_extension/`); the local file has 37.
-- [ ] **Judge completeness check.** `scripts/llm_judge_eval.py` should exit non-zero, or mark the
+- [x] **Judge completeness check.** `scripts/llm_judge_eval.py` should exit non-zero, or mark the
       summary incomplete, when it judged fewer dialogues than the run contains. The archived Sonnet
       run was judged on 274 of 681 dialogues and nothing flagged it. Add a test.
 - [ ] **Local judge.** Pick one pinned open-weight model already on `ollie-cachy` (Qwen 27B class),
@@ -107,14 +171,19 @@ the R9700. If SocratTeachLLM cannot be served there, the fallback is `scripts/se
       Hugging Face dataset repo before starting the next run. `results/` is in `.gitignore`, so
       summaries reach git only when added with `git add -f`; that is how the Gemma 12B results were
       lost. Either un-ignore `results/*/*.json` or make the force-add part of the run script.
+      *Done in part 2026-11-17:* `.gitignore` now tracks `metrics_summary.json`,
+      `judge_summary.json`, `run_config.json` and `semantic_r1.json` under `results/`. The Hugging
+      Face dataset repo for dialogues is not created yet.
 - [ ] **Seeds.** Fix the list up front: 42 for everything, plus two more for the headline cell.
 
 ### Phase 3: analyses that need no GPU
 
-- [ ] **Block bootstrap on the Gemma 12B runs** from `results/wandb_export/`: state-accuracy
+- [x] **Block bootstrap on the Gemma 12B runs** from `results/wandb_export/`: state-accuracy
       intervals for base, fine-tune, no-consultant and oracle variants. Unpaired, blocks of 10
-      dialogues.
-- [ ] **Sample-size analysis, redone.** Rewrite `scripts/convergence_analysis.py` to resample with
+      dialogues. *Done: `scripts/wandb_block_bootstrap.py`.* Intervals on the full 681-dialogue
+      runs are about ±1.5 points. The synthetic-set runs have only 8 blocks, so their
+      intervals are too narrow to rely on.
+- [x] **Sample-size analysis, redone.** Rewrite `scripts/convergence_analysis.py` to resample with
       replacement and report standard errors. It can only be run on real outputs once Phase 4
       produces the first full run.
 - [ ] **Weight sweep and judge bootstrap** (`scripts/unified_robustness.py`) rerun on the new runs.
@@ -127,7 +196,7 @@ rest can run at 400 dialogues.
 
 | # | Consultant | Teacher | Set | Purpose |
 |---|---|---|---|---|
-| 1 | Qwen3.5 classifier | Gemma 4 31B | 681 | Headline |
+| 1 | Qwen3.5 classifier | Gemma 4 31B | 681 | Headline. Run 2026-11-18 (54.50% state accuracy, ROUGE-1 36.98) with a classifier that had seen the test dialogues. **Repeated clean 2026-11-18 (`r1b`): 52.14% state accuracy [50.56, 53.68], 49.91% over all ground-truth turns, ROUGE-1 36.86** |
 | 2 | BERT | Gemma 4 31B | 681 | Consultant ablation |
 | 3 | Gemma 4 31B (LLM as consultant) | Gemma 4 31B | 681 | Baseline: classifier against an LLM consultant, with outputs |
 | 4 | Qwen3.5 classifier | SocratTeachLLM | 681 | Fine-tuned teacher |
@@ -138,6 +207,30 @@ rest can run at 400 dialogues.
 
 The archived GPT-4o + SocratTeachLLM reproduction (25.94% state accuracy) stays in the paper as a
 cited earlier figure without an interval. Run 3 is the baseline that has artifacts.
+
+**Run 9, proposed 2026-11-20, not started: a frontier-LLM consultant through Bedrock.** The
+GPT-4o row is the one number in the paper that cannot be backed or rerun.
+
+| Run | Consultant | Teacher | n | Purpose |
+|---|---|---|---|---|
+| 9 | A hosted frontier model through Bedrock | SocratTeachLLM | 681 | Replaces the archived GPT-4o row with a number that has dialogues and an interval; paired against run 4 (same teacher, classifier consultant) |
+
+- **GPT-4o itself is not on Bedrock.** Checked 2026-11-20 in us-east-1 and us-west-2: the OpenAI
+  models offered are GPT-5.4, GPT-5.5, the GPT-5.6 and GPT-6 families, and the open-weight
+  gpt-oss-20b and gpt-oss-120b. So the 25.94% figure cannot be reproduced there; run 9 would be a
+  new baseline with a current model, and the paper must say so.
+- **Candidates:** Claude Sonnet 4.6 (also a judge here, so a Claude consultant should be judged
+  by Qwen as well), or an OpenAI model on Bedrock, which is closest in spirit to the original
+  GPT-4o row. Pick one before running; running both doubles the cost.
+- **Cost:** one consultant call per turn, about 4,100 turns with the dialogue history and the
+  state definitions in the prompt. Roughly the size of a judge pass, so on the order of $15 to
+  $20 with Sonnet 4.6; not measured, so run 20 dialogues first and extrapolate.
+- **Needs:** a Bedrock consultant backend in the pipeline (the consultant client is
+  OpenAI-compatible today), and the teacher served where the pipeline can reach both: the
+  teacher on a GPU machine and the consultant calls from the work laptop, or the whole run on a
+  work machine with AWS credentials, which have not been put on any GPU machine.
+- **If the ex-partner's files turn up**, they give the GPT-4o row an interval and a rejudge, and
+  run 9 becomes optional. See section 4.
 
 ### Phase 5: ablations
 
@@ -187,8 +280,15 @@ Run at the dialogue count Phase 3 justifies, on the headline configuration unles
   paper.
 - **Run 3 changes the baseline** from GPT-4o to an open model. The claim becomes "beats an LLM
   consultant of the same size class as the teacher", which is narrower than the current wording.
-- **Open:** does the ex-partner still have the `results/` directory from the 5090 machine? If it
-  turns up, the archived runs can be rescored and Phase 4 shrinks.
+- **Open:** does the ex-partner still have the `results/` directory from the 5090 machine? He
+  said on 2026-11-20 that he will look; do not count on it. Phase 4 was rerun without it, so what
+  it would still add is: (1) the GPT-4o + SocratTeachLLM dialogues, which would give that row an
+  interval, a rejudge with the current judges and a paired comparison with run 4; (2) the
+  original classifier checkpoint or its training split, which would settle whether the old 55.39%
+  headline was free of the train/test leak (the clean rerun gives 52.14%); (3) the original
+  Sonnet per-turn judge scores, now less needed because Sonnet 4.6 is run on the new dialogues
+  through Bedrock. It would not change the new result grid, and old and new numbers still must
+  not share a table.
 - **Open:** which venue, and whether it requires anonymisation.
 - **Not needed for the paper:** the ROCm training fault. Inference on the R9700 is unaffected.
   Status is in `docs/HANDOFF_GFX1201_UPSTREAM_AMD.md`.
@@ -222,3 +322,13 @@ open PRs. Dependabot still opens PRs; they now wait for a manual merge. Re-enabl
 
 - 2026-11-17: plan written. #129 merged, #101 closed, #183 and #184 opened.
 - 2026-11-17: #183 and #184 merged. Dependabot auto-merge paused. transformers is at 5.23 on main.
+- 2026-11-17: #185 merged; six Dependabot PRs merged, three held (#126, #174, #176).
+- 2026-11-17: Phase 1 run on the R9700. T1, T2, T4 and T5 pass; T3 not needed. Judge completeness
+  check, result-summary tracking and the W&B block bootstrap added.
+- 2026-11-18: Phase 4 run 1 finished on the R9700 (3 h 18 min evaluation, 2 h 5 min judge pass).
+  The local judge is lenient and flat across stages; the judge of record is undecided. Next steps
+  are in `docs/handoffs/HANDOFF_JOURNAL_RERUNS.md`.
+- 2026-11-18: found that the published classifier was trained on 607 of the 681 evaluation
+  dialogues (split mismatch). Run 1 must be repeated with a retrained classifier.
+- 2026-11-18: state accuracy over all ground-truth turns becomes the primary figure;
+  `scripts/state_accuracy_bootstrap.py` reports it and the early-stop rate with intervals.

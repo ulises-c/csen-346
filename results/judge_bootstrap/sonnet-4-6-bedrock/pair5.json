@@ -1,0 +1,53 @@
+{
+  "method": "percentile bootstrap, whole dialogues resampled with replacement; turn-weighted mean",
+  "n_boot": 10000,
+  "seed": 0,
+  "ci_percent": 95.0,
+  "judge_stem": "judge_summary_bedrock-claude-sonnet-4-6",
+  "runs": [
+    {
+      "run": "r6-qwen35clfzh-gemma12bsft-fewshot10-n681-seed42",
+      "judge": {
+        "n_dialogues": 681,
+        "n_turns": 4018,
+        "estimate": 7.693130910900946,
+        "lo": 7.628574400282664,
+        "hi": 7.758560583401095,
+        "se": 0.033128379711678764,
+        "n_undefined": 0
+      }
+    },
+    {
+      "run": "r6-qwen35clfzh-gemma12b-fewshot10-n681-seed42",
+      "judge": {
+        "n_dialogues": 681,
+        "n_turns": 4174,
+        "estimate": 7.580258744609488,
+        "lo": 7.522044360215547,
+        "hi": 7.639533375905052,
+        "se": 0.02996955495535836,
+        "n_undefined": 0
+      }
+    }
+  ],
+  "paired": {
+    "a": "r6-qwen35clfzh-gemma12bsft-fewshot10-n681-seed42",
+    "b": "r6-qwen35clfzh-gemma12b-fewshot10-n681-seed42",
+    "judge": {
+      "n_shared_dialogues": 681,
+      "n_only_a": 0,
+      "n_only_b": 0,
+      "n_turns_a": 4018,
+      "n_turns_b": 4174,
+      "mean_a": 7.693130910900946,
+      "mean_b": 7.580258744609488,
+      "difference": {
+        "estimate": 0.11287216629145824,
+        "lo": 0.0445396803875894,
+        "hi": 0.1799864445326103,
+        "se": 0.03431029895485408,
+        "n_undefined": 0
+      }
+    }
+  }
+}

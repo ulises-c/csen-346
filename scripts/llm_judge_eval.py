@@ -17,6 +17,10 @@ Two backends:
   it can't silently fall back to API billing.
 - api: OpenAI-compat endpoint with ANTHROPIC_API_KEY (default model claude-sonnet-4-6),
   parallel via --workers.
+- bedrock: Amazon Bedrock (Converse API) with the AWS credentials of the machine it runs on,
+  parallel via --workers. --model is a Bedrock model or inference-profile id, for example
+  us.anthropic.claude-sonnet-4-6. Needs boto3 (uv run --with boto3 ...). Billed to that AWS
+  account at Bedrock's on-demand rates.
 
 Usage:
   # subscription smoke (5 turns) then full arm:
@@ -34,6 +38,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -41,6 +46,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import openai
+
+# Exit status when a full judge pass scored fewer turns than the run contains.
+INCOMPLETE_EXIT_CODE = 3
 
 ALL_STATES = (
     ["a0", "a1"]
@@ -118,11 +126,24 @@ def _parse_rubric(content: str) -> dict | None:
         if content.startswith("json"):
             content = content[4:]
         content = content.strip()
+    axes = ("socratic_validity", "advancement", "age_appropriateness", "question_form")
     try:
         scores = json.loads(content)
+        if not isinstance(scores, dict):
+            return None
     except json.JSONDecodeError:
-        return None
-    for k in ("socratic_validity", "advancement", "age_appropriateness", "question_form"):
+        # The reply is not clean JSON: the judge reasoned in prose before the JSON, or put an
+        # unescaped quote in its comment. Take the four numbers from the last place each is
+        # written as a JSON field; without all four the turn stays unscored.
+        scores = {}
+        for k in axes:
+            found = re.findall(rf'"{k}"\s*:\s*"?(\d+)', content)
+            if found:
+                scores[k] = found[-1]
+        comment = re.findall(r'"comment"\s*:\s*"(.*)', content, flags=re.S)
+        if comment:
+            scores["comment"] = re.sub(r'"?\s*}?\s*(```)?\s*$', "", comment[-1])
+    for k in axes:
         if k not in scores:
             return None
         scores[k] = int(scores[k])
@@ -198,6 +219,44 @@ def _claude_code_judge(model: str, prompt: str, max_retries: int = 5) -> dict | 
     return None
 
 
+_bedrock_client = None
+
+
+JUDGE_MAX_TOKENS = 200
+JUDGE_MAX_TOKENS_RETRY = 1000
+
+
+def _bedrock_judge(
+    model: str, user_prompt: str, max_retries: int = 6, max_tokens: int = JUDGE_MAX_TOKENS
+) -> dict | None:
+    """One judge call through Amazon Bedrock's Converse API. Same system prompt, token cap and
+    temperature as the api backend."""
+    global _bedrock_client
+    if _bedrock_client is None:
+        import boto3  # optional dependency: only this backend needs it
+
+        _bedrock_client = boto3.client("bedrock-runtime")
+    for attempt in range(max_retries):
+        try:
+            resp = _bedrock_client.converse(
+                modelId=model,
+                system=[{"text": JUDGE_SYSTEM_PROMPT}],
+                messages=[{"role": "user", "content": [{"text": user_prompt}]}],
+                inferenceConfig={"maxTokens": max_tokens, "temperature": 0},
+            )
+            text = "".join(b.get("text", "") for b in resp["output"]["message"]["content"])
+            usage = resp.get("usage", {})
+            return {
+                "content": text,
+                "usage_in": usage.get("inputTokens", 0),
+                "usage_out": usage.get("outputTokens", 0),
+            }
+        except Exception as e:  # throttling, expired credentials, network
+            print(f"  bedrock error (attempt {attempt + 1}): {str(e)[:200]}", file=sys.stderr)
+            time.sleep(min(2**attempt, 30))
+    return None
+
+
 def score_turn(
     client: openai.Client | None,
     model: str,
@@ -221,6 +280,30 @@ def score_turn(
         scores["usage_in"] = r["usage_in"]
         scores["usage_out"] = r["usage_out"]
         scores["cost_usd"] = r["cost_usd"]
+        return scores
+
+    if backend == "bedrock":
+        r = _bedrock_judge(model, user_prompt, max_retries)
+        if r is None:
+            return None
+        scores = _parse_rubric(r["content"])
+        if scores is None and r["usage_out"] >= JUDGE_MAX_TOKENS:
+            # The reply ran into the token cap before reaching its scores (the judge sometimes
+            # reasons in prose first, mostly on replies it finds wrong). Dropping these turns
+            # would remove low scores from the average, so ask again with room to finish.
+            first = r
+            r = _bedrock_judge(model, user_prompt, max_retries, JUDGE_MAX_TOKENS_RETRY)
+            if r is None:
+                return None
+            r["usage_in"] += first["usage_in"]  # both calls were paid for
+            r["usage_out"] += first["usage_out"]
+            scores = _parse_rubric(r["content"])
+            if scores is not None:
+                scores["retried_with_max_tokens"] = JUDGE_MAX_TOKENS_RETRY
+        if scores is None:
+            return None
+        scores["usage_in"] = r["usage_in"]
+        scores["usage_out"] = r["usage_out"]
         return scores
 
     assert client is not None
@@ -269,6 +352,14 @@ def judge_dialogue(
     return out
 
 
+def count_dialogue_turns(dialogue_files: list[Path]) -> tuple[int, int]:
+    """Return (dialogues, turns) present on disk: what a complete judge pass covers."""
+    n_turns = 0
+    for dfile in dialogue_files:
+        n_turns += len(json.loads(dfile.read_text()).get("dialogue", []))
+    return len(dialogue_files), n_turns
+
+
 def _summarize(
     results_dir: Path,
     model: str,
@@ -277,8 +368,16 @@ def _summarize(
     per_dialogue_summaries: list[dict],
     elapsed: float,
     out_name: str,
+    n_dialogues_total: int,
+    n_turns_total: int,
 ) -> dict:
-    """Aggregate scored turns into the summary dict + write it to disk."""
+    """Aggregate scored turns into the summary dict + write it to disk.
+
+    The summary records how many dialogues and turns the run contains next to
+    how many were judged, and sets ``complete`` only when every turn got a
+    score. A partial pass (judge errors, rate limits, an interrupted run) used
+    to be indistinguishable from a full one.
+    """
     per_stage = {s: {"n": 0, "total": 0.0} for s in "abcde"}
     for s in all_turn_scores:
         gt = s.get("ground_truth_state", "?")
@@ -308,6 +407,9 @@ def _summarize(
         "backend": backend,
         "n_dialogues_judged": len(per_dialogue_summaries),
         "n_turns_judged": n_turns,
+        "n_dialogues_total": n_dialogues_total,
+        "n_turns_total": n_turns_total,
+        "complete": n_turns == n_turns_total and n_turns_total > 0,
         "wall_clock_seconds": elapsed,
         "overall_avg": sum(s["total"] for s in all_turn_scores) / n_turns if n_turns else 0,
         "axis_avgs": {
@@ -329,6 +431,13 @@ def _summarize(
         f"Overall: {summary['overall_avg']:.2f}/10  ({n_turns} turns, "
         f"${cost:.3f} cost, {elapsed:.0f}s wall clock)"
     )
+    if not summary["complete"]:
+        print(
+            f"WARNING: incomplete judge pass: {n_turns}/{n_turns_total} turns in "
+            f"{len(per_dialogue_summaries)}/{n_dialogues_total} dialogues were scored. "
+            "Averages cover the scored subset only.",
+            file=sys.stderr,
+        )
     return summary
 
 
@@ -356,22 +465,44 @@ def judge_sequential(
 ) -> dict:
     """Sequential judge — one call at a time. Used for the claude-code (subscription)
     backend, where parallel `claude -p` processes would race on the same account.
-    max_turns caps the total turns scored (for a cheap smoke run)."""
+    max_turns caps the total turns scored (for a cheap smoke run or a sample).
+
+    A fully scored dialogue is saved under ``judge_scores/<summary name>/`` and
+    reused by a later call, as in the parallel path. The pass stops after three
+    turns in a row fail, which on a subscription means the usage limit was hit;
+    run the same command again later to continue."""
     print(f"\n=== Judging {len(dialogue_files)} dialogues in {results_dir} (sequential) ===")
     print(f"Judge model: {model}, backend: {backend}, max_turns: {max_turns}")
     started = time.time()
     all_turn_scores: list[dict] = []
     per_dialogue_summaries: list[dict] = []
+    cache_dir = results_dir / "judge_scores" / Path(out_name).stem
+    failed_in_a_row = 0
     for dfile in dialogue_files:
         if max_turns is not None and len(all_turn_scores) >= max_turns:
             break
+        if failed_in_a_row >= 3:
+            print("  three turns in a row failed; stopping (usage limit?)", file=sys.stderr)
+            break
         d = json.loads(dfile.read_text())
         turns = d.get("dialogue", [])
+        cached = _load_cached_scores(cache_dir / dfile.name, model, dfile)
+        if cached is not None and (
+            max_turns is None or len(all_turn_scores) + len(cached["scores"]) <= max_turns
+        ):
+            all_turn_scores.extend(cached["scores"])
+            per_dialogue_summaries.append(
+                _dialogue_summary(dfile.name, cached["id"], cached["scores"])
+            )
+            continue
         dlg_scores = []
         for i in range(len(turns)):
             if max_turns is not None and len(all_turn_scores) >= max_turns:
                 break
+            if failed_in_a_row >= 3:
+                break
             score = score_turn(None, model, d, i, backend=backend)
+            failed_in_a_row = 0 if score is not None else failed_in_a_row + 1
             if score is not None:
                 score["turn_idx"] = i
                 score["ground_truth_state"] = turns[i].get("ground_truth_state", "?")
@@ -386,6 +517,8 @@ def judge_sequential(
             per_dialogue_summaries.append(
                 _dialogue_summary(dfile.name, d.get("id", -1), dlg_scores)
             )
+        if turns and len(dlg_scores) == len(turns):
+            _save_scores(cache_dir / dfile.name, model, d.get("id", -1), dlg_scores)
     return _summarize(
         results_dir,
         model,
@@ -394,7 +527,32 @@ def judge_sequential(
         per_dialogue_summaries,
         time.time() - started,
         out_name,
+        *count_dialogue_turns(dialogue_files),
     )
+
+
+def _save_scores(path: Path, model: str, dialogue_id, scores: list[dict]) -> None:
+    """Save one fully scored dialogue; written to a temporary name first."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent / (path.name + ".tmp")
+    tmp.write_text(
+        json.dumps({"judge_model": model, "id": dialogue_id, "scores": scores}, ensure_ascii=False)
+    )
+    tmp.replace(path)
+
+
+def _load_cached_scores(path: Path, model: str, dialogue_file: Path) -> dict | None:
+    """Saved scores for one dialogue, if they are from this judge and cover every turn."""
+    if not path.is_file():
+        return None
+    try:
+        cached = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
+    n_turns = len(json.loads(dialogue_file.read_text()).get("dialogue", []))
+    if cached.get("judge_model") != model or len(cached.get("scores", [])) != n_turns:
+        return None
+    return cached
 
 
 def judge_results_dir(
@@ -406,14 +564,22 @@ def judge_results_dir(
     max_turns: int | None = None,
     out_name: str = "judge_summary.json",
 ) -> dict:
-    """Run judge over all dialogues in results_dir. Returns summary dict."""
+    """Run judge over all dialogues in results_dir. Returns summary dict.
+
+    Each dialogue's scores are saved under ``judge_scores/<summary name>/`` as
+    soon as every turn of it is scored, and a later call with the same judge
+    model reuses them. An interrupted pass therefore continues where it
+    stopped, and a pass that missed a few turns only repeats those dialogues.
+    """
     dialogues_dir = results_dir / "dialogues"
     if not dialogues_dir.is_dir():
         raise FileNotFoundError(f"No dialogues/ in {results_dir}")
 
-    dialogue_files = sorted(dialogues_dir.glob("*.json"))
+    # Skip dotfiles: a tar made on macOS adds "._<name>.json" resource forks, which are not JSON.
+    dialogue_files = sorted(f for f in dialogues_dir.glob("*.json") if not f.name.startswith("."))
 
-    if backend == "claude-code":
+    # The subscription backend must not run in parallel; a turn cap is only implemented there.
+    if backend == "claude-code" or max_turns is not None:
         return judge_sequential(results_dir, dialogue_files, model, backend, max_turns, out_name)
 
     print(f"\n=== Judging {len(dialogue_files)} dialogues in {results_dir} ===")
@@ -422,14 +588,32 @@ def judge_results_dir(
     started = time.time()
     all_turn_scores = []
     per_dialogue_summaries = []
+    cache_dir = results_dir / "judge_scores" / Path(out_name).stem
+
+    todo = []
+    for dfile in dialogue_files:
+        cached = _load_cached_scores(cache_dir / dfile.name, model, dfile)
+        if cached is None:
+            todo.append(dfile)
+        else:
+            per_dialogue_summaries.append(
+                _dialogue_summary(dfile.name, cached["id"], cached["scores"])
+            )
+            all_turn_scores.extend(cached["scores"])
+    if len(todo) < len(dialogue_files):
+        print(
+            f"Reusing saved scores for {len(dialogue_files) - len(todo)} dialogues; {len(todo)} to judge"
+        )
 
     def _judge_one(dfile: Path):
         d = json.loads(dfile.read_text())
         scores = judge_dialogue(client, model, d, backend=backend)
+        if scores and len(scores) == len(d.get("dialogue", [])):
+            _save_scores(cache_dir / dfile.name, model, d.get("id", -1), scores)
         return dfile.name, d.get("id", -1), scores
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futures = [ex.submit(_judge_one, f) for f in dialogue_files]
+        futures = [ex.submit(_judge_one, f) for f in todo]
         for i, fut in enumerate(as_completed(futures)):
             fname, did, scores = fut.result()
             if scores:
@@ -437,10 +621,10 @@ def judge_results_dir(
                 all_turn_scores.extend(scores)
             elapsed = time.time() - started
             rate = (i + 1) / elapsed if elapsed > 0 else 0
-            remaining = (len(dialogue_files) - i - 1) / rate if rate > 0 else 0
+            remaining = (len(todo) - i - 1) / rate if rate > 0 else 0
             avg = per_dialogue_summaries[-1]["avg_total"] if scores else 0
             print(
-                f"  {i + 1}/{len(dialogue_files)}  {fname}  "
+                f"  {i + 1}/{len(todo)}  {fname}  "
                 f"({len(scores) if scores else 0} turns, avg {avg:.2f}/10) "
                 f"{elapsed:.0f}s elapsed, {remaining:.0f}s remaining",
                 flush=True,
@@ -454,6 +638,7 @@ def judge_results_dir(
         per_dialogue_summaries,
         time.time() - started,
         out_name,
+        *count_dialogue_turns(dialogue_files),
     )
 
 
@@ -534,7 +719,15 @@ def judge_paired_compare(
         print(f"\n=== Judging arm: {arm.name} ({len(sample)} turns, {model}) ===")
         scores = _judge_arm_on_sample(arm, sample, model, backend)
         arm_scores[arm.name] = _summarize(
-            arm, model, backend, scores, [], time.time() - started, f".judge_{arm.name}.tmp.json"
+            arm,
+            model,
+            backend,
+            scores,
+            [],
+            time.time() - started,
+            f".judge_{arm.name}.tmp.json",
+            n_dialogues_total=len({fname for fname, _i, _s in sample}),
+            n_turns_total=len(sample),
         )
         (arm / f".judge_{arm.name}.tmp.json").unlink(missing_ok=True)
 
@@ -581,7 +774,7 @@ def main():
     parser.add_argument("results_dir", type=Path, help="Path to results dir containing dialogues/")
     parser.add_argument(
         "--backend",
-        choices=["api", "claude-code"],
+        choices=["api", "claude-code", "bedrock"],
         default="claude-code",
         help="'claude-code' judges via the Claude Code CLI on the logged-in "
         "SUBSCRIPTION (no API key, sequential); 'api' uses ANTHROPIC_API_KEY.",
@@ -663,17 +856,24 @@ def main():
         )
         return
 
-    if args.backend == "claude-code":
+    if args.backend in ("claude-code", "bedrock"):
+        if args.backend == "bedrock" and not args.model:
+            parser.error(
+                "--backend bedrock needs --model (a Bedrock model or inference-profile id)"
+            )
         model = args.model or "claude-opus-4-8"
-        judge_results_dir(
+        summary = judge_results_dir(
             args.results_dir,
             None,
             model,
             args.workers,
-            backend="claude-code",
+            backend=args.backend,
             max_turns=args.max_turns,
             out_name=args.out_name,
         )
+        # --max-turns is a deliberate partial (smoke) run; anything else must be complete.
+        if args.max_turns is None and not summary["complete"]:
+            sys.exit(INCOMPLETE_EXIT_CODE)
         return
 
     model = args.model or "claude-sonnet-4-6"
@@ -691,9 +891,11 @@ def main():
         sys.exit(1)
 
     client = openai.Client(api_key=api_key, base_url=args.base_url)
-    judge_results_dir(
+    summary = judge_results_dir(
         args.results_dir, client, model, args.workers, backend="api", out_name=args.out_name
     )
+    if not summary["complete"]:
+        sys.exit(INCOMPLETE_EXIT_CODE)
 
 
 if __name__ == "__main__":

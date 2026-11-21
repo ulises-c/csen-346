@@ -1,0 +1,784 @@
+# Handoff: journal reruns (Phase 4)
+
+Updated 2026-11-18, afternoon. The plan of record is `docs/JOURNAL_SUBMISSION_PLAN.md`. This file
+says where things stand, what to do next, and how to run it from any machine.
+
+## Why the reruns exist
+
+The per-dialogue outputs behind every number in the current paper are gone: they were never
+committed, the RTX 4000 Ada machine is wiped, and the 5090 machine belongs to the project partner,
+who was asked on 2026-11-17 and has not answered yet. Without them the archived runs cannot be
+rescored with the fixed ROUGE, re-judged, or given confidence intervals. Phase 4 regenerates them
+on the R9700.
+
+**If the partner turns up with the old `results/` directory:** the archived runs can then be
+rescored and bootstrapped directly, and the Sonnet and Opus teacher runs (which will not be rerun
+under the no-cost rule) become usable again. The new runs are still worth keeping: they are
+reproducible from a recorded commit, and the exact classifier checkpoint behind the paper's
+headline is gone either way.
+
+## Blocker found 2026-11-18: the classifier was trained on the evaluation dialogues
+
+**Run 1's state accuracy cannot be reported.** The classifier used
+(`ulises-c/socrates-state-classifier-qwen3.5-lora`) was trained on a different 90/10 split from
+the one the evaluation uses.
+
+- `load_dataset()` shuffles the list it loads with seed 42. Between 2026-05-21 and 2026-06-09 it
+  loaded SocratDataset-EN plus SocratDataset (13,606 dialogues); now it loads SocratDataset alone
+  (6,803). Same seed, different list, different split.
+- The published classifier was trained in that window. Its card's 77,258 training turns and 8,526
+  test turns are reproduced exactly by the concatenated split.
+- Of run 1's 681 evaluation dialogues, **607 were in the classifier's training set in Chinese**,
+  611 in English, 678 in at least one language. Three are clean.
+- Measured effect in run 1: state accuracy 54.95% on the 607 seen dialogues against 50.88% on the
+  74 whose Chinese original was unseen (456 turns, so about plus or minus 5 points; 71 of those
+  74 were still seen in English). Small, and not separable from noise, but the number is not
+  publishable either way.
+- The paper's original classifier (lost) reported 4,304 test turns, which is the Chinese-only
+  test split, so it appears to have been trained on the matching split. The archived 55.39% is
+  probably clean; this cannot be confirmed without the checkpoint.
+- Reproduce with `scripts/check_classifier_split_overlap.py results/<run>`.
+
+An earlier note in the plan said the split was "confirmed" with no leakage. That was wrong: it
+compared the seed, not the list being shuffled.
+
+What run 1 is still good for: timing, the pipeline check, the judge validation (it scores teacher
+replies, not states), and ROUGE/BLEU only as an approximation, since the states steer the teacher.
+
+**Fix, in order:**
+
+1. Done: `load_dataset()` now splits each repo separately, so loading a second language can no
+   longer change which dialogues are held out. The Chinese-only split is unchanged (checked
+   against run 1's 681 ids), and the two-repo train split now shares no id with the test set.
+2. **Retrain the classifier** on the Chinese-only seed-42 train split (36,659 training turns plus
+   1,929 held out; this is what `scripts/train_state_classifier_34way.py` does by default today).
+   Command from the model card:
+   `uv run python scripts/train_state_classifier_34way.py --model-id Qwen/Qwen3.5-0.8B-Base --lora --lora-r 8 --lora-alpha 16 --batch_size 8 --bf16-autocast`
+   **Where it runs (settled 2026-11-18):**
+   - **Done on a borrowed RTX A6000** (`hw-0047`, reached with `ssh work-laptop` then
+     `ssh hw-0047`): 5 epochs in 1 h 25 min. **State accuracy on the 4,304 test turns: 68.45%**
+     (the paper's lost classifier: 67.57%); implied stage accuracy a 100, b 92.4, c 85.0, d 75.7,
+     e 96.9. Merged model sha256 `696e6e044c5222e2…`, on that machine in
+     `~/csen346-train/results/state-clf-qwen3.5-0.8b-lora-zh/` and copied to the Mac
+     (`results/state-clf-qwen3.5-0.8b-lora-zh/`, archive in `~/csen346-archive/`). Not yet on
+     Hugging Face. No credentials were put on that machine. The system python there has no
+     `Python.h`, which Triton needs, so the venv uses a uv-managed python
+     (`uv sync --extra cuda --no-dev --python-preference only-managed`).
+   - **The R9700 works too, as a fallback.** `scripts/train_classifier_r9700.sh --probe` under
+     the ROCm 10.1 torch (`~/rocm10-probe` on ollie-cachy, with the project's training libraries
+     added): 40 steps clean, 111 steps/min, 20 GB VRAM, projected 3.4 hours, no GPU fault in the
+     kernel log. Forty steps do not settle the old fault, which appeared around step 1230; a
+     full run there would.
+   - The M5 Max is out: with `--device mps` the run did not finish 40 steps in 10 minutes.
+   - ollie-game-server (GTX 1070, 8 GB) does not answer ssh.
+3. Verify the new checkpoint with `scripts/check_classifier_split_overlap.py` logic (its training
+   ids against the test ids), record its offline accuracy on the 4,304 test turns, publish it as
+   a new Hugging Face revision, and point `rerun_headline_r9700.sh` at it.
+4. Repeat run 1.
+5. Check the Gemma 12B fine-tunes for the same problem before using run 6: which split they were trained on
+   has not been checked. The loader default was two-language until 2026-06-09.
+
+**The consultant for run 2 is the 34-state bge-small classifier, not the 5-way stage classifier.**
+`--bert-consultant` loads a 34-state model (`src/project/socratic_teaching_bert_consultant.py`);
+the earlier logs call it "BERT" and record 61.64% state accuracy
+(`docs/CONSULTANT_UPGRADE_LOG.md`). Retrained 2026-11-18 on the Chinese-only train split with
+`scripts/train_state_classifier_34way.py --device cpu --out-dir results/state-clf-bge-small-zh`
+(all other defaults; MPS fails on attention dropout): **61.59%** on the 4,304 test turns, sha256
+`07d79532334d5178…`, on the Mac in `results/state-clf-bge-small-zh/` and archived at
+`~/csen346-archive/state-clf-bge-small-zh-20261118.tgz`. Use this checkpoint as `CKPT` for run 2.
+
+**Stage classifier (5-way BERT) retrained 2026-11-18** on the Chinese-only train split, on the M5 Max
+(`scripts/train_stage_classifier.py --epochs 3 --batch_size 32`, 87 minutes on the Apple GPU).
+Stage accuracy on the 4,304 test turns: **86.64%** (a 99.85, b 90.28, c 80.86, d 75.07, e 94.13),
+from `scripts/eval_stage_classifier_on_test.py`; the paper reports 86.55%. Weights are in
+`results/stage_classifier_v1/final` on the Mac (sha256 `de40c97f9e334eac…`) and archived at
+`~/csen346-archive/stage_classifier_v1-bert-zh-seed42-20261118.tgz`. Not yet on Hugging Face and
+not yet copied to ollie-cachy, which the BERT runs need.
+
+## Run 1 repeat with the clean classifier (done 2026-11-18)
+
+`r1b-qwen35clfzh-gemma31b-fewshot10-n681-seed42`: the retrained classifier plus Gemma 4 31B Q5,
+same settings as run 1, on the A6000 (`hw-0047`). Evaluation 2 h 12 min, judge 1 h 42 min.
+Summaries are in `results/r1b-…/`; the dialogues are in `~/csen346-archive/r1b-….tgz` on the Mac.
+
+| | Run 1 repeat (clean) | Run 1 (leaking classifier) | Archived paper run |
+|---|---|---|---|
+| State accuracy, scored turns | **52.14%** [50.56, 53.68] | 54.50% | 55.39% |
+| State accuracy, all 4,304 ground-truth turns | **49.91%** [48.27, 51.53] | 52.35% | n/a |
+| Stage-balanced | 57.50% [55.87, 59.09] | 59.50% | n/a |
+| Stages b / c / d / e | 47.17 / 32.46 / 36.71 / 71.16 | 50.59 / 35.41 / 41.07 / 70.45 | 46.39 / 35.42 / 46.36 / 78.45 |
+| ROUGE-1 / ROUGE-2 / BLEU-4 | 36.86 / 16.49 / 9.01 | 36.98 / 16.63 / 9.06 | 37.65 / 16.74 / 9.61 |
+| Turns scored; dialogues cut short | 4,120; 20.6% | 4,134; 18.5% | 3,974 |
+
+- **The leak was worth 2.36 points** of state accuracy (paired over the 681 dialogues, 95%
+  interval 0.68 to 4.05). Text-overlap metrics did not move.
+- The 74 dialogues the old classifier had not seen in Chinese score about 4 points lower with
+  the clean classifier too (48.67% against 52.56%), so that gap is those dialogues being harder,
+  not the leak.
+- The classifier scores 68.45% offline and 52.14% in the loop; the offline-to-live gap stands.
+- **Judge (Qwen3.6-27B Q5_K_XL): 8.64/10 on 4,119 of 4,120 turns, so the pass is marked
+  incomplete** (one stage-e turn was not scored). Per stage: a 9.59, b 9.35, c 8.92, d 7.58,
+  e 7.05, a spread of 2.5 points. Rerun the judge stage to fill the missing turn before quoting
+  the judge figure. This judge differs from run 1's (Qwen3.8-27B), so the two judge means are
+  not comparable.
+- Run settings on that machine: llama.cpp build 12138 (CUDA), the R9700 used 11429.
+
+- Code: `~/csen346-run/` (a clone from a git bundle, so `run_config.json` has the commit).
+- Launcher: `~/csen346-runs/run_r1b.sh` (smoke, evaluation, then judge); output in
+  `~/csen346-runs/run_r1b.out`, status in `~/csen346-runs/STATUS`. Rerun the launcher to resume.
+- llama.cpp: the machine's own CUDA build, `/opt/laza-llm/llama.cpp/current` (build 12138; the
+  R9700 used 11429).
+- Weights in `~/csen346-models/`: the Gemma GGUF is the 2026-07-09 revision of
+  `unsloth/gemma-4-31b-it-GGUF` (`12e99a2f`), which matches the R9700 copy by sha256
+  (`f46afb90…`); the current revision is a different file. Qwen3.6-27B matches as is.
+  `hf download` stalled there; `~/csen346-models/pdl.sh` fetches with parallel ranged curls.
+- Risk: that machine runs a shared model service (`laza-llm`, port 8080). If it loads a model
+  mid-run the card can run out of memory; the run then stops and resumes on relaunch.
+- Stop: `pkill -f run_r1b.sh; pkill -f rerun_headline_r9700.sh` on that machine.
+- Afterwards: copy `~/csen346-runs/r1b-….tgz` back, commit the summaries, and delete
+  `~/csen346-train`, `~/csen346-run`, `~/csen346-models` there when no more runs are planned.
+
+## Result grid so far (2026-11-19, all on the clean split, 681 dialogues, seed 42, 10-shot)
+
+Judge: Qwen3.6-27B Q5_K_XL, every pass complete. Intervals are 95%, bootstrapped over dialogues.
+
+| Run | Consultant | Teacher | State acc., scored turns | All 4,304 turns | Cut short | ROUGE-1 | BLEU-4 | Judge |
+|---|---|---|---|---|---|---|---|---|
+| 1 repeat | Qwen3.5 classifier | Gemma 4 31B | 52.14 [50.56, 53.68] | 49.91 | 20.6% | 36.86 | 9.01 | 8.63 |
+| 2 | bge-small classifier | Gemma 4 31B | 48.36 [46.74, 49.97] | 42.75 | 47.0% | 35.92 | 8.34 | 8.26 |
+| 3 | Gemma 4 31B | Gemma 4 31B | 35.34 [34.08, 36.61] | 35.06 | 4.6% | 35.43 | 8.15 | 8.38 |
+| 4 | Qwen3.5 classifier | SocratTeachLLM | 55.92 [54.22, 57.63] | 52.70 | 26.3% | 46.54 | 20.18 | 7.20 |
+| 5 | Qwen3.5 classifier | GLM-4-9B base | 51.85 [50.41, 53.26] | 51.14 | 6.6% | 34.44 | 8.31 | 5.52 |
+
+Paired differences in state accuracy on scored turns: run 1 repeat minus run 3, +16.80
+[14.93, 18.66]; run 1 repeat minus run 2, +3.78 [1.84, 5.71]; run 4 minus run 5, +4.07
+[2.37, 5.78]; run 4 minus run 1 repeat, +3.78 [1.96, 5.63].
+
+- Summaries are in `results/<run>/`; dialogues and per-turn judge scores are in
+  `~/csen346-archive/<run>.tgz` on the Mac. Not on Hugging Face yet.
+- SocratTeachLLM has the highest ROUGE and BLEU by far but a lower judge score than Gemma: the
+  metric inversion, now on clean runs. Paired judge intervals are not computed yet (the per-turn
+  scores to do it are in `judge_scores/`).
+- Where they ran: run 1 repeat on the A6000 (judge pass redone on the R9700); runs 2 and 3 on the
+  A6000 in 1-hour Slurm slices, so their `run_config.json` elapsed time covers the last slice
+  only; runs 4 and 5 on hw-0304, judged on the R9700 except 611 of run 4's dialogues, judged on
+  the A6000. The A6000 used llama.cpp build 12138, the R9700 build 11429.
+- Not done: run 6 (Gemma 12B pair; check its training split first), run 7 (synthetic set; the
+  run script has no dataset option yet), run 8 (seeds 2 and 3; no seed option yet), ablations,
+  the judge check against Claude and a human, and the paper rewrite.
+- Copying dialogues from the Mac with `tar` adds `._*` files; the judge now skips them, but use
+  `COPYFILE_DISABLE=1 tar` anyway.
+
+## State on 2026-11-20 13:10: user decisions and what is running
+
+The user is scoring the 150 human-scoring turns over the next couple of days (`make
+human-scoring`; worksheet fingerprint `ea4bb3e9fac1b0cd`, private copy in `~/csen346-archive/` on
+the Mac). Decisions given the same day: run 9 is a go, Sonnet passes on every run are approved,
+the Hugging Face release is public, Claude and other hosted calls go through Amazon Bedrock on
+work-laptop (not the subscription, not Codex: neither Bedrock nor Codex offers GPT-4o).
+
+- **Sonnet 4.6 judge passes through Bedrock (work-laptop).** `~/csen346-bedrock-full.sh` judged
+  the five main runs; `~/csen346-bedrock-chain2.sh` then refills their few unscored turns and
+  judges the other nine (two headline repeats, the 12B pair, five synthetic cells). Logs
+  `~/csen346-bedrock-full.log` and `-full2.log`; results under `~/csen346-judge/results/<run>/`
+  as `judge_summary_bedrock-claude-sonnet-4-6.json` and `judge_scores/<same stem>/`. About $16
+  per 681-dialogue run. First results: Gemma 31B 8.08, SocratTeachLLM 7.33. Not yet copied to the
+  Mac. After they land: rerun `scripts/judge_bootstrap.py` pairs on the Sonnet scores (the
+  script reads `judge_scores/judge_summary/`; it needs an option for another stem).
+- **Run 9, frontier consultant (pilot done, full run waiting for the user's cost go-ahead).**
+  `scripts/bedrock_openai_proxy.py` runs on work-laptop port 8090 with a private key
+  (`~/csen346-run9/key`, also `~/.csen346-proxy-key` on hw-0304), call log
+  `~/csen346-run9/proxy_calls.jsonl`; `~/csen346-run9/tunnel.sh` keeps a reverse ssh tunnel so
+  hw-0304's loopback port 8090 reaches it. `~/csen346-runs/r9.sbatch` on hw-0304 runs the usual
+  script with `CKPT=none CONSULTANT_URL=... CONSULTANT_MODEL=us.openai.gpt-5.4` and
+  SocratTeachLLM as teacher. Pilot `r9pilot-gpt54-socratteachllm-fewshot10-n20` (job 12736, 2
+  minutes): 116 consultant calls, 58,509 input and 22,148 output tokens, state accuracy 27.59% on
+  116 turns (the archived GPT-4o row was 25.94%; 20 dialogues is far too few to compare). Full run:
+  about 4,000 calls, 2.0M input and 0.8M output tokens; the Bedrock price for GPT-5.4 was not
+  found through the pricing API. Submit with
+  `sbatch --export=ALL,R9_MODEL=us.openai.gpt-5.4,R9_NAME=r9-gpt54-socratteachllm-fewshot10-n681-seed42 ~/csen346-runs/r9.sbatch`,
+  then judge it like the others. Stop the proxy and tunnel on work-laptop when run 9 is done.
+- **Classifiers are on Hugging Face (2026-11-20, user approved names and licences).**
+  `ulises-c/socrates-state-classifier-qwen3.5-lora` `main` is now the clean retrain (commit
+  `daeaffa5`, weights sha256 `696e6e04…`, Apache-2.0); the leaking first version is at tag
+  `v1-leaky` (`9183119d…`). New public repo `ulises-c/socrates-bert-classifiers-zh` (MIT, commit
+  `4033252c`) holds the 34-state bge-small classifier in `state-34way/` and the stage classifier
+  in `stage-5way/`. Verified anonymously: hashes match, both bge models load with `subfolder=`
+  and predict. The dataset goes to `ulises-c/kele-journal-runs` (CC-BY-4.0) after the Sonnet
+  passes; not uploaded yet.
+- **Hugging Face release, staged (dataset part not uploaded).** `scripts/build_hf_run_release.py` builds the
+  dataset folder (stage at `/Users/ulises/.hermes/cache/scratch/hf_stage/` on the Mac; cards
+  copied in `docs/hf_release/`). Rebuild with `--overlay` pointing at the Sonnet results once
+  they are on the Mac, then upload. Owner still has to confirm: the dataset repo name, the three
+  model repo names suggested in the cards, and the licence (source datasets are cc-by-4.0 on the
+  Hub; upstream KELE has no licence file).
+- **The A6000 is in use by another agent** (the user's 12B retrain, Slurm job `csen346-sftprobe`).
+  Do not queue there without checking `squeue`.
+
+## Sonnet 4.6 judge on every run, and run 9 (2026-11-20 14:45)
+
+**Sonnet 4.6 through Bedrock, full passes, all complete** (14 runs, $159.44; summaries in
+`results/<run>/judge_summary_bedrock-claude-sonnet-4-6.json`, per-turn scores in
+`~/csen346-archive/bedrock-claude-sonnet-4-6-full-judge-20261120.tar` on the Mac and in
+`~/csen346-judge/results/` on work-laptop). 39 turns had stayed unscored because Sonnet
+sometimes reasons in prose before its JSON, mostly on replies it finds wrong, and hit the
+200-token cap; `llm_judge_eval.py` now reads such replies and the Bedrock backend asks again
+with a 1,000-token cap (the local Qwen passes were complete and are unchanged).
+
+| Run | Sonnet 4.6 (95% interval) | Qwen3.6 |
+|---|---|---|
+| r1b classifier → Gemma 31B | 8.07 (8.02–8.13) | 8.63 |
+| r8 rep2 / rep3 | 8.06 / 8.08 | 8.63 / 8.67 |
+| r2 bge-small → Gemma 31B | 7.84 (7.78–7.90) | 8.26 |
+| r3 Gemma → Gemma | 8.07 (8.01–8.12) | 8.38 |
+| r4 classifier → SocratTeachLLM | 7.32 (7.25–7.38) | 7.20 |
+| r5 classifier → GLM-4-9B base | 5.98 (5.92–6.04) | 5.52 |
+| r6 Gemma 12B base / fine-tune (contaminated) | 7.58 / 7.69 | 8.23 / 7.90 |
+| synthetic: Gemma 31B / SocratTeachLLM / GLM | 7.96 / 7.14 / 6.05 | 8.32 / 6.57 / 5.46 |
+| synthetic: Gemma 12B base / fine-tune | 7.47 / 7.53 | 7.80 / 7.33 |
+
+Paired judge differences, first minus second (`results/judge_bootstrap/sonnet-4-6-bedrock/`,
+made with `scripts/judge_bootstrap.py --judge-stem judge_summary_bedrock-claude-sonnet-4-6`):
+
+| Comparison | Sonnet 4.6 | Qwen3.6 | Same conclusion? |
+|---|---|---|---|
+| Gemma 31B vs SocratTeachLLM | +0.76 (0.68 to 0.83) | +1.43 (1.34 to 1.52) | yes, half the size |
+| SocratTeachLLM vs GLM base | +1.34 (1.26 to 1.41) | +1.69 (1.59 to 1.78) | yes |
+| Qwen3.5 clf vs bge-small | +0.23 (0.17 to 0.29) | +0.37 (0.29 to 0.45) | yes |
+| Qwen3.5 clf vs Gemma self-consult | +0.01 (−0.06 to 0.07) | +0.25 (0.17 to 0.33) | **no**: no difference under Sonnet |
+| 12B fine-tune vs base, test (contaminated) | +0.11 (0.04 to 0.18) | −0.32 (−0.41 to −0.23) | **no**: opposite sign |
+| SocratTeachLLM vs GLM, synthetic | +1.09 (0.86 to 1.32) | +1.12 (0.85 to 1.38) | yes |
+| 12B fine-tune vs base, synthetic | +0.06 (−0.15 to 0.28) | −0.48 (−0.79 to −0.16) | **no**: no difference under Sonnet |
+| Gemma 31B vs SocratTeachLLM, synthetic | +0.82 (0.61 to 1.03) | +1.75 (1.50 to 2.00) | yes, half the size |
+
+What this means for the paper: the teacher ordering and the ROUGE-versus-judge inversion hold
+under both judges. Two claims do not: that the classifier consultant improves reply quality
+over Gemma consulting itself (state accuracy +16.8 points stands; judged quality does not
+differ under Sonnet), and that fine-tuning the 12B lowers judged quality (Qwen says lower,
+Sonnet says equal or slightly higher). The human scores decide which judge to trust there.
+
+**Run 9, `r9-gpt54-socratteachllm-fewshot10-n681-seed42`** (GPT-5.4 through Bedrock as
+consultant, SocratTeachLLM as teacher; hw-0304, Slurm job 12737, 55 minutes, 4,147 consultant
+calls, 2.00M input and 0.79M output tokens; dollar cost not known, see the Bedrock bill).
+State accuracy 25.34% (24.02–26.65) on 4,147 scored turns, 24.42% over all 4,304; ROUGE-1
+44.31, BLEU-4 19.28. The archived GPT-4o row was 25.94%. Paired against run 4 (classifier,
+same teacher): run 4 is higher by 30.57 points (28.56 to 32.60). GPT-5.4 gets the opening
+turn's state right only 33% of the time and stage d 2.7%. The proxy and tunnel are stopped and
+the key files removed. Judges: Sonnet pass running on work-laptop
+(`~/csen346-bedrock-r9.log`); Qwen3.6 pass on the A6000 as three chained 1-hour jobs
+(12738–12740, `~/csen346-runs2/judge_r9.sh`, which judges an existing run without
+re-evaluating it; the checkout there is at `e0aac05b`, the same judge code as the other Qwen
+passes). When both are done: copy the scores to the Mac, rebuild the dataset stage with
+`--overlay`, upload to `ulises-c/kele-journal-runs`.
+
+**Run 9 judged (2026-11-20 16:10).** Qwen3.6 7.23 and Sonnet 4.6 7.43, both complete over
+4,147 turns. Paired against run 4 (classifier consultant, same teacher), run 4 minus run 9:
+state accuracy +30.57 (28.56 to 32.60); Qwen judge −0.03 (−0.12 to 0.06); Sonnet judge −0.12
+(−0.19 to −0.05); ROUGE-1 +2.23 (1.58 to 2.89). So a 30-point gain in state accuracy came
+with no gain in judged reply quality for this teacher. Files:
+`results/judge_bootstrap/pair9_r4_minus_r9.json` and the same name under
+`sonnet-4-6-bedrock/`. Run 9's archive on the Mac now includes the Qwen per-turn scores.
+
+**Dataset release is built and checked but NOT uploaded.** The stage is at
+`/Users/ulises/.hermes/cache/scratch/hf_stage/runs-dataset` on the Mac (16 runs, 47,385 turns,
+both judges, 77.7 MB; card filled in with `--repo-id ulises-c/kele-journal-runs --license
+cc-by-4.0`; loads with `datasets`, turn counts and both judges' means match the summaries).
+The upload command waited for the user's approval at the terminal and timed out, so it did
+not run. Do not upload without the user saying so again. To rebuild:
+`uv run python scripts/build_hf_run_release.py --archive-dir ~/csen346-archive --overlay <folder with the Sonnet scores> --out <stage> --repo-id ulises-c/kele-journal-runs --license cc-by-4.0`
+(the Sonnet scores are in `~/csen346-archive/bedrock-claude-sonnet-4-6-full-judge-20261120.tar`).
+
+## In progress, started 2026-11-20 02:20: run 6 on the A6000 and the Claude judge check on m4-mini
+
+### The Gemma 4 12B fine-tune was trained on the test dialogues
+
+`ulises-c/SocratesLM-12B` was trained on 77,202 records. `load_split_pair` in
+`src/project/dataset.py` cut the per-turn record list 90/10, so about 90% of the turns of every
+dialogue went into training: 3,858 Chinese turns and 3,858 English turns from all 681 held-out
+test dialogues. `scripts/check_sft_split_overlap.py` shows it, and the 77,202 count is reproduced
+only by that cut. The loader is fixed (it now uses each source's dialogue-level split; 77,172
+records, no test dialogue), with a test.
+
+Consequences:
+
+- The fine-tune's scores on the 681-dialogue test split are **not a clean measure**. Any earlier
+  "fine-tune beats base" number on that split (SFT_RESULTS_REPORT and the paper's 12B rows) has
+  this problem.
+- The 75 synthetic dialogues are its only clean comparison with the base model.
+- A clean fine-tune needs a retrain with the fixed loader (QLoRA on the 12B; hours on the R9700
+  or the A6000). Not started, not asked.
+- SocratTeachLLM (the upstream KELE model) has the same question: its training data is not known
+  to exclude this test split. Runs 4 and 7 already show its ROUGE advantage shrinking on unseen
+  dialogues.
+
+### Run 6 (A6000, ten chained 1-hour Slurm jobs `csen346-a6000`, about 8 hours)
+
+`~/csen346-runs2/slice.sh` on hw-0047, in this order, each with the Qwen3.6-27B judge and the
+clean Qwen3.5 classifier:
+
+1. `r6-synth75-qwen35clfzh-gemma12b-fewshot10` (base, synthetic 75)
+2. `r6-qwen35clfzh-gemma12b-fewshot10-n681-seed42` (base, test split)
+3. `r6-synth75-qwen35clfzh-gemma12bsft-fewshot10` (fine-tune, synthetic 75)
+4. `r6-qwen35clfzh-gemma12bsft-fewshot10-n681-seed42` (fine-tune, test split; contaminated)
+
+- Weights in `~/csen346-models/`: `gemma-4-12b-it-Q8_0.gguf` from `unsloth/gemma-4-12b-it-GGUF`
+  (sha256 `f20e7ff1be28c283…`) and `gemma-4-12B-kele-socratic-sft-Q8_0.gguf` from the private
+  `ulises-c/SocratesLM-12B-GGUF` (sha256 `2357fbfdb2a812c1…`). The private file was downloaded on
+  the Mac and piped over ssh; no Hugging Face login was put on the work machine. If the chain
+  reaches step 3 before that copy lands, the slice logs "missing or unreadable" and the remaining
+  slices do nothing; resubmit with `submit_chain.sh`.
+- Both served with 4 slots, a 65,536-token context, thinking off (`TEACHER_KIND=gemma12b` and
+  `gemma12b-sft` in the run script). The base is Q8_0 to match the fine-tune's quantisation;
+  earlier 12B runs used the UD-Q8_K_XL file.
+- If the chain runs out of slices, add more: `submit_chain.sh` on hw-0304, `bash -s -- <n>`.
+
+### Run 6 results (finished 2026-11-20 09:41; A6000 idle, nothing queued)
+
+| Teacher | Set | State acc., scored turns | All turns | Cut short | ROUGE-1 | BLEU-4 | Judge |
+|---|---|---|---|---|---|---|---|
+| Gemma 4 12B base | test 681 | 49.52 [47.99, 51.09] | 48.03 | 14.5% | 35.53 | 8.31 | 8.23 |
+| Gemma 4 12B fine-tune | test 681 (seen in training) | 54.93 [53.29, 56.57] | 51.28 | 29.2% | 45.93 | 18.14 | 7.90 |
+| Gemma 4 12B base | synthetic 75 | 28.74 | — | — | 29.04 | 4.83 | 7.80 |
+| Gemma 4 12B fine-tune | synthetic 75 | 29.72 | — | — | 33.30 | 8.31 | 7.33 |
+
+- Fine-tune minus base: ROUGE-1 +10.40 on the test split and +4.26 on the synthetic set; judge
+  -0.33 and -0.47. So the fine-tune raises overlap metrics and lowers the judge score on both
+  sets, and most of its overlap gain is on dialogues it trained on. Same pattern as
+  SocratTeachLLM against GLM-4-9B for ROUGE (+12.10 against +4.39), but there the judge favoured
+  the fine-tune (+1.68, +1.11).
+- State accuracy, fine-tune minus base on the test split: +5.41 [3.63, 7.19] on scored turns.
+  Contaminated, and the consultant is the same classifier in both, so the difference comes from
+  how the teacher's replies steer the dialogue.
+- No intervals on the judge or synthetic-set differences yet.
+- Summaries in `results/r6-…`; dialogues and judge scores in `~/csen346-archive/`.
+
+### Paired intervals on judge score and ROUGE-1 (2026-11-20)
+
+`scripts/judge_bootstrap.py --paired A B --rouge` (10,000 dialogue resamples, 95% percentile
+interval). Outputs in `results/judge_bootstrap/pair1..8.json`. Judge is Qwen3.6-27B.
+
+| A minus B | Dialogues | Judge difference | ROUGE-1 difference |
+|---|---|---|---|
+| Gemma 31B minus SocratTeachLLM (run 1 repeat, run 4) | 681 | +1.43 [+1.34, +1.52] | -9.68 [-10.32, -9.02] |
+| SocratTeachLLM minus GLM-4-9B base (runs 4, 5) | 681 | +1.69 [+1.59, +1.78] | +12.10 [+11.49, +12.71] |
+| Qwen3.5 classifier minus bge-small (run 1 repeat, run 2) | 681 | +0.37 [+0.29, +0.45] | +0.93 [+0.60, +1.27] |
+| Qwen3.5 classifier minus Gemma as consultant (run 1 repeat, run 3) | 681 | +0.25 [+0.17, +0.33] | +1.42 [+1.10, +1.75] |
+| Gemma 12B fine-tune minus base, test split (contaminated) | 681 | -0.32 [-0.41, -0.23] | +10.40 [+9.88, +10.91] |
+| SocratTeachLLM minus GLM-4-9B base, synthetic | 75 | +1.12 [+0.85, +1.38] | +4.39 [+3.13, +5.63] |
+| Gemma 12B fine-tune minus base, synthetic | 75 | -0.48 [-0.79, -0.16] | +4.26 [+3.34, +5.19] |
+| Gemma 31B minus SocratTeachLLM, synthetic | 75 | +1.75 [+1.50, +2.00] | -2.14 [-3.65, -0.71] |
+
+No interval includes zero. The metric inversion (Gemma 31B has lower ROUGE-1 and a higher judge
+score than SocratTeachLLM) holds on both the test split and the synthetic set. These intervals
+cover dialogue sampling only, not the choice of judge; on the 600-turn sample Claude Sonnet gave
+a smaller Gemma lead than Qwen.
+
+### Why state accuracy is about 30% on the synthetic set
+
+See `docs/SYNTHETIC_STATE_ACCURACY_NOTE.md`. In short: the synthetic set's sub-state labels
+follow a different convention. Its generator was given only the code range per stage, so, for
+example, `d33` is 88% of stage-d turns in SocratDataset and 1 of 67 in the synthetic set. That
+accounts for about 14 of the 21.5 points; stage-level errors account for about 7; early stopping
+is not a cause. State accuracy on the synthetic set measures label convention, so do not report
+it; stage-level accuracy (68% against 79% on the test split) is the usable figure. The analysis
+scripts behind the note are in the Mac's scratch folder, not in the repo.
+
+### Claude as a second judge (m4-mini, user approved about 600 subscription calls)
+
+- `~/csen346-claude-judge.sh` on m4-mini (log `~/csen346-claude-judge.log`), in the worktree
+  `~/github/csen-346-judge`. Claude Sonnet 4.6 through `claude -p` on the subscription logged in
+  there (plan "pro"; `ANTHROPIC_API_KEY` is unset) scores the first 200 turns of the run 1
+  repeat, run 4 and run 5: the same 30-odd dialogues under three teachers. About 3.6 s per call.
+- Output: `results/<run>/judge_summary_claude-sonnet-4-6.json` plus per-dialogue scores in
+  `judge_scores/judge_summary_claude-sonnet-4-6/`. The script can be run again at any time; it
+  reuses finished dialogues and stops by itself when calls keep failing (usage limit).
+- Compare with the judge of record:
+  `uv run python scripts/compare_judges.py results/r1b-… results/r4-… results/r5-… --other judge_summary_claude-sonnet-4-6.json`
+- **Result (finished 02:59, 600 calls, no usage limit hit).** Mean score per dialogue over the
+  same turns:
+
+  | Run (teacher) | Dialogues | Claude Sonnet 4.6 | Qwen3.6-27B | Rank correlation over dialogues |
+  |---|---|---|---|---|
+  | Run 1 repeat (Gemma 4 31B) | 34 | 7.77 | 8.50 | 0.72 |
+  | Run 4 (SocratTeachLLM) | 35 | 7.31 | 7.31 | 0.80 |
+  | Run 5 (GLM-4-9B base) | 34 | 5.94 | 5.63 | 0.69 |
+
+  Both judges order the three teachers the same way. Over all 103 dialogues the rank correlation
+  is 0.90 (inflated by the differences between teachers; within a run it is 0.69 to 0.80) and the
+  mean absolute difference is 0.59 points. Claude is harder on Gemma 31B: its gap between Gemma
+  and SocratTeachLLM is 0.46 points against Qwen's 1.19, and no interval has been put on either.
+  Files: `results/<run>/judge_summary_claude-sonnet-4-6.json`,
+  `results/judge-agreement/`, and per-turn scores in
+  `~/csen346-archive/claude-sonnet-4-6-judge-check-20261120.tar` on the Mac.
+- **Same check through Amazon Bedrock (2026-11-20 11:44, at the user's request: Claude calls go
+  through AWS on work-laptop from now on, not the subscription).** `llm_judge_eval.py --backend
+  bedrock --model us.anthropic.claude-sonnet-4-6`, run by `~/csen346-bedrock-judge.sh` in
+  `~/csen346-judge` on work-laptop (AWS SSO profile already logged in there, region us-east-1;
+  `uv run --no-project --with openai --with boto3`). This backend sends the judge's system prompt
+  and nothing else, at temperature 0; the subscription route goes through the Claude Code CLI.
+
+  | Run (teacher) | Bedrock Sonnet 4.6 | Subscription Sonnet 4.6 | Qwen3.6-27B |
+  |---|---|---|---|
+  | Run 1 repeat (Gemma 4 31B) | 8.08 | 7.77 | 8.52 |
+  | Run 4 (SocratTeachLLM) | 7.26 | 7.31 | 7.33 |
+  | Run 5 (GLM-4-9B base) | 5.96 | 5.94 | 5.63 |
+
+  Bedrock Sonnet against Qwen: same order of teachers, rank correlation over dialogues 0.60 to
+  0.73 within a run, mean absolute difference 0.57. Bedrock Sonnet against subscription Sonnet:
+  0.80 to 0.88 and 0.29, so the two routes to the same model are close but not identical, and the
+  Gemma mean moves by 0.3. Gemma minus SocratTeachLLM is 0.82 under Bedrock Sonnet, 0.46 under
+  subscription Sonnet and 1.19 under Qwen (no intervals).
+- **Bedrock cost and what the account offers.** 600 turns cost about $2.41 (about 850 input and
+  105 output tokens per turn, $0.004 per turn at Sonnet 4.6 rates), so a full 681-dialogue run is
+  about $16 to $17. The account has on-demand access through `us.` and `global.` inference
+  profiles to Sonnet 4.6, Sonnet 5 and 5.5, Opus 4.5 to 5.5, Haiku 4.5 and 5.5 and the Fable 5
+  models; quota 10,000 requests and 6,000,000 tokens per minute for Sonnet 4.6. Batch inference
+  exists (at least 100 records per job) and is cheaper, but needs an S3 bucket and an IAM service
+  role, which has not been set up or asked for. Nothing beyond the 600 turns has been run.
+- Limits of this check: the sample is the first dialogues in file order, not a random draw, and
+  it is one Claude model. It tests whether the two judges order the teachers and the dialogues
+  the same way; it is not a human check.
+
+## Batch 2 results (finished 2026-11-20 01:39; runs 7 and 8)
+
+**Run 8, the headline configuration three times** (Qwen3.5 classifier + Gemma 4 31B, 681 dialogues):
+
+| | State acc., scored turns | All 4,304 turns | ROUGE-1 | BLEU-4 | Judge |
+|---|---|---|---|---|---|
+| Run 1 repeat (random sampler seed) | 52.14 | 49.91 | 36.86 | 9.01 | 8.63 |
+| Repeat 2 (`--seed 2`) | 52.01 | 49.84 | 36.79 | 8.92 | 8.63 |
+| Repeat 3 (`--seed 3`) | 51.92 | 49.74 | 36.72 | 8.94 | 8.67 |
+
+Run-to-run spread is 0.22 points of state accuracy and 0.04 judge points, far inside the
+dialogue-sampling interval of about plus or minus 1.6. Paired differences from the first run:
++0.12 [-1.20, 1.47] and +0.22 [-1.16, 1.61].
+
+**Run 7, the 75 synthetic dialogues** (`ulises-c/SocratDataset-SYNTHETIC`, all 75, same classifier):
+
+| Teacher | Turns | State acc. | ROUGE-1 | BLEU-4 | Judge |
+|---|---|---|---|---|---|
+| Gemma 4 31B | 431 | 30.63 | 30.35 | 5.33 | 8.32 |
+| SocratTeachLLM | 432 | 31.48 | 32.49 | 8.00 | 6.57 |
+| GLM-4-9B base | 436 | 24.31 | 28.10 | 4.69 | 5.46 |
+
+- Fine-tuned minus base on the synthetic set: ROUGE-1 +4.39, judge +1.11. On the test split the
+  same pair differs by ROUGE-1 +12.10 and judge +1.68. So about two thirds of the fine-tune's
+  ROUGE advantage disappears on dialogues it cannot have seen, while most of the judge advantage
+  stays. No intervals yet: 75 dialogues, and the paired bootstrap has not been run on these.
+- State accuracy on the synthetic set is about 30% for every teacher (stages c and d under 8%).
+  The plan says not to report it there; whether that is the classifier failing off-distribution
+  or the synthetic state labels following a different convention has not been checked.
+- Summaries are in `results/r7-…` and `results/r8-…`; dialogues and judge scores in
+  `~/csen346-archive/`. Both work GPUs are idle and nothing is queued.
+
+## Batch 2, how it was run (started 2026-11-19 16:23)
+
+- **A6000:** eleven chained 1-hour Slurm jobs `csen346-a6000` (12127 onward) run the rewritten
+  `~/csen346-runs2/slice.sh`: the synthetic 75 dialogues with the headline configuration
+  (`r7-synth75-qwen35clfzh-gemma31b-fewshot10`), then the headline configuration twice more
+  (`r8-…-rep2`, `r8-…-rep3`), each with the Qwen3.6-27B judge, then judge passes for the two 9B
+  synthetic cells. About 8.5 hours.
+- **hw-0304:** Slurm job 12126 (`queue_0304_synth.sbatch`): the synthetic 75 with SocratTeachLLM
+  and with GLM-4-9B base, no judge. The relay on work-laptop (`~/csen346-relay/relay2.sh`) copies
+  them to the A6000 for judging.
+- **"Seeds 2 and 3" are repeats, not seeded reruns.** The pipeline sets no temperature and the
+  llama.cpp server samples with a random seed by default, so every run already differs. The
+  repeats pass `--seed 2` and `--seed 3` to the server (`SERVER_SEED`), which labels them but
+  does not make them reproducible with four parallel workers. Runs 1 to 5 used a random seed.
+- The run script now takes `SERVER_SEED`, `HF_REPO` and `SPLIT`.
+- A first attempt at 16:22 started on old code, because `git pull` on both machines aborted on
+  untracked result summaries that the branch now tracks. Both jobs were cancelled within a
+  minute and left nothing behind. Check the commit in STATUS's "preflight passed" line.
+
+## Work machines and Slurm (2026-11-18)
+
+Reached with `ssh work-laptop`, then `ssh <host>`. Only the three Slurm nodes may be used:
+
+| Host | Slurm node | GPU | Partition for user `ulises` | Notes |
+|---|---|---|---|---|
+| hw-0304 | hw-0304 | RTX 4000 Ada 20 GB | `general`, 7 days | Login is `ulises`; submit jobs from here |
+| hw-0457 | lz-lazalab | RTX A2000 12 GB | `general`, 7 days | Login is `uchavarria`; jobs run as `ulises` |
+| hw-0047 | lz-hw-0047 | RTX A6000 48 GB | `hw-0047`, **1 hour** | The 7-day `inference` partition is for the `laza-llm` service account only |
+
+- Submit with `sbatch` (the user's instruction), so the scheduler knows the card is taken. The
+  run 1 repeat was started on hw-0047 directly, before this was known; nothing else should be.
+- **A6000 queue (finished 2026-11-19 12:09; nothing queued now. The user approved chaining
+  1-hour jobs on 2026-11-18 and said the card is free again from about 18:00 on 2026-11-19).** Sixteen chained Slurm jobs named `csen346-a6000` (11750 to
+  11765, each `afterany` the previous) run `/home/uchavarria/csen346-runs2/slice.sh` on
+  hw-0047. A slice works through, in order: run 2 (bge-small + Gemma), run 3 (Gemma as its own
+  consultant), then judge passes for runs 4 and 5 and the run 1 repeat, each with the
+  Qwen3.6-27B judge. Every step resumes from disk; a slice with nothing to do exits at once.
+  - Status: `~/csen346-runs2/STATUS` on hw-0047 (as `uchavarria`); `squeue -n csen346-a6000`
+    on hw-0304. Stop: `scancel -n csen346-a6000` on hw-0304.
+  - The jobs run as `ulises` inside `uchavarria`'s tree (`~/csen346-run2`, `~/csen346-runs2`,
+    `~/csen346-models`), which `ulises` can reach through ACLs set on those paths and on
+    `~/.local/share/uv`. Remove them with `setfacl -R -x u:ulises` when done.
+  - The partition caps memory at 22 GB per group; the jobs ask for 20 GB and 12 CPUs.
+  - A relay on work-laptop (`~/csen346-relay/relay.sh`, log beside it) copies run 4 and run 5
+    results from hw-0304 to hw-0047 as they finish, so their judge passes can start.
+  - The user cannot raise the 1-hour limit (no Slurm admin level). An admin can, with
+    `scontrol update PartitionName=hw-0047 MaxTime=12:00:00` on `lz-svc-agent`.
+- The judge now saves per-dialogue scores in `results/<run>/judge_scores/` and resumes from them.
+- Each node has: `~/csen346-run` (clone from a bundle), `~/csen346-models`, `~/csen346-llama`
+  (hw-0304, hw-0457: a copy of hw-0047's `/opt/laza-llm/llama.cpp/b12138`), `~/csen346-runs`
+  (STATUS, sbatch files, logs). No credentials on any of them.
+- **Running: Slurm job 11747 on hw-0304** (`~/csen346-runs/queue_0304.sbatch`): run 4
+  (classifier + SocratTeachLLM) then run 5 (classifier + GLM-4-9B base), no judge. Started
+  22:42 at about 165 dialogues/hour, so about 4 hours each. `squeue`, `scancel 11747`; resubmit
+  to resume. The 27B judge does not fit in 20 GB; judge these on the R9700 or the A6000.
+- `scripts/rerun_headline_r9700.sh` now takes `TEACHER_KIND` (gemma31b, socratteachllm, glm49b),
+  `CKPT=none` (teacher as its own consultant), `LLAMA_SERVER`, and works on NVIDIA.
+
+## State
+
+- **Branch:** `feat/journal-phase1-side-items`, on top of main `5f2f645`. 257 tests pass; ruff,
+  pyright, shellcheck and codespell are clean. No PR yet. Check `git branch -r` to see whether it
+  has been pushed; on 2026-11-18 it existed only on the MacBook and, through a git bundle, in the
+  ollie-cachy worktree `~/github/csen-346-main` (at `60a482c`, two commits behind the MacBook).
+- **Constraints from the user:** no paid API calls. The R9700 (ollie-cachy) is in the user's
+  bedroom and is loud: GPU jobs run in the daytime only and must end by evening.
+- **Phase 1 passed:** the R9700 serves SocratTeachLLM, the GLM-4-9B base and Gemma 4 31B through
+  llama.cpp, and Qwen3.8-27B as a judge.
+
+## Done: run 1, the headline cell (2026-11-18)
+
+Qwen3.5-0.8B LoRA classifier + Gemma 4 31B Q5, 10-shot, seed 42, 4 workers, thinking off. Started
+by cron from m4-mini at 10:00, finished 15:23. Evaluation 3 h 18 min, judge 2 h 5 min.
+
+| | New run | Archived (paper) |
+|---|---|---|
+| State accuracy | 54.50% | 55.39% |
+| Per stage a / b / c / d / e | 100 / 50.59 / 35.41 / 41.07 / 70.45 | 100 / 46.39 / 35.42 / 46.36 / 78.45 |
+| ROUGE-1 / ROUGE-2 / BLEU-4 | 36.98 / 16.63 / 9.06 | 37.65 / 16.74 / 9.61 |
+| Turns scored | 4,134 | 3,974 |
+| Judge, out of 10 | 9.11 (Qwen3.8-27B Q5_K_M) | 8.32 (Claude Sonnet 4.6) |
+
+- Summaries are in git: `results/r1-qwen35clf-gemma31b-fewshot10-n681-seed42/`.
+- All 681 dialogues: on ollie-cachy at `~/github/csen-346-main/results/r1-…/dialogues/` and
+  `~/csen346-runs/r1-qwen35clf-gemma31b-fewshot10-n681-seed42.tgz`, and on the MacBook at
+  `~/csen346-archive/`. **Not on Hugging Face yet.** From another machine, copy the tarball from
+  ollie-cachy.
+- The judge pass is complete (681 of 681 dialogues) and `run_config.json` records commit
+  `60a482c`, `git_dirty: false`, the settings and the classifier hash.
+
+Unexplained so far: the new run scores 160 more turns than the archived one, and the per-stage mix
+moved (b up, d and e down). The classifier is a different checkpoint, which probably accounts for
+the stage shift; the turn count needs a look.
+
+## Decide first: which judge
+
+The run used a local judge because of the no-cost rule: a Sonnet pass through the API is about $15
+per run (about 3.2M input tokens), and eight or more runs need judging.
+
+What the first pass shows about the local judge: it is lenient and flat. Mean 9.11, and its stage
+averages span 1.0 point (8.35 to 9.36) where Sonnet's span 2.2 (7.14 to 9.38) on the archived run
+of the same configuration. Those two passes are on different dialogues, so this is a hint, not a
+measurement. Whether the local judge can separate systems is unknown until a second system is
+judged.
+
+Options:
+
+1. **Keep the local judge, validate it.** Judge run 3 (the weakest cell) as well. If it scores
+   clearly lower than run 1, the judge is usable. Then run the planned agreement check: Sonnet or
+   Opus through the Claude subscription (`llm_judge_eval.py --backend claude-code`) on about 100
+   dialogues of run 1, and report agreement.
+2. **Sonnet through the subscription for everything.** `--backend claude-code` exists. A full pass
+   is 4,134 sequential calls per run with no temperature control, and it counts against the
+   subscription's usage limits; how many runs fit is untested. Check that this use is within the
+   subscription terms.
+3. **Stricter local judge.** Tighter rubric or a different model (Qwen3.6-27B is on ollie-cachy),
+   tested on run 1's dialogues before use. Re-judging run 1 costs about 2 hours of GPU.
+4. **Pay for Sonnet on the headline comparison only** (about $30 for runs 1 and 3). Outside the
+   current no-cost rule; the user's call.
+
+**Decided 2026-11-18 (user): validate the local judge, whichever model ends up as judge.**
+
+Another candidate, suggested by the user: **Qwen3.8-Flash-Next** (125B mixture-of-experts, about
+3B active per token). It is on ollie-cachy and already configured in llama-swap
+(`~/.config/llama-swap/config.yaml`, model ids `qwen3.8-flash-next` and
+`qwen3.8-flash-next-radiance`, port 8080); weights under `~/models/Qwen3.8-Flash-Next-Gyro/` and
+`~/models/ista/IQ3_S/`. Unknown and to be measured before relying on it: throughput (most experts
+sit in RAM, so probably one request at a time), whether replies are repeatable at temperature 0
+with its draft model on, and how to pin it for the paper, since it runs on a non-standard engine
+at a 3-bit-class quantization. A larger model is not automatically a stricter judge.
+
+Validation, cheapest first:
+
+1. **Controls on run 1's dialogues, no new evaluation needed: `scripts/judge_validation.py`**
+   (built and run 2026-11-18). It samples 30 turns per stage (120 turns,
+   seed 42), keeps the conversation history, and has the judge score seven replies per turn: the
+   system's, the reference, and five bad controls, each aimed at one rubric axis (a reply swapped
+   in from another dialogue, the previous reply repeated, a flat statement with no question,
+   university-level jargon, the closing summary given early). It reports the paired drop against
+   the system's reply with a dialogue-level bootstrap interval, flags controls the judge does not
+   detect, and scores each system reply twice for repeatability. 887 judge calls, about 27
+   minutes at Qwen3.8-27B's speed. Every judge gets the same items, and
+   `--compare A.json B.json` gives item-level agreement between two judges.
+
+   ```bash
+   # on ollie-cachy, daytime, with a judge server up (reasoning off) on port 8086
+   .venv/bin/python scripts/judge_validation.py results/r1-qwen35clf-gemma31b-fewshot10-n681-seed42 \
+     --backend api --base-url http://127.0.0.1:8086/v1 --api-key local --model Qwen3.8-27B-Q5_K_M
+   # Claude through the subscription, from any machine with the dialogues (smaller sample)
+   uv run python scripts/judge_validation.py <run dir> --backend claude-code \
+     --model claude-sonnet-4-6 --per-stage 10
+   ```
+
+   Run it for Qwen3.8-27B, Qwen3.6-27B and Qwen3.8-Flash-Next, then compare. The summary files
+   are small; commit them. There is no wrapper yet that starts the judge server, runs this and
+   stops the server; `scripts/rerun_headline_r9700.sh` stage 2 shows the server command.
+   **Result for the two Qwen 27B judges** (120 turns, 767 items each, 26 minutes each on the
+   R9700; files in `results/r1-…/judge_validation_*.json`):
+
+   | | Qwen3.8-27B Q5_K_M | Qwen3.6-27B Q5_K_XL |
+   |---|---|---|
+   | System reply, mean | 9.17 | 8.34 |
+   | Reference reply, mean | 9.34 | 9.57 |
+   | Drop for swapped / repeat / statement / jargon / early closure | 6.5 / 5.1 / 8.8 / 9.2 / 7.6 | 7.1 / 4.2 / 8.3 / 8.3 / 7.8 |
+   | Bad controls detected | 5 of 5 | 5 of 5 |
+   | System replies given 10/10 | 73 of 120 | 67 of 120 |
+   | System replies scored 6 or lower | 1 | 23 |
+   | Same total on a repeat | 97% | 98% |
+
+   Reading: neither judge is blind. Both put every kind of broken reply far below the real one,
+   on the intended axes, and both are repeatable. That is a floor test and they pass it. The
+   weakness is at the top: both give full marks to more than half of the real replies, although
+   the rubric says a 10 should be rare, so they have little room to separate two competent
+   systems. Qwen3.6-27B uses more of the scale and ranks the reference above the system reply
+   (by 1.2 points; Qwen3.8 does not separate them). On real replies the two agree only
+   moderately (rank correlation 0.60). The controls do not test fine distinctions; step 2 and
+   step 3 below do. Qwen3.6-27B looks like the better candidate so far; a rubric that makes 10
+   harder to earn is worth testing on these same items.
+
+2. **A second system.** Judge run 3 once it exists and compare with run 1.
+3. **Agreement with Claude** on about 100 dialogues through the subscription backend, and with
+   human scores (Phase 6).
+
+The Sonnet-judging-Sonnet objection no longer applies, because no Claude teacher run is being
+rerun. Recommended: option 1, falling back to 3 if the judge does not separate runs 1 and 3.
+
+Do not spend GPU time on further judge passes until this is settled. Evaluations can go ahead with
+`SKIP_JUDGE=1`; judging can be added later because the dialogues are kept.
+
+## Work to do, in order
+
+Done on 2026-11-18 (all on the branch, PR #186):
+
+- **Bootstrap intervals:** `scripts/state_accuracy_bootstrap.py` (resamples dialogues; `--paired`
+  for two runs). Run 1: 54.50% [52.89, 56.13], stage-balanced 59.50% [57.81, 61.16]. These are
+  from the run with the leaking classifier; the method stands, the numbers will be replaced.
+- **Sample size:** `scripts/convergence_analysis.py` rewritten to resample with replacement.
+  Standard error of state accuracy is 1.07 points at 400 dialogues and 0.82 at 681. Two
+  independent runs can detect a difference of about 4.2 points at 400 and 3.3 at 681 (rule of
+  thumb, 95% level, 80% power). Paired comparisons on the same dialogues should do better; one
+  run cannot say by how much. `README.md` and `docs/CONVERGENCE_ANALYSIS.md` still describe the
+  old method and its "400 is sufficient" conclusion and need rewriting.
+- **Turn counts:** `docs/RUN1_TURN_COUNT_NOTE.md`. A dialogue stops when the consultant predicts
+  `e34` (`src/project/kele.py`), so each system is scored on a different set of turns. Run 1
+  dropped 170 of 4,304 turns in 126 dialogues; the archived run dropped about 330. Report turn
+  counts beside every turn-level metric and compare by dialogue.
+- **Synthetic set:** nothing to pull. The default config of `ulises-c/SocratDataset-SYNTHETIC`
+  already has all 75 dialogues; use `--hf-repo ulises-c/SocratDataset-SYNTHETIC --split all`.
+
+No GPU needed, still to do:
+
+1. Merge PR #186.
+2. Rewrite the sample-size sections of `README.md` and `docs/CONVERGENCE_ANALYSIS.md`.
+3. ~~Decide how to handle early-stopped dialogues in the paper.~~ **Decided 2026-11-18 (user):**
+   the primary state-accuracy figure is over all ground-truth turns, with the turns after an
+   early `e34` counted as wrong. Report accuracy over scored turns and the early-stop rate beside
+   it. `scripts/state_accuracy_bootstrap.py` now prints all three with intervals when the
+   dialogue files record `num_turns_ground_truth`. Run 1 (leaking classifier, numbers to be
+   replaced): 52.35% [50.68, 54.05] over all 4,304 turns; 18.50% [15.57, 21.44] of dialogues cut
+   short. Still open:
+   - Write the two figures into `metrics_summary.json` (`src/project/metrics.py`).
+   - Find which denominator the KELE paper used; it decides which figure compares with theirs.
+   - Per-stage accuracy stays on scored turns: the files do not hold the states of cut-off turns.
+4. Flash-Next as a judge: `llm_judge_eval.py` caps replies at 200 tokens and sends no reasoning
+   setting; Flash-Next thinks by default behind llama-swap (port 8080, needs the llama-swap key).
+   Add a token cap and reasoning-effort option, then run the validation against it.
+5. Create the Hugging Face dataset repo for run outputs and upload run 1 (the user decides public
+   or private).
+6. Generalise `scripts/rerun_headline_r9700.sh` so the teacher and consultant are parameters. Keep
+   its preflight, caps, resume and cleanup.
+7. Retrain the BERT consultant (`scripts/train_stage_classifier.py`, minutes on any card) and
+   publish it; the weights are gone.
+8. Re-evaluate the Qwen3.5 classifier on the 4,304-turn Chinese test set for the paper's
+   classifier table.
+9. Pull the 75-dialogue synthetic set (`ulises-c/SocratDataset-SYNTHETIC`, `n75_extension/`).
+
+GPU, daytime, one run per day unless shortened by item 3 (table in the plan, Phase 4):
+
+10. Run 3: Gemma 4 31B as its own consultant. The baseline, and the judge test. Slower than run 1
+    because the consultant is an LLM call per turn; time 20 dialogues first.
+11. Run 2: BERT + Gemma.
+12. Runs 4 and 5: classifier + SocratTeachLLM, classifier + GLM-4-9B base. GGUFs are in
+    `~/Documents/models/weights/` on ollie-cachy.
+13. Run 6: Gemma 4 12B base and fine-tune.
+14. Run 7: synthetic set. Run 8: two more seeds of run 1.
+
+Then Phases 5 to 7 in the plan (ablations, judge validation with humans, paper and release items).
+
+## How to run a job
+
+From any machine with ssh to m4-mini or ollie-cachy.
+
+```bash
+# start (wakes ollie-cachy if needed; refuses after 13:59)
+ssh m4-mini '~/.local/bin/csen346-headline-launch'
+# or, with the machine already on:
+ssh ollie-cachy 'cd ~/github/csen-346-main && systemd-run --user --unit csen346-headline --collect \
+  -p WorkingDirectory=$PWD -E HOME=$HOME /usr/bin/bash scripts/rerun_headline_r9700.sh'
+
+ssh ollie-cachy 'cat ~/csen346-runs/STATUS'                    # progress, stage by stage
+ssh ollie-cachy 'systemctl --user stop csen346-headline'       # stop the run and the GPU server
+ssh ollie-cachy 'cd ~/github/csen-346-main && bash scripts/rerun_headline_r9700.sh --preflight'
+```
+
+Environment for the run script: `RUN_NAME`, `LIMIT`, `SKIP_JUDGE=1`, `EVAL_CAP_S`, `JUDGE_CAP_S`,
+`JUDGE_MODEL`. Through the launcher, pass them as `RUN_ENV="K=V K=V"`. A stopped evaluation
+resumes from the dialogues on disk; finished stages are skipped.
+
+To schedule: a crontab line on m4-mini, for example
+`0 10 19 11 * $HOME/.local/bin/csen346-headline-launch # csen346-headline-once`.
+
+After a run: copy the three summary files into `results/<run>/` in the repo and commit; copy
+`~/csen346-runs/<run>.tgz` off the machine; check `"complete": true` in `judge_summary.json`.
+
+To get new code onto ollie-cachy: once the branch is on GitHub, `git fetch` in `~/github/csen-346`
+there and check it out in the worktree `~/github/csen-346-main`. Leave the main checkout alone.
+
+## Known problems
+
+- **The launcher cannot remove its own crontab line.** macOS refuses crontab edits from inside
+  cron ("Operation not permitted"). The 2026-11-18 entry was removed by hand. After a scheduled
+  run, remove the line yourself: `crontab -l | grep -v csen346-headline-once | crontab -` over
+  ssh. Fix: guard on the date inside the script, or schedule with launchd.
+- **Wake-on-LAN is untested** in this launcher; ollie-cachy was already on when it fired. It
+  reuses the user's `wake-cachy` helper.
+- The launcher does not power ollie-cachy down afterwards.
+- The judge log prints a dollar cost for the local model; it is a token count at API prices, not a
+  charge.
+- `scripts/convert_socratteachllm_to_gguf.sh` was fixed, but the SocratTeachLLM file on disk was
+  made with the same method by hand; rerun the script once to confirm it.
+- Port 8080 on ollie-cachy belongs to `llama-swap`. The run uses 8085 and 8086.
+- **Precision laptop only (a second machine used on 2026-11-18):**
+  - Its installed pre-commit hook was an old copy that ran an unpinned `uvx ruff`, and a leftover
+    `torchaudio` broke `tests/test_hf_callback.py`. Both are fixed (`make install-hooks`,
+    `uv pip uninstall torchaudio`); the full hook passes there now.
+  - Run 1's dialogues are also at `~/csen346-archive/` there (sent with Taildrop).
+  - Local branch `backup/precision-bootstrap-f3a0e8e` and three refs under `refs/recovery/` hold
+    superseded or already-merged work and can be deleted.
+- **Two sessions worked on this branch at once on 2026-11-18** and wrote the same bootstrap script
+  twice. `origin` has two push URLs (this repo and the SCU-CSEN346/KELE mirror); a push that this
+  repo rejected still created a stray `feat/journal-phase1-side-items` on the mirror at
+  `f3a0e8e`. `make sync-mirror` overwrites it. Fetch before starting an item and before pushing.
+
+## Other open items
+
+- ollie-cachy: two f16 intermediate GGUFs (about 38 GB) can be deleted; `~/p1-logs/` holds the
+  Phase 1 logs; `~/rocm10-probe/` is the ROCm 10 probe venv.
+- Dependabot auto-merge is paused until Phase 4 ends (`gh workflow enable
+  dependabot-automerge.yml`). #126, #174 and #176 stay open.
+- ollie-game-server (GTX 1070) has not answered ssh; not needed so far.
+- The upstream ROCm reply (rocm-libraries#7992) is on hold at the user's request.

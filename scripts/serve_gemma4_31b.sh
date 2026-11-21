@@ -18,6 +18,10 @@ set -euo pipefail
 if [[ -z "${LLAMA_SERVER:-}" ]]; then
   if [[ -x "$HOME/Github/llama.cpp/build/bin/llama-server" ]]; then
     LLAMA_SERVER="$HOME/Github/llama.cpp/build/bin/llama-server"
+  elif [[ -x "$HOME/Documents/models/llama.cpp/build/bin/llama-server" ]]; then
+    LLAMA_SERVER="$HOME/Documents/models/llama.cpp/build/bin/llama-server"
+  elif command -v llama-server >/dev/null 2>&1; then
+    LLAMA_SERVER="$(command -v llama-server)"   # e.g. a distro llama.cpp package
   else
     LLAMA_SERVER="$HOME/Documents/models/llama.cpp/build/bin/llama-server"
   fi
@@ -49,10 +53,16 @@ PORT=8080
 # Auto-detect GPU backend: AMD (/dev/kfd present) → Vulkan0 (fastest on gfx1201),
 # NVIDIA → CUDA0. Override: DEV=ROCm0, DEV=CUDA0, etc.
 if [[ -z "${DEV:-}" ]]; then
-  if [[ -e /dev/kfd ]]; then
-    DEV="Vulkan0"
-  else
-    DEV="CUDA0"
+  # Ask the binary which devices it was built for: a ROCm/HIP build names the
+  # card "ROCm0", a Vulkan build "Vulkan0", a CUDA build "CUDA0".
+  DEV="$("$LLAMA_SERVER" --list-devices 2>/dev/null |
+    awk -F: '/^[[:space:]]+[A-Za-z]+[0-9]+:/ { gsub(/[[:space:]]/, "", $1); print $1; exit }' || true)"
+  if [[ -z "$DEV" ]]; then
+    if [[ -e /dev/kfd ]]; then
+      DEV="Vulkan0"
+    else
+      DEV="CUDA0"
+    fi
   fi
 fi
 # 2048 is the safe default on 32 GB VRAM with Gemma 4 31B Q5. The earlier 4096
@@ -109,6 +119,14 @@ echo "Batch:     ${BATCH} / Ubatch: ${UBATCH}"
 echo "Endpoint:  http://localhost:${PORT}/v1/chat/completions"
 echo "Test:      curl http://localhost:${PORT}/v1/models"
 echo "---"
+
+# Recent llama.cpp builds detect that Gemma 4's chat template supports thinking
+# and turn it on (--reasoning auto). The teacher then writes about 600 reasoning
+# tokens before each reply of about 35, which made a 50-dialogue run on the
+# R9700 six times slower. The archived runs' wall times (681 dialogues in 32
+# minutes on a 5090) are only consistent with thinking off, so pin it off.
+# Override with LLAMA_ARG_REASONING=auto. Builds without the option ignore it.
+export LLAMA_ARG_REASONING="${LLAMA_ARG_REASONING:-off}"
 
 exec "$LLAMA_SERVER" \
   -m "$MODEL" \

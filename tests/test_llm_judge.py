@@ -92,3 +92,227 @@ def test_stratified_sample_takes_all_when_pool_small(tmp_path):
     ddir = _make_dialogues(tmp_path)  # only 10 turns per stage available
     sample = llm_judge_eval.build_stratified_sample(ddir, per_stage=50, stages="c", seed=42)
     assert len(sample) == 10  # capped at pool size, no error
+
+
+# ── completeness of a judge pass ──────────────────────────────────────────────
+
+
+def _write_run(tmp_path, n_dialogues=3, n_turns=2):
+    dialogues = tmp_path / "dialogues"
+    dialogues.mkdir()
+    for d in range(n_dialogues):
+        turns = [
+            {"teacher_response": "q?", "ground_truth_teacher": "q?", "ground_truth_state": "b4"}
+            for _ in range(n_turns)
+        ]
+        (dialogues / f"{d:04d}.json").write_text(_json.dumps({"id": d, "dialogue": turns}))
+    return tmp_path
+
+
+def _fake_score(fail_dialogue_ids=()):
+    def score_turn(client, model, dialogue, turn_idx, backend="api"):
+        if dialogue["id"] in fail_dialogue_ids:
+            return None
+        return {
+            "socratic_validity": 2,
+            "advancement": 2,
+            "age_appropriateness": 2,
+            "question_form": 2,
+            "total": 8,
+        }
+
+    return score_turn
+
+
+def test_judge_summary_marks_complete_pass(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+
+    summary = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+
+    assert summary["complete"] is True
+    assert (summary["n_dialogues_judged"], summary["n_dialogues_total"]) == (3, 3)
+    assert (summary["n_turns_judged"], summary["n_turns_total"]) == (6, 6)
+
+
+def test_judge_summary_flags_partial_pass(tmp_path, monkeypatch, capsys):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score(fail_dialogue_ids={1}))
+
+    summary = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+
+    assert summary["complete"] is False
+    assert (summary["n_dialogues_judged"], summary["n_dialogues_total"]) == (2, 3)
+    assert (summary["n_turns_judged"], summary["n_turns_total"]) == (4, 6)
+    assert "incomplete judge pass" in capsys.readouterr().err
+    on_disk = _json.loads((run / "judge_summary.json").read_text())
+    assert on_disk["complete"] is False
+
+
+def test_sequential_smoke_run_is_reported_incomplete(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+
+    summary = llm_judge_eval.judge_results_dir(
+        run, None, "m", workers=1, backend="claude-code", max_turns=3
+    )
+
+    assert summary["n_turns_judged"] == 3
+    assert summary["n_turns_total"] == 6
+    assert summary["complete"] is False
+
+
+def test_judge_pass_resumes_from_saved_scores(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score(fail_dialogue_ids={1}))
+    first = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+    assert first["complete"] is False
+
+    calls = []
+
+    def counting_score(client, model, dialogue, turn_idx, backend="api"):
+        calls.append(dialogue["id"])
+        return _fake_score()(client, model, dialogue, turn_idx)
+
+    monkeypatch.setattr(llm_judge_eval, "score_turn", counting_score)
+    second = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+
+    assert second["complete"] is True
+    assert set(calls) == {1}  # only the dialogue that was not fully scored is judged again
+    assert (second["n_dialogues_judged"], second["n_turns_judged"]) == (3, 6)
+
+
+def test_saved_scores_from_another_judge_are_not_reused(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+    llm_judge_eval.judge_results_dir(run, None, "judge-a", workers=2)
+
+    calls = []
+
+    def counting_score(client, model, dialogue, turn_idx, backend="api"):
+        calls.append(dialogue["id"])
+        return _fake_score()(client, model, dialogue, turn_idx)
+
+    monkeypatch.setattr(llm_judge_eval, "score_turn", counting_score)
+    llm_judge_eval.judge_results_dir(run, None, "judge-b", workers=2)
+
+    assert set(calls) == {0, 1, 2}
+
+
+def test_judge_pass_ignores_dotfiles_in_the_dialogue_folder(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    (run / "dialogues" / "._0000.json").write_bytes(b"\x00\x05\x16\x07\xa3 not json")
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+
+    summary = llm_judge_eval.judge_results_dir(run, None, "m", workers=2)
+
+    assert summary["complete"] is True
+    assert summary["n_dialogues_total"] == 3
+
+
+def test_sequential_pass_resumes_and_stops_after_repeated_failures(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    calls = []
+
+    def flaky(client, model, dialogue, turn_idx, backend="api"):
+        calls.append((dialogue["id"], turn_idx))
+        if len(calls) > 2:  # the "usage limit" arrives after two good turns
+            return None
+        return {
+            "total": 8,
+            "socratic_validity": 3,
+            "advancement": 2,
+            "age_appropriateness": 2,
+            "question_form": 1,
+        }
+
+    monkeypatch.setattr(llm_judge_eval, "score_turn", flaky)
+    first = llm_judge_eval.judge_results_dir(run, None, "m", workers=1, backend="claude-code")
+    assert first["n_turns_judged"] == 2
+    assert len(calls) == 5  # two good turns, then three failures, then it stops
+
+    calls.clear()
+    monkeypatch.setattr(llm_judge_eval, "score_turn", _fake_score())
+    second = llm_judge_eval.judge_results_dir(run, None, "m", workers=1, backend="claude-code")
+    assert second["complete"] is True
+    saved = len(list((run / "judge_scores" / "judge_summary").glob("*.json")))
+    assert saved == second["n_dialogues_total"]
+
+
+def test_bedrock_backend_sends_the_judge_prompt_and_parses_the_reply(tmp_path, monkeypatch):
+    run = _write_run(tmp_path)
+    sent = []
+
+    class FakeBedrock:
+        def converse(self, **kw):
+            sent.append(kw)
+            reply = '{"socratic_validity": 3, "advancement": 2, "age_appropriateness": 2, "question_form": 1}'
+            return {
+                "output": {"message": {"content": [{"text": reply}]}},
+                "usage": {"inputTokens": 400, "outputTokens": 50},
+            }
+
+    monkeypatch.setattr(llm_judge_eval, "_bedrock_client", FakeBedrock())
+
+    summary = llm_judge_eval.judge_results_dir(
+        run, None, "us.some-model", workers=2, backend="bedrock"
+    )
+
+    assert summary["complete"] is True
+    assert summary["overall_avg"] == 8
+    assert summary["tokens_in"] == 400 * summary["n_turns_judged"]
+    assert sent[0]["modelId"] == "us.some-model"
+    assert sent[0]["system"][0]["text"] == llm_judge_eval.JUDGE_SYSTEM_PROMPT
+    assert sent[0]["inferenceConfig"] == {"maxTokens": 200, "temperature": 0}
+
+
+def test_parse_rubric_reads_scores_after_prose_and_with_a_broken_comment():
+    prose_first = (
+        "Looking at this response:\n\nThe teacher contradicts the student.\n\n```json\n{\n"
+        '  "socratic_validity": 0,\n  "advancement": 0,\n  "age_appropriateness": 1,\n'
+        '  "question_form": 0,\n  "comment": "Overrides a correct answer"\n}\n```'
+    )
+    broken_quote = (
+        '```json\n{"socratic_validity": 3, "advancement": 3, "age_appropriateness": 2, '
+        '"question_form": 1, "comment": "phrasing (\'容易地"滚"下去\') is compound."}\n```'
+    )
+
+    a = _parse_rubric(prose_first)
+    b = _parse_rubric(broken_quote)
+
+    assert a is not None and a["total"] == 1 and a["comment"] == "Overrides a correct answer"
+    assert b is not None and b["total"] == 9 and b["comment"].endswith("is compound.")
+
+
+def test_parse_rubric_prose_that_never_reaches_the_scores_stays_unscored():
+    assert _parse_rubric('Looking at this:\n```json\n{\n  "socratic_validity": 0') is None
+    assert _parse_rubric("- **socratic_validity**: 2, advancement: 1") is None
+
+
+def test_bedrock_reply_cut_off_at_the_token_cap_is_asked_again_with_more_room(
+    tmp_path, monkeypatch
+):
+    run = _write_run(tmp_path)
+    caps = []
+
+    class FakeBedrock:
+        def converse(self, **kw):
+            cap = kw["inferenceConfig"]["maxTokens"]
+            caps.append(cap)
+            done = '{"socratic_validity": 0, "advancement": 0, "age_appropriateness": 1, "question_form": 0}'
+            cut = cap == llm_judge_eval.JUDGE_MAX_TOKENS
+            return {
+                "output": {"message": {"content": [{"text": "Looking at" if cut else done}]}},
+                "usage": {"inputTokens": 400, "outputTokens": cap if cut else 260},
+            }
+
+    monkeypatch.setattr(llm_judge_eval, "_bedrock_client", FakeBedrock())
+
+    summary = llm_judge_eval.judge_results_dir(
+        run, None, "us.some-model", workers=1, backend="bedrock"
+    )
+
+    assert summary["complete"] is True
+    assert summary["overall_avg"] == 1
+    assert set(caps) == {llm_judge_eval.JUDGE_MAX_TOKENS, llm_judge_eval.JUDGE_MAX_TOKENS_RETRY}
+    assert summary["tokens_in"] == 800 * summary["n_turns_judged"]
